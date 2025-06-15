@@ -3,10 +3,19 @@ const socketUrl = window.location.hostname === 'localhost'
     ? 'http://localhost:3000' 
     : `https://${window.location.hostname}`;
 
-const socket = io(socketUrl, {
-    transports: ['websocket', 'polling'],
-    upgrade: true,
-    rememberUpgrade: true
+// Подключение к Socket.IO через API endpoint
+const socket = io({
+    path: '/api/socket.js',
+    transports: ['websocket', 'polling']
+});
+
+socket.on('connect', () => {
+    console.log('Подключено к серверу');
+});
+
+socket.on('connect_error', (error) => {
+    console.error('Ошибка подключения:', error);
+    alert('Ошибка подключения к серверу. Попробуйте обновить страницу.');
 });
 
 let gameState = {
@@ -173,16 +182,6 @@ socket.on('playerDisconnected', (data) => {
 
 socket.on('error', (data) => {
     alert(`Ошибка: ${data.message}`);
-});
-
-// Обработчик ошибок подключения
-socket.on('connect_error', (error) => {
-    console.error('Ошибка подключения:', error);
-    alert('Ошибка подключения к серверу. Попробуйте обновить страницу.');
-});
-
-socket.on('connect', () => {
-    console.log('Подключено к серверу');
 });
 
 // Функции интерфейса
