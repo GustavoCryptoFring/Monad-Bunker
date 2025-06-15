@@ -1,22 +1,7 @@
 console.log('Client.js loading...');
 
-// Функция для присоединения к существующей комнате (с URL)
-function joinExistingRoom(roomCode) {
-    const playerName = document.getElementById('playerName').value.trim();
-    
-    if (!playerName) {
-        alert('Пожалуйста, введите ваше имя!');
-        return;
-    }
-    
-    gameState.playerName = playerName;
-    gameState.currentPlayerName = playerName;
-    socket.emit('join-room', { roomCode, playerName });
-}
-
-// Объединенное состояние игры из обоих файлов
+// Объединенное состояние игры
 let gameState = {
-    // Из script.js
     players: [],
     currentRound: 1,
     gamePhase: 'login',
@@ -33,8 +18,6 @@ let gameState = {
     playersWhoVoted: [],
     skipVotes: 0,
     playersToEliminateNextRound: 0,
-    
-    // Из client.js (дополнительные поля)
     currentPhase: 'waiting',
     round: 1,
     maxPlayers: 8,
@@ -66,11 +49,30 @@ socket.on('connect_error', function(error) {
     alert('Не удалось подключиться к серверу');
 });
 
+// ИСПРАВЛЕННЫЙ обработчик создания комнаты
 socket.on('room-created', function(data) {
-    console.log('Room created, redirecting to:', data.roomUrl);
+    console.log('Room created:', data);
+    gameState.roomCode = data.roomCode;
+    gameState.isHost = data.isHost;
+    gameState.isRoomHost = data.isHost;
+    gameState.players = [];
     
-    // Перенаправляем на URL комнаты
-    window.location.href = data.roomUrl;
+    // Конвертируем данные сервера в формат игры
+    data.players.forEach(player => {
+        gameState.players.push({
+            id: player.id,
+            name: player.name,
+            isHost: player.isHost,
+            characteristics: generateCharacteristics(), // Сразу генерируем характеристики
+            actionCards: [getRandomActionCard()], // Сразу даем карту действия
+            isAlive: true,
+            votes: 0,
+            hasRevealed: false
+        });
+    });
+    
+    // СРАЗУ показываем экран настройки комнаты
+    showRoomSetup();
 });
 
 socket.on('room-joined', function(data) {
@@ -85,15 +87,8 @@ socket.on('room-joined', function(data) {
             id: player.id,
             name: player.name,
             isHost: player.isHost,
-            characteristics: {
-                profession: null,
-                health: null,
-                hobby: null,
-                phobia: null,
-                baggage: null,
-                fact: null
-            },
-            actionCards: [],
+            characteristics: generateCharacteristics(),
+            actionCards: [getRandomActionCard()],
             isAlive: true,
             votes: 0,
             hasRevealed: false
@@ -112,15 +107,8 @@ socket.on('player-joined', function(data) {
             id: player.id,
             name: player.name,
             isHost: player.isHost,
-            characteristics: {
-                profession: null,
-                health: null,
-                hobby: null,
-                phobia: null,
-                baggage: null,
-                fact: null
-            },
-            actionCards: [],
+            characteristics: generateCharacteristics(),
+            actionCards: [getRandomActionCard()],
             isAlive: true,
             votes: 0,
             hasRevealed: false
@@ -139,15 +127,8 @@ socket.on('player-left', function(data) {
             id: player.id,
             name: player.name,
             isHost: player.isHost,
-            characteristics: {
-                profession: null,
-                health: null,
-                hobby: null,
-                phobia: null,
-                baggage: null,
-                fact: null
-            },
-            actionCards: [],
+            characteristics: generateCharacteristics(),
+            actionCards: [getRandomActionCard()],
             isAlive: true,
             votes: 0,
             hasRevealed: false
@@ -157,12 +138,25 @@ socket.on('player-left', function(data) {
     updatePlayersList();
 });
 
+socket.on('game-started', function(data) {
+    console.log('Game started:', data);
+    
+    // Переходим к игровому экрану
+    document.getElementById('roomSetup').style.display = 'none';
+    document.getElementById('gameBoard').style.display = 'block';
+    
+    gameState.gamePhase = 'discussion';
+    updateGameDisplay();
+    updatePlayersGrid();
+    startDiscussionPhase();
+});
+
 socket.on('error', function(error) {
     console.error('Server error:', error);
     alert('Ошибка: ' + error);
 });
 
-// Все данные игры из script.js (вставьте сюда все массивы из script.js)
+// Данные игры
 const professions = [
     "Врач", "Учитель", "Инженер", "Повар", "Программист", "Механик",
     "Писатель", "Художник", "Музыкант", "Строитель", "Фермер", "Пилот",
@@ -238,6 +232,8 @@ function createRoom() {
     
     gameState.playerName = playerName;
     gameState.currentPlayerName = playerName;
+    
+    // Отправляем запрос на создание комнаты
     socket.emit('create-room', { playerName });
 }
 
@@ -257,6 +253,7 @@ function joinRoom() {
 
     gameState.playerName = playerName;
     gameState.currentPlayerName = playerName;
+    
     socket.emit('join-room', { roomCode, playerName });
 }
 
@@ -300,18 +297,17 @@ function updatePlayersList() {
 
 function copyRoomCode() {
     const roomCode = document.getElementById('roomCode').textContent;
-    const roomUrl = `${window.location.origin}/${roomCode}`;
     
-    navigator.clipboard.writeText(roomUrl).then(() => {
-        alert(`Ссылка на комнату скопирована:\n${roomUrl}`);
+    navigator.clipboard.writeText(roomCode).then(() => {
+        alert(`Код комнаты скопирован: ${roomCode}`);
     }).catch(() => {
         const textArea = document.createElement('textarea');
-        textArea.value = roomUrl;
+        textArea.value = roomCode;
         document.body.appendChild(textArea);
         textArea.select();
         document.execCommand('copy');
         document.body.removeChild(textArea);
-        alert(`Ссылка на комнату скопирована:\n${roomUrl}`);
+        alert(`Код комнаты скопирован: ${roomCode}`);
     });
 }
 
@@ -331,49 +327,31 @@ function startGame() {
         return;
     }
     
-    // Начинаем игру
-    gameState.gamePhase = 'setup';
-    gameState.currentRound = 1;
-    
-    // Раздаем характеристики и карты действий
-    distributeCharacteristics();
-    distributeActionCards();
-    
-    // Переходим к игровому экрану
-    document.getElementById('roomSetup').style.display = 'none';
-    document.getElementById('gameBoard').style.display = 'block';
-    
-    updateGameDisplay();
-    updatePlayersGrid(); // Добавьте эту строку
-    startDiscussionPhase();
+    // Отправляем сигнал начала игры на сервер
+    socket.emit('start-game', { roomCode: gameState.roomCode });
 }
 
-// Функции игровой логики из script.js
-function distributeCharacteristics() {
-    gameState.players.forEach(player => {
-        player.characteristics = {
-            profession: getRandomItem(professions),
-            health: getRandomItem(healthConditions),
-            hobby: getRandomItem(hobbies),
-            phobia: getRandomItem(phobias),
-            baggage: getRandomItem(baggage),
-            fact: getRandomItem(facts)
-        };
-    });
+// Функции генерации данных
+function generateCharacteristics() {
+    return {
+        profession: getRandomItem(professions),
+        health: getRandomItem(healthConditions),
+        hobby: getRandomItem(hobbies),
+        phobia: getRandomItem(phobias),
+        baggage: getRandomItem(baggage),
+        fact: getRandomItem(facts)
+    };
 }
 
-function distributeActionCards() {
-    gameState.players.forEach(player => {
-        // Каждый игрок получает случайную карту действия
-        const randomCard = { ...getRandomItem(actionCards) };
-        player.actionCards = [randomCard];
-    });
+function getRandomActionCard() {
+    return { ...getRandomItem(actionCards) };
 }
 
 function getRandomItem(array) {
     return array[Math.floor(Math.random() * array.length)];
 }
 
+// Остальные функции игры...
 function updateGameDisplay() {
     const currentRoundElement = document.getElementById('currentRound');
     const gameStatusElement = document.getElementById('gameStatus');
@@ -418,19 +396,14 @@ function updatePlayersGrid() {
     const playersGrid = document.getElementById('playersGrid');
     if (!playersGrid) return;
     
-    // Очищаем старые карточки
     playersGrid.innerHTML = '';
-    
-    // Удаляем старые классы количества игроков
     playersGrid.className = 'players-grid';
     
-    // Добавляем новый класс в зависимости от количества игроков
     const playerCount = gameState.players.length;
     playersGrid.classList.add(`players-${playerCount}`);
     
     console.log(`Setting grid for ${playerCount} players`);
     
-    // Создаем карточки игроков
     gameState.players.forEach(player => {
         const playerCard = createPlayerCard(player);
         playersGrid.appendChild(playerCard);
@@ -566,7 +539,6 @@ function startVotingPhase() {
 
 function showResults() {
     gameState.gamePhase = 'results';
-    // Логика подсчета голосов и исключения игроков
     updateGameDisplay();
     
     setTimeout(() => {
@@ -591,47 +563,33 @@ function endGame() {
     alert('Игра завершена!');
 }
 
-// Функции взаимодействия
+// Заглушки для функций взаимодействия
 function revealCharacteristic(playerId) {
-    // Логика раскрытия характеристики
     console.log('Revealing characteristic for player:', playerId);
 }
 
 function voteForPlayer(playerId) {
-    // Логика голосования
     console.log('Voting for player:', playerId);
 }
 
 function voteToSkip() {
-    // Логика пропуска
     console.log('Voting to skip');
 }
 
 function showActionCard() {
-    // Показать карты действий
     console.log('Showing action cards');
 }
 
 function useActionCard(cardId) {
-    // Использовать карту действия
     console.log('Using action card:', cardId);
 }
 
-// Заглушки для модальных окон
 function closeActionCardModal() {}
 function closeTargetSelectionModal() {}
 function closeCharacteristicSelectionModal() {}
 
-// Проверка загрузки DOM
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded');
-    
-    const playerNameInput = document.getElementById('playerName');
-    console.log('PlayerName input found:', !!playerNameInput);
-    
-    if (!playerNameInput) {
-        console.error('❌ PlayerName input not found in HTML!');
-    }
 });
 
 console.log('Client.js loaded with full game logic');
