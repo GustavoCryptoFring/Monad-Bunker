@@ -280,6 +280,7 @@ function showRoomSetup() {
 function updatePlayersList() {
     const playersList = document.getElementById('playersList');
     const currentPlayersCount = document.getElementById('currentPlayersCount');
+    const maxPlayersCount = document.getElementById('maxPlayersCount');
     
     if (!playersList || !currentPlayersCount) return;
     
@@ -287,12 +288,15 @@ function updatePlayersList() {
     
     gameState.players.forEach(player => {
         const li = document.createElement('li');
-        li.textContent = player.name + (player.isHost ? ' (Хост)' : '');
+        li.textContent = player.name + (player.isHost ? ' 👑' : '');
         li.className = player.isHost ? 'host' : '';
         playersList.appendChild(li);
     });
     
     currentPlayersCount.textContent = gameState.players.length;
+    if (maxPlayersCount) {
+        maxPlayersCount.textContent = gameState.maxPlayers;
+    }
     
     const startBtn = document.getElementById('startGameBtn');
     if (startBtn) {

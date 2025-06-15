@@ -17,7 +17,9 @@
         <div class="login-screen" id="loginScreen">
             <h2>Добро пожаловать!</h2>
             <div class="login-form">
-                <label>Ваше имя: <input type="text" id="playerName" placeholder="Введите ваше имя" maxlength="20"></label>
+                <label>Ваше имя: 
+                    <input type="text" id="playerName" placeholder="Введите ваше имя" maxlength="20">
+                </label>
                 <div class="room-options">
                     <button id="createRoomBtn" class="room-btn" onclick="createRoom()">Создать новую комнату</button>
                     <div class="join-room">
@@ -28,17 +30,19 @@
             </div>
         </div>
 
-        <!-- Экран создания комнаты -->
+        <!-- Экран настройки комнаты -->
         <div class="room-setup" id="roomSetup" style="display: none;">
             <h2>Настройка комнаты</h2>
             <div class="room-info">
-                <p>Код комнаты: <span id="roomCode" class="room-code"></span></p>
+                <p>Код комнаты: <span id="roomCode" class="room-code">XXXXXX</span></p>
                 <button id="copyCodeBtn" class="copy-btn" onclick="copyRoomCode()">Копировать код</button>
             </div>
             <div class="room-settings">
                 <label>Количество игроков: 
                     <select id="maxPlayers" onchange="updateMaxPlayers()">
                         <option value="8">8 игроков</option>
+                        <option value="6">6 игроков</option>
+                        <option value="4">4 игрока</option>
                     </select>
                 </label>
             </div>
@@ -49,7 +53,7 @@
             <button id="startGameBtn" class="start-game-btn" onclick="startGame()" disabled>Начать игру</button>
         </div>
 
-        <!-- Экран игры -->
+        <!-- Игровой экран -->
         <div class="game-board" id="gameBoard" style="display: none;">
             <div class="game-info">
                 <div class="round-info">
@@ -62,15 +66,51 @@
                 </div>
             </div>
 
+            <!-- Сетка игроков -->
             <div class="players-grid" id="playersGrid">
                 <!-- Карточки игроков будут добавлены динамически -->
+            </div>
+
+            <!-- Панель действий -->
+            <div class="game-actions">
+                <button id="skipPhaseBtn" onclick="voteToSkip()" class="action-btn">
+                    ⏭️ Пропустить фазу
+                </button>
+                <button id="showActionCardsBtn" onclick="showActionCard()" class="action-btn">
+                    🃏 Карты действий
+                </button>
+            </div>
+        </div>
+
+        <!-- Модальное окно карт действий -->
+        <div id="actionCardModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close" onclick="closeActionCardModal()">&times;</span>
+                <h3>Ваши карты действий</h3>
+                <div id="actionCardsList"></div>
+            </div>
+        </div>
+
+        <!-- Модальное окно выбора цели -->
+        <div id="targetSelectionModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close" onclick="closeTargetSelectionModal()">&times;</span>
+                <h3>Выберите цель</h3>
+                <div id="targetPlayersList"></div>
+            </div>
+        </div>
+
+        <!-- Модальное окно выбора характеристики -->
+        <div id="characteristicSelectionModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close" onclick="closeCharacteristicSelectionModal()">&times;</span>
+                <h3>Выберите характеристику для раскрытия</h3>
+                <div id="characteristicsList"></div>
             </div>
         </div>
     </div>
 
-    <!-- ВАЖНО: Добавьте Socket.IO и используйте правильный JS файл -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="client.js"></script>
-    <!-- НЕ загружайте script.js отдельно -->
 </body>
 </html>
