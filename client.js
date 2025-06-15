@@ -348,6 +348,7 @@ function startGame() {
     document.getElementById('gameBoard').style.display = 'block';
     
     updateGameDisplay();
+    updatePlayersGrid(); // Добавьте эту строку
     startDiscussionPhase();
 }
 
@@ -421,8 +422,19 @@ function updatePlayersGrid() {
     const playersGrid = document.getElementById('playersGrid');
     if (!playersGrid) return;
     
+    // Очищаем старые карточки
     playersGrid.innerHTML = '';
     
+    // Удаляем старые классы количества игроков
+    playersGrid.className = 'players-grid';
+    
+    // Добавляем новый класс в зависимости от количества игроков
+    const playerCount = gameState.players.length;
+    playersGrid.classList.add(`players-${playerCount}`);
+    
+    console.log(`Setting grid for ${playerCount} players`);
+    
+    // Создаем карточки игроков
     gameState.players.forEach(player => {
         const playerCard = createPlayerCard(player);
         playersGrid.appendChild(playerCard);
@@ -431,24 +443,60 @@ function updatePlayersGrid() {
 
 function createPlayerCard(player) {
     const card = document.createElement('div');
-    card.className = `player-card ${player.isAlive ? '' : 'eliminated'}`;
+    const isCurrentPlayer = player.id === gameState.playerId;
+    
+    card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''}`;
+    
     card.innerHTML = `
-        <div class="player-name">${player.name}</div>
-        <div class="player-characteristics">
-            ${Object.entries(player.characteristics).map(([key, value]) => 
-                `<div class="characteristic ${player.hasRevealed ? 'revealed' : 'hidden'}">
-                    <strong>${translateCharacteristic(key)}:</strong> 
-                    ${player.hasRevealed || key === 'profession' ? value : '???'}
-                </div>`
-            ).join('')}
+        <div class="player-header">
+            <div class="player-info">
+                <div class="player-avatar-container">
+                    <div class="player-avatar ${player.isAlive ? '' : 'eliminated-avatar'}">
+                        ${player.name.charAt(0).toUpperCase()}
+                    </div>
+                </div>
+                <div>
+                    <div class="player-name ${player.isAlive ? '' : 'eliminated-name'}">
+                        ${player.name}${player.isHost ? ' 👑' : ''}
+                    </div>
+                    ${isCurrentPlayer ? '<div class="player-status current">Вы</div>' : ''}
+                </div>
+            </div>
         </div>
+        
+        <div class="characteristics">
+            ${Object.entries(player.characteristics).map(([key, value]) => {
+                const isRevealed = player.hasRevealed || key === 'profession';
+                const isOwnCard = isCurrentPlayer;
+                
+                return `<div class="characteristic ${isRevealed ? 'revealed' : (isOwnCard ? 'own-hidden' : 'hidden')}">
+                    <span class="characteristic-name">${translateCharacteristic(key)}:</span>
+                    <span class="characteristic-value ${isOwnCard && !isRevealed ? 'own-characteristic' : ''}">
+                        ${isRevealed ? value : (isOwnCard ? value : '???')}
+                    </span>
+                </div>`;
+            }).join('')}
+        </div>
+        
         <div class="player-actions">
-            ${player.id === gameState.playerId ? 
-                `<button onclick="revealCharacteristic('${player.id}')">Раскрыть характеристику</button>` : 
-                `<button onclick="voteForPlayer('${player.id}')">Голосовать за исключение</button>`
+            ${gameState.gamePhase === 'discussion' && isCurrentPlayer ? 
+                `<button class="modal-buttons" onclick="revealCharacteristic('${player.id}')">
+                    🔍 Раскрыть характеристику
+                </button>` : ''
+            }
+            ${gameState.gamePhase === 'voting' && !isCurrentPlayer && player.isAlive ? 
+                `<div class="vote-section">
+                    <button class="vote-player-btn" onclick="voteForPlayer('${player.id}')">
+                        📋 Голосовать за исключение
+                    </button>
+                    <div class="voters-list" id="voters-${player.id}">
+                        Голосов: ${player.votes || 0}
+                    </div>
+                </div>` : ''
             }
         </div>
     `;
+    
     return card;
 }
 

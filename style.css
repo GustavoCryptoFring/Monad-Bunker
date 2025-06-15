@@ -291,23 +291,38 @@ body {
     display: grid;
     gap: 20px;
     margin-bottom: 30px;
+    /* По умолчанию 2 ряда по 4 игрока для 8 игроков */
+    grid-template-columns: repeat(4, 1fr);
 }
 
-/* Сетка для 8 игроков - 2 ряда по 4 */
+/* Адаптивная сетка в зависимости от количества игроков */
+.players-grid.players-1,
+.players-grid.players-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.players-grid.players-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.players-grid.players-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.players-grid.players-5,
+.players-grid.players-6 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.players-grid.players-7,
 .players-grid.players-8 {
     grid-template-columns: repeat(4, 1fr);
 }
 
-/* Для других количеств игроков */
-.players-grid.players-9 {
-    grid-template-columns: repeat(3, 1fr);
-}
-
+.players-grid.players-9,
+.players-grid.players-10,
+.players-grid.players-11,
 .players-grid.players-12 {
-    grid-template-columns: repeat(4, 1fr);
-}
-
-.players-grid.players-16 {
     grid-template-columns: repeat(4, 1fr);
 }
 
