@@ -1,19 +1,23 @@
 const express = require('express');
 const http = require('http');
-const socketIo = require('socket.io');
+const { Server } = require('socket.io');
 const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server, {
+
+// Настройка Socket.IO
+const io = new Server(server, {
     cors: {
         origin: "*",
-        methods: ["GET", "POST"]
-    }
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    transports: ['websocket', 'polling']
 });
 
 // Статические файлы
-app.use(express.static(path.join(__dirname)));
+app.use(express.static(__dirname));
 
 // Хранилище игровых комнат
 const rooms = new Map();
@@ -21,11 +25,6 @@ const rooms = new Map();
 // Генерация кода комнаты
 function generateRoomCode() {
     return Math.random().toString(36).substr(2, 6).toUpperCase();
-}
-
-// Создание субдомена для комнаты
-function createRoomSubdomain(roomCode) {
-    return `${roomCode.toLowerCase()}.localhost:3000`;
 }
 
 // Генерация характеристик игрока
@@ -97,7 +96,7 @@ const actionCards = [
     {
         id: 1,
         name: "Двойной голос",
-        description: "Имеет двойную силу голоса при голосовании. Используйте во время голосования.",
+        description: "Имеет двойную силу голоса при голосовании.",
         type: "voting",
         effect: "double_vote"
     },
@@ -118,21 +117,21 @@ const actionCards = [
     {
         id: 4,
         name: "Обмен возрастом",
-        description: "Может поменяться возрастом с любым игроком (если возраст известен).",
+        description: "Может поменяться возрастом с любым игроком.",
         type: "instant",
         effect: "swap_age"
     },
     {
         id: 5,
         name: "Замена карты",
-        description: "Может заменить одну характеристику у другого игрока на случайную.",
+        description: "Может заменить одну характеристику у другого игрока.",
         type: "instant",
         effect: "replace_card"
     },
     {
         id: 6,
         name: "Обмен здоровьем",
-        description: "Может поменяться здоровьем с другим игроком (если оба здоровья видны).",
+        description: "Может поменяться здоровьем с другим игроком.",
         type: "instant",
         effect: "swap_health"
     },
@@ -145,7 +144,7 @@ const actionCards = [
     }
 ];
 
-// Обработка подключений
+// Socket.IO обработчики
 io.on('connection', (socket) => {
     console.log('Новое подключение:', socket.id);
 
@@ -153,11 +152,9 @@ io.on('connection', (socket) => {
     socket.on('createRoom', (data) => {
         const { playerName } = data;
         const roomCode = generateRoomCode();
-        const subdomain = createRoomSubdomain(roomCode);
         
         const room = {
             code: roomCode,
-            subdomain: subdomain,
             maxPlayers: 8,
             players: [],
             gameState: {
@@ -174,7 +171,6 @@ io.on('connection', (socket) => {
             createdAt: new Date()
         };
 
-        // Добавляем создателя как хоста
         const hostPlayer = {
             id: 0,
             socketId: socket.id,
@@ -195,7 +191,6 @@ io.on('connection', (socket) => {
         socket.join(roomCode);
         socket.emit('roomCreated', {
             roomCode,
-            subdomain,
             playerId: 0,
             isHost: true
         });
@@ -712,25 +707,13 @@ function handleActionCard(roomCode, player, targetId, additionalData) {
     });
 }
 
-// Роут для субдоменов
+// Роуты
 app.get('/', (req, res) => {
-    const host = req.get('host');
-    const subdomain = host.split('.')[0];
-    
-    if (subdomain !== 'localhost' && subdomain.length === 6) {
-        // Это субдомен комнаты
-        const roomCode = subdomain.toUpperCase();
-        res.sendFile(path.join(__dirname, 'room.html'));
-    } else {
-        // Главная страница
-        res.sendFile(path.join(__dirname, 'index.html'));
-    }
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Сервер запущен на порту ${PORT}`);
-    console.log('Доступные эндпоинты:');
-    console.log('- http://localhost:3000 - главная страница');
-    console.log('- http://ROOMCODE.localhost:3000 - страница комнаты');
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Сервер запущен на порту ${PORT}`);
+    console.log(`🌐 Локальный адрес: http://localhost:${PORT}`);
 });

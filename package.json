@@ -14,10 +14,10 @@
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
+  "engines": {
+    "node": "18.x"
+  },
   "keywords": ["game", "multiplayer", "websocket", "bunker"],
   "author": "Your Name",
-  "license": "MIT",
-  "engines": {
-    "node": ">=16.0.0"
-  }
+  "license": "MIT"
 }
