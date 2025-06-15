@@ -15,29 +15,22 @@ app.use(express.static(__dirname));
 // Хранилище комнат
 const rooms = new Map();
 
-// ГЛАВНАЯ СТРАНИЦА - только основной домен
+// ГЛАВНАЯ СТРАНИЦА
 app.get('/', (req, res) => {
-    const host = req.get('host');
-    console.log('📄 Request to:', host);
+    const roomCode = req.query.room;
     
-    // Проверяем, это основной домен или поддомен
-    const subdomain = getSubdomain(host);
-    
-    if (subdomain && subdomain !== 'www') {
-        // Это поддомен комнаты
-        const roomCode = subdomain.toUpperCase();
-        console.log('🎮 Room subdomain detected:', roomCode);
+    if (roomCode) {
+        // Это ссылка на комнату через параметр
+        const upperRoomCode = roomCode.toUpperCase();
+        console.log('🎮 Room parameter detected:', upperRoomCode);
         
-        // Проверяем, существует ли комната
-        if (rooms.has(roomCode)) {
-            // Отправляем страницу комнаты
-            res.send(generateRoomPage(roomCode));
+        if (rooms.has(upperRoomCode)) {
+            res.send(generateRoomPage(upperRoomCode));
         } else {
-            // Комната не найдена
-            res.send(generateNotFoundPage(roomCode));
+            res.send(generateNotFoundPage(upperRoomCode));
         }
     } else {
-        // Основной домен - главная страница
+        // Основная страница
         console.log('🏠 Serving main page');
         res.sendFile(path.join(__dirname, 'index.html'));
     }
@@ -97,11 +90,10 @@ io.on('connection', (socket) => {
             
             console.log('✅ Room created:', roomCode);
             
-            // Создаем URL поддомена
+            // Создаем URL с параметром
             const host = socket.handshake.headers.host;
             const protocol = socket.handshake.headers['x-forwarded-proto'] || 'http';
-            const baseHost = getBaseHost(host);
-            const roomUrl = `${protocol}://${roomCode.toLowerCase()}.${baseHost}`;
+            const roomUrl = `${protocol}://${host}/?room=${roomCode}`;
             
             console.log('🌐 Room URL created:', roomUrl);
             
@@ -158,11 +150,10 @@ io.on('connection', (socket) => {
         });
         
         if (data.fromMainPage) {
-            // Если присоединение с главной страницы - перенаправляем на поддомен
+            // Если присоединение с главной страницы - перенаправляем
             const host = socket.handshake.headers.host;
             const protocol = socket.handshake.headers['x-forwarded-proto'] || 'http';
-            const baseHost = getBaseHost(host);
-            const roomUrl = `${protocol}://${data.roomCode.toLowerCase()}.${baseHost}`;
+            const roomUrl = `${protocol}://${host}/?room=${data.roomCode}`;
             
             socket.emit('room-joined', {
                 roomCode: data.roomCode,
@@ -172,7 +163,7 @@ io.on('connection', (socket) => {
                 redirect: true
             });
         } else {
-            // Если уже на поддомене - остаемся здесь
+            // Остаемся на текущей странице
             socket.emit('room-joined', {
                 roomCode: data.roomCode,
                 players: room.players,
@@ -241,6 +232,11 @@ function getSubdomain(host) {
 function getBaseHost(host) {
     if (!host) return 'localhost:3000';
     
+    // Для Railway всегда используем основной домен
+    if (host.includes('railway.app')) {
+        return 'monad-bunker-production.up.railway.app';
+    }
+    
     const parts = host.split('.');
     if (parts.length <= 2) return host;
     
@@ -256,8 +252,6 @@ function generateRoomCode() {
 }
 
 function generateRoomPage(roomCode) {
-    const room = rooms.get(roomCode);
-    
     return `
 <!DOCTYPE html>
 <html lang="ru">
@@ -290,7 +284,7 @@ function generateRoomPage(roomCode) {
             </div>
         </div>
 
-        <!-- Экран настройки комнаты -->
+        <!-- Остальной HTML остается без изменений -->
         <div class="room-setup" id="roomSetup" style="display: none;">
             <h2>Комната ${roomCode}</h2>
             <div class="room-info">
@@ -313,7 +307,6 @@ function generateRoomPage(roomCode) {
             <button id="startGameBtn" class="start-game-btn" onclick="startGame()" disabled style="display: none;">Начать игру</button>
         </div>
 
-        <!-- Игровой экран -->
         <div class="game-board" id="gameBoard" style="display: none;">
             <div class="game-info">
                 <div class="round-info">
@@ -326,19 +319,6 @@ function generateRoomPage(roomCode) {
                 </div>
             </div>
             <div class="players-grid" id="playersGrid"></div>
-            <div class="game-actions">
-                <button id="skipPhaseBtn" onclick="voteToSkip()" class="action-btn">⏭️ Пропустить фазу</button>
-                <button id="showActionCardsBtn" onclick="showActionCard()" class="action-btn">🃏 Карты действий</button>
-            </div>
-        </div>
-
-        <!-- Модальные окна -->
-        <div id="actionCardModal" class="modal" style="display: none;">
-            <div class="modal-content">
-                <span class="close" onclick="closeActionCardModal()">&times;</span>
-                <h3>Ваши карты действий</h3>
-                <div id="actionCardsList"></div>
-            </div>
         </div>
     </div>
 

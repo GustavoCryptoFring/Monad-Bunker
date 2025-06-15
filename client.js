@@ -187,6 +187,12 @@ function showRoomSetup() {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('roomSetup').style.display = 'block';
     
+    // Обновляем код комнаты в интерфейсе
+    const roomCodeElement = document.getElementById('roomCode');
+    if (roomCodeElement) {
+        roomCodeElement.textContent = gameState.roomCode;
+    }
+    
     // Показываем настройки только хосту
     if (gameState.isHost) {
         document.getElementById('roomSettings').style.display = 'block';
@@ -258,6 +264,30 @@ function copyRoomUrl() {
         document.body.removeChild(textArea);
         alert(`Ссылка на комнату скопирована:\n${roomUrl}`);
     });
+}
+
+function copyRoomCode() {
+    const roomCode = gameState.roomCode;
+    
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(roomCode).then(() => {
+            alert(`Код комнаты скопирован: ${roomCode}`);
+        }).catch(() => {
+            fallbackCopy(roomCode);
+        });
+    } else {
+        fallbackCopy(roomCode);
+    }
+}
+
+function fallbackCopy(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textArea);
+    alert(`Код комнаты скопирован: ${text}`);
 }
 
 function updateMaxPlayers() {
@@ -575,8 +605,18 @@ function closeActionCardModal() {}
 function closeTargetSelectionModal() {}
 function closeCharacteristicSelectionModal() {}
 
+// Проверяем параметры URL при загрузке
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, IS_ROOM_PAGE:', IS_ROOM_PAGE, 'ROOM_CODE:', ROOM_CODE);
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomFromUrl = urlParams.get('room');
+    
+    if (roomFromUrl) {
+        window.ROOM_CODE = roomFromUrl.toUpperCase();
+        window.IS_ROOM_PAGE = true;
+        gameState.roomCode = window.ROOM_CODE;
+    }
+    
+    console.log('DOM loaded, IS_ROOM_PAGE:', window.IS_ROOM_PAGE, 'ROOM_CODE:', window.ROOM_CODE);
 });
 
 console.log('Client.js loaded with subdomain support');
