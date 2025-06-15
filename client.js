@@ -1,392 +1,291 @@
-console.log('Client.js loading...');
+console.log('🎮 Bunker Game Client Loading...');
 
-// Проверяем, на какой странице мы находимся
-const IS_ROOM_PAGE = window.IS_ROOM_PAGE || false;
-const ROOM_CODE = window.ROOM_CODE || null;
-
-// Объединенное состояние игры
+// Состояние игры
 let gameState = {
-    players: [],
-    currentRound: 1,
-    gamePhase: 'login',
-    votingResults: {},
-    maxRounds: 3,
-    currentPlayerName: '',
-    currentPlayerId: null,
-    roomCode: ROOM_CODE || '',
-    isRoomHost: false,
-    currentTurnPlayerId: null,
-    revealedThisRound: 0,
-    timer: null,
-    timeLeft: 0,
-    playersWhoVoted: [],
-    skipVotes: 0,
-    playersToEliminateNextRound: 0,
-    currentPhase: 'waiting',
-    round: 1,
-    maxPlayers: 8,
-    playerId: '',
+    playerId: null,
     playerName: '',
     isHost: false,
-    skipVotes: {
-        discussion: new Set(),
-        voting: new Set()
-    }
+    players: [],
+    gamePhase: 'login',
+    serverGameState: 'lobby',
+    currentRound: 1,
+    timeLeft: 0,
+    votingResults: {},
+    myVote: null,
+    timer: null
 };
 
 // Инициализация Socket.IO
 const socket = io();
 
-// Socket.IO обработчики
+// === SOCKET ОБРАБОТЧИКИ ===
 socket.on('connect', function() {
     console.log('✅ Connected to server:', socket.id);
     gameState.playerId = socket.id;
-    gameState.currentPlayerId = socket.id;
+    updatePlayerCount();
 });
 
 socket.on('disconnect', function() {
     console.log('❌ Disconnected from server');
+    showNotification('Отключение', 'Соединение с сервером потеряно');
 });
 
-socket.on('connect_error', function(error) {
-    console.error('❌ Connection error:', error);
-    alert('Не удалось подключиться к серверу');
+socket.on('room-state', function(data) {
+    console.log('📊 Room state received:', data);
+    updateGameState(data);
 });
 
-// Обработчик создания комнаты - с перенаправлением
-socket.on('room-created', function(data) {
-    console.log('Room created:', data);
-    
-    if (data.redirect && data.roomUrl) {
-        // Убираем alert и сразу перенаправляем
-        console.log('Redirecting to:', data.roomUrl);
-        window.location.href = data.roomUrl;
-    } else {
-        // Остаемся на текущей странице (мы уже на поддомене)
-        gameState.roomCode = data.roomCode;
-        gameState.isHost = data.isHost;
-        gameState.isRoomHost = data.isHost;
-        updatePlayersFromServer(data.players);
-        showRoomSetup();
-    }
-});
-
-socket.on('room-joined', function(data) {
-    console.log('Room joined:', data);
-    
-    if (data.redirect && data.roomUrl) {
-        // Убираем alert и сразу перенаправляем
-        console.log('Redirecting to:', data.roomUrl);
-        window.location.href = data.roomUrl;
-    } else {
-        // Остаемся на поддомене
-        gameState.roomCode = data.roomCode;
-        gameState.isHost = data.isHost;
-        gameState.isRoomHost = data.isHost;
-        updatePlayersFromServer(data.players);
-        showRoomSetup();
-    }
+socket.on('join-confirmed', function(data) {
+    console.log('✅ Join confirmed:', data);
+    gameState.playerId = data.playerId;
+    gameState.playerName = data.playerName;
+    gameState.isHost = data.isHost;
+    showLobbyScreen();
 });
 
 socket.on('player-joined', function(data) {
-    console.log('Player joined:', data);
-    updatePlayersFromServer(data.players);
-    updatePlayersList();
+    console.log('👋 Player joined:', data);
+    gameState.players = data.players;
+    updatePlayersDisplay();
+    updatePlayerCount();
 });
 
 socket.on('player-left', function(data) {
-    console.log('Player left:', data);
-    updatePlayersFromServer(data.players);
-    updatePlayersList();
+    console.log('👋 Player left:', data);
+    gameState.players = data.players;
+    gameState.serverGameState = data.gameState;
+    updatePlayersDisplay();
+    updatePlayerCount();
+    
+    // Проверяем, стали ли мы хостом
+    const me = gameState.players.find(p => p.id === gameState.playerId);
+    if (me) {
+        gameState.isHost = me.isHost;
+        updateHostControls();
+    }
 });
 
 socket.on('game-started', function(data) {
-    console.log('Game started:', data);
-    
-    document.getElementById('roomSetup').style.display = 'none';
-    document.getElementById('gameBoard').style.display = 'block';
-    
-    gameState.gamePhase = 'discussion';
+    console.log('🚀 Game started:', data);
+    gameState.players = data.players;
+    gameState.serverGameState = data.gameState;
+    gameState.gamePhase = data.gamePhase || 'discussion';
+    gameState.currentRound = data.currentRound;
+    gameState.timeLeft = data.timeLeft;
+    showGameScreen();
+});
+
+socket.on('phase-changed', function(data) {
+    console.log('🔄 Phase changed:', data);
+    gameState.gamePhase = data.gamePhase;
+    gameState.timeLeft = data.timeLeft;
+    gameState.players = data.players;
     updateGameDisplay();
+});
+
+socket.on('timer-update', function(data) {
+    gameState.timeLeft = data.timeLeft;
+    updateTimerDisplay();
+});
+
+socket.on('vote-update', function(data) {
+    console.log('🗳️ Vote update:', data);
+    gameState.players = data.players;
+    gameState.votingResults = data.votingResults;
     updatePlayersGrid();
-    startDiscussionPhase();
+});
+
+socket.on('characteristic-revealed', function(data) {
+    console.log('🔍 Characteristic revealed:', data);
+    gameState.players = data.players;
+    updatePlayersGrid();
+    showNotification('Характеристика раскрыта', 
+        `${data.playerName} раскрыл: ${translateCharacteristic(data.characteristic)} - ${data.value}`);
+});
+
+socket.on('round-results', function(data) {
+    console.log('📊 Round results:', data);
+    gameState.players = data.players;
+    
+    if (data.eliminatedPlayer) {
+        showNotification('Игрок исключен', `${data.eliminatedPlayer} был исключен из бункера!`);
+    } else {
+        showNotification('Результаты голосования', 'Никто не был исключен в этом раунде');
+    }
+    
+    updatePlayersGrid();
+});
+
+socket.on('new-round', function(data) {
+    console.log('🔄 New round:', data);
+    gameState.currentRound = data.currentRound;
+    gameState.gamePhase = data.gamePhase;
+    gameState.timeLeft = data.timeLeft;
+    gameState.players = data.players;
+    gameState.myVote = null;
+    updateGameDisplay();
+});
+
+socket.on('game-ended', function(data) {
+    console.log('🏁 Game ended:', data);
+    gameState.players = data.players;
+    showResultsScreen(data.winners);
+});
+
+socket.on('game-reset', function(data) {
+    console.log('🔄 Game reset:', data);
+    gameState.players = data.players;
+    gameState.serverGameState = data.gameState;
+    gameState.gamePhase = 'lobby';
+    gameState.currentRound = 1;
+    gameState.myVote = null;
+    showLobbyScreen();
 });
 
 socket.on('error', function(error) {
-    console.error('Server error:', error);
-    alert('Ошибка: ' + error);
+    console.error('❌ Server error:', error);
+    showNotification('Ошибка', error);
 });
 
-// Функции для разных типов страниц
-function createRoom() {
-    console.log('Creating room...');
-    
-    const playerName = document.getElementById('playerName').value.trim();
+// === ОСНОВНЫЕ ФУНКЦИИ ===
+function joinGame() {
+    const playerName = document.getElementById('playerNameInput').value.trim();
     
     if (!playerName) {
-        alert('Пожалуйста, введите ваше имя');
+        showNotification('Ошибка', 'Пожалуйста, введите ваше имя');
+        return;
+    }
+    
+    if (playerName.length < 2) {
+        showNotification('Ошибка', 'Имя должно содержать минимум 2 символа');
         return;
     }
     
     if (!socket.connected) {
-        alert('Нет соединения с сервером');
+        showNotification('Ошибка', 'Нет соединения с сервером');
         return;
     }
     
-    console.log('Sending create-room request with playerName:', playerName);
-    
-    gameState.playerName = playerName;
-    gameState.currentPlayerName = playerName;
-    
-    socket.emit('create-room', { playerName });
-}
-
-function joinRoom() {
-    const playerName = document.getElementById('playerName').value.trim();
-    const roomCode = document.getElementById('roomCodeInput').value.trim().toUpperCase();
-    
-    if (!playerName) {
-        alert('Пожалуйста, введите ваше имя!');
-        return;
-    }
-    
-    if (!roomCode) {
-        alert('Пожалуйста, введите код комнаты!');
-        return;
-    }
-
-    gameState.playerName = playerName;
-    gameState.currentPlayerName = playerName;
-    
-    socket.emit('join-room', { 
-        roomCode, 
-        playerName,
-        fromMainPage: true  // Указываем, что присоединяемся с главной страницы
-    });
-}
-
-// Функция для присоединения с поддомена
-function joinRoomFromSubdomain(roomCode) {
-    const playerName = document.getElementById('playerName').value.trim();
-    
-    if (!playerName) {
-        alert('Пожалуйста, введите ваше имя!');
-        return;
-    }
-    
-    gameState.playerName = playerName;
-    gameState.currentPlayerName = playerName;
-    gameState.roomCode = roomCode;
-    
-    socket.emit('join-room', { 
-        roomCode, 
-        playerName,
-        fromMainPage: false  // Мы уже на поддомене
-    });
-}
-
-function showRoomSetup() {
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('roomSetup').style.display = 'block';
-    
-    // Обновляем код комнаты в интерфейсе
-    const roomCodeElement = document.getElementById('roomCode');
-    if (roomCodeElement) {
-        roomCodeElement.textContent = gameState.roomCode;
-    }
-    
-    // Показываем настройки только хосту
-    if (gameState.isHost) {
-        document.getElementById('roomSettings').style.display = 'block';
-        document.getElementById('startGameBtn').style.display = 'block';
-    }
-    
-    updatePlayersList();
-}
-
-function updatePlayersFromServer(players) {
-    gameState.players = [];
-    
-    players.forEach(player => {
-        gameState.players.push({
-            id: player.id,
-            name: player.name,
-            isHost: player.isHost,
-            characteristics: generateCharacteristics(),
-            actionCards: [getRandomActionCard()],
-            isAlive: true,
-            votes: 0,
-            hasRevealed: false
-        });
-    });
-}
-
-function updatePlayersList() {
-    const playersList = document.getElementById('playersList');
-    const currentPlayersCount = document.getElementById('currentPlayersCount');
-    const maxPlayersCount = document.getElementById('maxPlayersCount');
-    
-    if (!playersList || !currentPlayersCount) return;
-    
-    playersList.innerHTML = '';
-    
-    gameState.players.forEach(player => {
-        const li = document.createElement('li');
-        li.textContent = player.name + (player.isHost ? ' 👑' : '');
-        li.className = player.isHost ? 'host' : '';
-        playersList.appendChild(li);
-    });
-    
-    currentPlayersCount.textContent = gameState.players.length;
-    if (maxPlayersCount) {
-        maxPlayersCount.textContent = gameState.maxPlayers;
-    }
-    
-    const startBtn = document.getElementById('startGameBtn');
-    if (startBtn) {
-        const canStart = gameState.players.length >= 2 && gameState.isHost;
-        startBtn.disabled = !canStart;
-        startBtn.textContent = gameState.players.length < 2 ? 
-            `Начать игру (минимум 2 игрока)` : 
-            `Начать игру (${gameState.players.length}/${gameState.maxPlayers})`;
-    }
-}
-
-function copyRoomUrl() {
-    const roomUrl = window.location.href;
-    
-    navigator.clipboard.writeText(roomUrl).then(() => {
-        alert(`Ссылка на комнату скопирована:\n${roomUrl}`);
-    }).catch(() => {
-        const textArea = document.createElement('textarea');
-        textArea.value = roomUrl;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        alert(`Ссылка на комнату скопирована:\n${roomUrl}`);
-    });
-}
-
-function copyRoomCode() {
-    const roomCode = gameState.roomCode;
-    
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(roomCode).then(() => {
-            alert(`Код комнаты скопирован: ${roomCode}`);
-        }).catch(() => {
-            fallbackCopy(roomCode);
-        });
-    } else {
-        fallbackCopy(roomCode);
-    }
-}
-
-function fallbackCopy(text) {
-    const textArea = document.createElement('textarea');
-    textArea.value = text;
-    document.body.appendChild(textArea);
-    textArea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textArea);
-    alert(`Код комнаты скопирован: ${text}`);
-}
-
-function updateMaxPlayers() {
-    if (!gameState.isHost) return;
-    
-    const maxPlayers = parseInt(document.getElementById('maxPlayers').value);
-    gameState.maxPlayers = maxPlayers;
-    updatePlayersList();
+    console.log('🎯 Joining game as:', playerName);
+    socket.emit('join-game', { playerName });
 }
 
 function startGame() {
-    if (!gameState.isHost) return;
-    
-    if (gameState.players.length < 2) {
-        alert('Для начала игры нужно минимум 2 игрока!');
+    if (!gameState.isHost) {
+        showNotification('Ошибка', 'Только хост может начать игру');
         return;
     }
     
-    socket.emit('start-game', { roomCode: gameState.roomCode });
+    socket.emit('start-game');
 }
 
-// Данные игры (все массивы остаются те же)
-const professions = [
-    "Врач", "Учитель", "Инженер", "Повар", "Программист", "Механик",
-    "Писатель", "Художник", "Музыкант", "Строитель", "Фермер", "Пилот",
-    "Медсестра", "Полицейский", "Пожарный", "Ветеринар", "Переводчик",
-    "Дизайнер", "Фотограф", "Журналист", "Психолог", "Бухгалтер"
-];
-
-const healthConditions = [
-    "Отличное здоровье", "Хорошее здоровье", "Удовлетворительное здоровье",
-    "Близорукость", "Дальнозоркость", "Астма", "Аллергия на пыль",
-    "Аллергия на животных", "Диабет", "Гипертония", "Артрит",
-    "Хроническая усталость", "Мигрени", "Бессонница", "Депрессия",
-    "Тревожность", "Боязнь высоты", "Клаустрофобия"
-];
-
-const hobbies = [
-    "Чтение", "Кулинария", "Садоводство", "Рисование", "Музыка",
-    "Спорт", "Танцы", "Фотография", "Путешествия", "Коллекционирование",
-    "Рукоделие", "Игры", "Рыбалка", "Охота", "Йога", "Медитация",
-    "Волонтерство", "Изучение языков", "Астрономия", "Археология"
-];
-
-const phobias = [
-    "Боязнь темноты", "Боязнь высоты", "Боязнь замкнутых пространств",
-    "Боязнь пауков", "Боязнь змей", "Боязнь собак", "Боязнь воды",
-    "Боязнь огня", "Боязнь толпы", "Боязнь публичных выступлений",
-    "Боязнь игл", "Боязнь крови", "Боязнь самолетов", "Боязнь лифтов",
-    "Боязнь микробов", "Боязнь клоунов", "Боязнь зеркал"
-];
-
-const baggage = [
-    "Рюкзак с едой", "Аптечка", "Инструменты", "Оружие", "Книги",
-    "Семена растений", "Радио", "Фонарик", "Одеяла", "Одежда",
-    "Документы", "Деньги", "Украшения", "Лекарства", "Компьютер",
-    "Музыкальный инструмент", "Спортивное снаряжение", "Игрушки"
-];
-
-const facts = [
-    "Был в тюрьме", "Спас чью-то жизнь", "Выиграл в лотерею",
-    "Знает 5 языков", "Чемпион по шахматам", "Бывший военный",
-    "Имеет двойное гражданство", "Работал в цирке", "Писал книги",
-    "Изобрел что-то важное", "Путешествовал по всему миру",
-    "Выживал в дикой природе", "Знает боевые искусства",
-    "Бывший актер", "Работал спасателем", "Имеет фотографическую память"
-];
-
-const actionCards = [
-    { id: 1, name: "Целитель", description: "Можете спасти одного игрока от исключения", type: "protective", usesLeft: 1 },
-    { id: 2, name: "Детектив", description: "Узнайте одну характеристику любого игрока", type: "investigative", usesLeft: 1 },
-    { id: 3, name: "Саботажник", description: "Отмените раскрытие характеристики другого игрока", type: "disruptive", usesLeft: 1 },
-    { id: 4, name: "Лидер", description: "Ваш голос считается за два", type: "influential", usesLeft: 1 },
-    { id: 5, name: "Шпион", description: "Посмотрите все карты действий других игроков", type: "investigative", usesLeft: 1 },
-    { id: 6, name: "Медик", description: "Излечите игрока с плохим здоровьем", type: "supportive", usesLeft: 1 },
-    { id: 7, name: "Стратег", description: "Измените порядок голосования", type: "tactical", usesLeft: 1 },
-    { id: 8, name: "Дипломат", description: "Предотвратите исключение игрока на один раунд", type: "protective", usesLeft: 1 }
-];
-
-// Остальные функции игры остаются те же...
-function generateCharacteristics() {
-    return {
-        profession: getRandomItem(professions),
-        health: getRandomItem(healthConditions),
-        hobby: getRandomItem(hobbies),
-        phobia: getRandomItem(phobias),
-        baggage: getRandomItem(baggage),
-        fact: getRandomItem(facts)
-    };
+// Функции для отображения экранов
+function showLobbyScreen() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('lobbyScreen').style.display = 'block';
+    document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('resultsScreen').style.display = 'none';
+    
+    updatePlayersDisplay();
+    updatePlayerCount();
+    updateHostControls();
 }
 
-function getRandomActionCard() {
-    return { ...getRandomItem(actionCards) };
+function showGameScreen() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('lobbyScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'block';
+    document.getElementById('resultsScreen').style.display = 'none';
+    
+    updateGameDisplay();
+    updatePlayersGrid();
 }
 
-function getRandomItem(array) {
-    return array[Math.floor(Math.random() * array.length)];
+function showResultsScreen(winners) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('lobbyScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('resultsScreen').style.display = 'block';
+    
+    const winnersList = document.getElementById('winnersList');
+    winnersList.innerHTML = '';
+    
+    winners.forEach(winner => {
+        const li = document.createElement('li');
+        li.textContent = winner.name;
+        li.className = 'host'; // Используем стиль хоста для выделения
+        winnersList.appendChild(li);
+    });
+}
+
+// Функции для обновления отображения
+function updateGameState(data) {
+    gameState.players = data.players || [];
+    gameState.serverGameState = data.gameState;
+    gameState.gamePhase = data.gamePhase;
+    gameState.currentRound = data.currentRound || 1;
+    gameState.timeLeft = data.timeLeft || 0;
+    
+    updatePlayerCount();
+    
+    if (gameState.players.length > 0) {
+        const me = gameState.players.find(p => p.id === gameState.playerId);
+        if (me) {
+            gameState.isHost = me.isHost;
+        }
+    }
+}
+
+function updatePlayersDisplay() {
+    const playersList = document.getElementById('playersList');
+    const currentPlayersCount = document.getElementById('currentPlayersCount');
+    
+    if (playersList) {
+        playersList.innerHTML = '';
+        
+        gameState.players.forEach(player => {
+            const li = document.createElement('li');
+            li.textContent = player.name + (player.isHost ? ' 👑' : '');
+            li.className = player.isHost ? 'host' : '';
+            playersList.appendChild(li);
+        });
+    }
+    
+    if (currentPlayersCount) {
+        currentPlayersCount.textContent = gameState.players.length;
+    }
+}
+
+function updatePlayerCount() {
+    const playerCountElement = document.getElementById('playerCount');
+    if (playerCountElement) {
+        playerCountElement.textContent = gameState.players.length;
+    }
+}
+
+function updateHostControls() {
+    const startBtn = document.getElementById('startGameBtn');
+    const waitingInfo = document.getElementById('waitingInfo');
+    
+    if (gameState.isHost) {
+        if (startBtn) {
+            startBtn.style.display = 'block';
+            startBtn.disabled = gameState.players.length < 2;
+            startBtn.textContent = gameState.players.length < 2 ? 
+                'Начать игру (минимум 2 игрока)' : 
+                `Начать игру (${gameState.players.length}/12)`;
+        }
+        if (waitingInfo) {
+            waitingInfo.style.display = 'none';
+        }
+    } else {
+        if (startBtn) {
+            startBtn.style.display = 'none';
+        }
+        if (waitingInfo) {
+            waitingInfo.style.display = 'block';
+        }
+    }
 }
 
 function updateGameDisplay() {
@@ -406,17 +305,17 @@ function updateGameDisplay() {
         phaseDisplayElement.textContent = getPhaseDisplayText();
     }
     
+    updateTimerDisplay();
     updatePlayersGrid();
 }
 
 function getGameStatusText() {
     switch (gameState.gamePhase) {
-        case 'setup': return 'Подготовка к игре...';
         case 'discussion': return 'Фаза обсуждения';
         case 'voting': return 'Фаза голосования';
         case 'results': return 'Подведение итогов раунда';
         case 'finished': return 'Игра завершена';
-        default: return 'Ожидание...';
+        default: return 'Ожидание начала игры...';
     }
 }
 
@@ -426,6 +325,15 @@ function getPhaseDisplayText() {
         case 'voting': return 'ГОЛОСОВАНИЕ';
         case 'results': return 'РЕЗУЛЬТАТЫ';
         default: return 'ПОДГОТОВКА';
+    }
+}
+
+function updateTimerDisplay() {
+    const timerDisplay = document.getElementById('timerDisplay');
+    if (timerDisplay && gameState.timeLeft > 0) {
+        const minutes = Math.floor(gameState.timeLeft / 60);
+        const seconds = gameState.timeLeft % 60;
+        timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
 }
 
@@ -440,8 +348,10 @@ function updatePlayersGrid() {
     playersGrid.classList.add(`players-${playerCount}`);
     
     gameState.players.forEach(player => {
-        const playerCard = createPlayerCard(player);
-        playersGrid.appendChild(playerCard);
+        if (player.characteristics) {
+            const playerCard = createPlayerCard(player);
+            playersGrid.appendChild(playerCard);
+        }
     });
 }
 
@@ -483,17 +393,17 @@ function createPlayerCard(player) {
         </div>
         
         <div class="player-actions">
-            ${gameState.gamePhase === 'discussion' && isCurrentPlayer ? 
-                `<button class="modal-buttons" onclick="revealCharacteristic('${player.id}')">
+            ${gameState.gamePhase === 'discussion' && isCurrentPlayer && !player.hasRevealed ? 
+                `<button class="room-btn" onclick="openCharacteristicModal()">
                     🔍 Раскрыть характеристику
                 </button>` : ''
             }
             ${gameState.gamePhase === 'voting' && !isCurrentPlayer && player.isAlive ? 
                 `<div class="vote-section">
-                    <button class="vote-player-btn" onclick="voteForPlayer('${player.id}')">
-                        📋 Голосовать за исключение
+                    <button class="vote-player-btn ${gameState.myVote === player.id ? 'voted' : ''}" onclick="voteForPlayer('${player.id}')">
+                        ${gameState.myVote === player.id ? '✅ Проголосовано' : '📋 Голосовать'}
                     </button>
-                    <div class="voters-list" id="voters-${player.id}">
+                    <div class="voters-list">
                         Голосов: ${player.votes || 0}
                     </div>
                 </div>` : ''
@@ -516,109 +426,75 @@ function translateCharacteristic(key) {
     return translations[key] || key;
 }
 
-function startDiscussionPhase() {
-    gameState.gamePhase = 'discussion';
-    gameState.timeLeft = 180;
+// Функции взаимодействия
+function openCharacteristicModal() {
+    const player = gameState.players.find(p => p.id === gameState.playerId);
+    if (!player || !player.characteristics) return;
     
-    updateGameDisplay();
-    startTimer();
-}
-
-function startTimer() {
-    if (gameState.timer) {
-        clearInterval(gameState.timer);
-    }
+    const modal = document.getElementById('characteristicModal');
+    const options = document.getElementById('characteristicOptions');
     
-    gameState.timer = setInterval(() => {
-        gameState.timeLeft--;
-        updateTimerDisplay();
-        
-        if (gameState.timeLeft <= 0) {
-            clearInterval(gameState.timer);
-            nextPhase();
+    options.innerHTML = '';
+    
+    Object.keys(player.characteristics).forEach(key => {
+        if (key !== 'profession') { // Профессия всегда видна
+            const button = document.createElement('button');
+            button.className = 'room-btn';
+            button.textContent = `${translateCharacteristic(key)}: ${player.characteristics[key]}`;
+            button.onclick = () => revealCharacteristic(key);
+            options.appendChild(button);
         }
-    }, 1000);
-}
-
-function updateTimerDisplay() {
-    const timerDisplay = document.getElementById('timerDisplay');
-    if (timerDisplay) {
-        const minutes = Math.floor(gameState.timeLeft / 60);
-        const seconds = gameState.timeLeft % 60;
-        timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    }
-}
-
-function nextPhase() {
-    switch (gameState.gamePhase) {
-        case 'discussion':
-            startVotingPhase();
-            break;
-        case 'voting':
-            showResults();
-            break;
-        case 'results':
-            nextRound();
-            break;
-    }
-}
-
-function startVotingPhase() {
-    gameState.gamePhase = 'voting';
-    gameState.timeLeft = 60;
-    gameState.playersWhoVoted = [];
+    });
     
-    updateGameDisplay();
-    startTimer();
+    modal.style.display = 'flex';
 }
 
-function showResults() {
-    gameState.gamePhase = 'results';
-    updateGameDisplay();
+function closeCharacteristicModal() {
+    document.getElementById('characteristicModal').style.display = 'none';
+}
+
+function revealCharacteristic(characteristic) {
+    socket.emit('reveal-characteristic', { characteristic });
+    closeCharacteristicModal();
+}
+
+function voteForPlayer(playerId) {
+    if (gameState.gamePhase !== 'voting') return;
     
-    setTimeout(() => {
-        nextRound();
-    }, 5000);
+    gameState.myVote = playerId;
+    socket.emit('vote-player', { targetId: playerId });
+    updatePlayersGrid();
 }
 
-function nextRound() {
-    gameState.currentRound++;
-    gameState.revealedThisRound = 0;
-    
-    if (gameState.currentRound > gameState.maxRounds) {
-        endGame();
-    } else {
-        startDiscussionPhase();
-    }
+function showNotification(title, message) {
+    document.getElementById('notificationTitle').textContent = title;
+    document.getElementById('notificationMessage').textContent = message;
+    document.getElementById('notificationModal').style.display = 'flex';
 }
 
-function endGame() {
-    gameState.gamePhase = 'finished';
-    updateGameDisplay();
-    alert('Игра завершена!');
+function closeNotificationModal() {
+    document.getElementById('notificationModal').style.display = 'none';
 }
 
-// Заглушки функций
-function revealCharacteristic(playerId) { console.log('Revealing characteristic for player:', playerId); }
-function voteForPlayer(playerId) { console.log('Voting for player:', playerId); }
-function voteToSkip() { console.log('Voting to skip'); }
-function showActionCard() { console.log('Showing action cards'); }
-function closeActionCardModal() {}
-function closeTargetSelectionModal() {}
-function closeCharacteristicSelectionModal() {}
+// Заглушки для дополнительных функций
+function voteToSkip() {
+    console.log('Vote to skip phase');
+}
 
-// Проверяем параметры URL при загрузке
+function showActionCard() {
+    console.log('Show action cards');
+}
+
+// Обработчик нажатия Enter в поле ввода имени
 document.addEventListener('DOMContentLoaded', function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const roomFromUrl = urlParams.get('room');
-    
-    if (roomFromUrl) {
-        window.ROOM_CODE = roomFromUrl.toUpperCase();
-        window.IS_ROOM_PAGE = true;
-        gameState.roomCode = window.ROOM_CODE;
+    const playerNameInput = document.getElementById('playerNameInput');
+    if (playerNameInput) {
+        playerNameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                joinGame();
+            }
+        });
     }
-    
-    console.log('DOM loaded, IS_ROOM_PAGE:', window.IS_ROOM_PAGE, 'ROOM_CODE:', window.ROOM_CODE);
 });
 
-console.log('Client.js loaded with subdomain support');
+console.log('🎮 Bunker Game Client Loaded');

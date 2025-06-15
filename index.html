@@ -3,58 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎭 РОЛЕВАЯ ИГРА</title>
+    <title>🎭 БУНКЕР</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="game-container">
         <header class="game-header">
-            <h1>🎭 РОЛЕВАЯ ИГРА</h1>
-            <p>Добро пожаловать в ролевую игру "Бункер"!</p>
+            <h1>🎭 БУНКЕР</h1>
+            <p>Общая игра для всех участников</p>
+            <div class="server-info">
+                <span id="playerCount">0</span> игроков онлайн
+            </div>
         </header>
 
         <!-- Экран входа -->
-        <div class="login-screen" id="loginScreen">
-            <h2>Добро пожаловать!</h2>
+        <div class="screen" id="loginScreen">
             <div class="login-form">
-                <label>Ваше имя: 
-                    <input type="text" id="playerName" placeholder="Введите ваше имя" maxlength="20">
-                </label>
-                <div class="room-options">
-                    <button id="createRoomBtn" class="room-btn" onclick="createRoom()">Создать новую комнату</button>
-                    <div class="join-room">
-                        <input type="text" id="roomCodeInput" placeholder="Код комнаты" maxlength="6">
-                        <button id="joinRoomBtn" class="room-btn" onclick="joinRoom()">Войти в комнату</button>
-                    </div>
+                <h2>Добро пожаловать в Бункер!</h2>
+                <p>Введите ваше имя для присоединения к общей игре:</p>
+                <input type="text" id="playerNameInput" placeholder="Ваше имя" maxlength="20" autofocus>
+                <button id="joinGameBtn" class="room-btn" onclick="joinGame()">
+                    Присоединиться к игре
+                </button>
+            </div>
+        </div>
+
+        <!-- Экран лобби -->
+        <div class="screen" id="lobbyScreen" style="display: none;">
+            <div class="room-setup">
+                <h2>Лобби игры</h2>
+                
+                <div class="players-waiting">
+                    <h3>Игроки в лобби (<span id="currentPlayersCount">0</span>/<span id="maxPlayersCount">12</span>):</h3>
+                    <ul id="playersList"></ul>
+                </div>
+
+                <button id="startGameBtn" class="start-game-btn" onclick="startGame()" style="display: none;" disabled>
+                    Начать игру
+                </button>
+                
+                <div class="game-info" id="waitingInfo">
+                    <p>⏳ Ожидание хоста для начала игры...</p>
                 </div>
             </div>
         </div>
 
-        <!-- Экран настройки комнаты -->
-        <div class="room-setup" id="roomSetup" style="display: none;">
-            <h2>Настройка комнаты</h2>
-            <div class="room-info">
-                <p>Код комнаты: <span id="roomCode" class="room-code">XXXXXX</span></p>
-                <button id="copyCodeBtn" class="copy-btn" onclick="copyRoomUrl()">Копировать ссылку</button>
-            </div>
-            <div class="room-settings">
-                <label>Количество игроков: 
-                    <select id="maxPlayers" onchange="updateMaxPlayers()">
-                        <option value="8">8 игроков</option>
-                        <option value="6">6 игроков</option>
-                        <option value="4">4 игрока</option>
-                    </select>
-                </label>
-            </div>
-            <div class="players-waiting" id="playersWaiting">
-                <h3>Игроки в комнате (<span id="currentPlayersCount">1</span>/<span id="maxPlayersCount">8</span>):</h3>
-                <ul id="playersList"></ul>
-            </div>
-            <button id="startGameBtn" class="start-game-btn" onclick="startGame()" disabled>Начать игру</button>
-        </div>
-
         <!-- Игровой экран -->
-        <div class="game-board" id="gameBoard" style="display: none;">
+        <div class="screen" id="gameScreen" style="display: none;">
             <div class="game-info">
                 <div class="round-info">
                     <h2>РАУНД <span id="currentRound">1</span></h2>
@@ -65,47 +60,47 @@
                     <div class="timer-display" id="timerDisplay">0:00</div>
                 </div>
             </div>
-
-            <!-- Сетка игроков -->
+            
             <div class="players-grid" id="playersGrid">
-                <!-- Карточки игроков будут добавлены динамически -->
+                <!-- Карточки игроков -->
             </div>
 
-            <!-- Панель действий -->
-            <div class="game-actions">
-                <button id="skipPhaseBtn" onclick="voteToSkip()" class="action-btn">
-                    ⏭️ Пропустить фазу
-                </button>
-                <button id="showActionCardsBtn" onclick="showActionCard()" class="action-btn">
-                    🃏 Карты действий
-                </button>
+            <div class="game-actions" id="gameActions">
+                <button id="skipPhaseBtn" onclick="voteToSkip()" class="action-btn">⏭️ Пропустить фазу</button>
+                <button id="showActionCardsBtn" onclick="showActionCard()" class="action-btn">🃏 Карты действий</button>
             </div>
         </div>
 
-        <!-- Модальное окно карт действий -->
-        <div id="actionCardModal" class="modal" style="display: none;">
-            <div class="modal-content">
-                <span class="close" onclick="closeActionCardModal()">&times;</span>
-                <h3>Ваши карты действий</h3>
-                <div id="actionCardsList"></div>
+        <!-- Экран результатов -->
+        <div class="screen" id="resultsScreen" style="display: none;">
+            <div class="room-setup">
+                <h2>🏆 Игра завершена!</h2>
+                <div id="winnersSection">
+                    <h3>Победители:</h3>
+                    <ul id="winnersList"></ul>
+                </div>
+                <div class="game-info">
+                    <p>Игра автоматически перезапустится через несколько секунд...</p>
+                </div>
             </div>
         </div>
 
-        <!-- Модальное окно выбора цели -->
-        <div id="targetSelectionModal" class="modal" style="display: none;">
+        <!-- Модальные окна -->
+        <div id="characteristicModal" class="modal" style="display: none;">
             <div class="modal-content">
-                <span class="close" onclick="closeTargetSelectionModal()">&times;</span>
-                <h3>Выберите цель</h3>
-                <div id="targetPlayersList"></div>
-            </div>
-        </div>
-
-        <!-- Модальное окно выбора характеристики -->
-        <div id="characteristicSelectionModal" class="modal" style="display: none;">
-            <div class="modal-content">
-                <span class="close" onclick="closeCharacteristicSelectionModal()">&times;</span>
                 <h3>Выберите характеристику для раскрытия</h3>
-                <div id="characteristicsList"></div>
+                <div id="characteristicOptions" class="modal-buttons">
+                    <!-- Опции будут добавлены динамически -->
+                </div>
+                <button onclick="closeCharacteristicModal()" class="room-btn secondary">Отмена</button>
+            </div>
+        </div>
+
+        <div id="notificationModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3 id="notificationTitle">Уведомление</h3>
+                <p id="notificationMessage"></p>
+                <button onclick="closeNotificationModal()" class="room-btn">ОК</button>
             </div>
         </div>
     </div>
