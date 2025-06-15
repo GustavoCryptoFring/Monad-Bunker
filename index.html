@@ -33,6 +33,17 @@
             <div class="room-setup">
                 <h2>Лобби игры</h2>
                 
+                <!-- ДОБАВИЛИ селектор количества игроков -->
+                <div class="room-settings" id="maxPlayersSelector" style="display: none;">
+                    <label>Максимум игроков: 
+                        <select id="maxPlayersSelect" onchange="changeMaxPlayers()">
+                            <option value="8">8 игроков</option>
+                            <option value="12" selected>12 игроков</option>
+                            <option value="16">16 игроков</option>
+                        </select>
+                    </label>
+                </div>
+                
                 <div class="players-waiting">
                     <h3>Игроки в лобби (<span id="currentPlayersCount">0</span>/<span id="maxPlayersCount">12</span>):</h3>
                     <ul id="playersList"></ul>

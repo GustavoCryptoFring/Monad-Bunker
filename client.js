@@ -12,7 +12,8 @@ let gameState = {
     timeLeft: 0,
     votingResults: {},
     myVote: null,
-    timer: null
+    timer: null,
+    maxPlayers: 12 // ДОБАВИЛИ maxPlayers
 };
 
 // Инициализация Socket.IO
@@ -40,14 +41,27 @@ socket.on('join-confirmed', function(data) {
     gameState.playerId = data.playerId;
     gameState.playerName = data.playerName;
     gameState.isHost = data.isHost;
+    gameState.maxPlayers = data.maxPlayers || 12; // ДОБАВИЛИ maxPlayers
     showLobbyScreen();
 });
 
 socket.on('player-joined', function(data) {
     console.log('👋 Player joined:', data);
     gameState.players = data.players;
+    if (data.maxPlayers) {
+        gameState.maxPlayers = data.maxPlayers; // ОБНОВЛЯЕМ maxPlayers
+    }
     updatePlayersDisplay();
     updatePlayerCount();
+});
+
+// НОВЫЙ обработчик изменения максимального количества игроков
+socket.on('max-players-changed', function(data) {
+    console.log('🔧 Max players changed:', data);
+    gameState.maxPlayers = data.maxPlayers;
+    gameState.players = data.players;
+    updatePlayersDisplay();
+    updateMaxPlayersSelector();
 });
 
 socket.on('player-left', function(data) {
@@ -239,6 +253,7 @@ function updateGameState(data) {
 function updatePlayersDisplay() {
     const playersList = document.getElementById('playersList');
     const currentPlayersCount = document.getElementById('currentPlayersCount');
+    const maxPlayersCount = document.getElementById('maxPlayersCount');
     
     if (playersList) {
         playersList.innerHTML = '';
@@ -254,6 +269,12 @@ function updatePlayersDisplay() {
     if (currentPlayersCount) {
         currentPlayersCount.textContent = gameState.players.length;
     }
+    
+    if (maxPlayersCount) {
+        maxPlayersCount.textContent = gameState.maxPlayers || 12;
+    }
+    
+    updateHostControls(); // ВАЖНО: обновляем контролы хоста
 }
 
 function updatePlayerCount() {
@@ -266,17 +287,22 @@ function updatePlayerCount() {
 function updateHostControls() {
     const startBtn = document.getElementById('startGameBtn');
     const waitingInfo = document.getElementById('waitingInfo');
+    const maxPlayersSelector = document.getElementById('maxPlayersSelector');
     
     if (gameState.isHost) {
         if (startBtn) {
             startBtn.style.display = 'block';
+            // ИСПРАВЛЕНО: кнопка активна при >= 2 игроков
             startBtn.disabled = gameState.players.length < 2;
             startBtn.textContent = gameState.players.length < 2 ? 
                 'Начать игру (минимум 2 игрока)' : 
-                `Начать игру (${gameState.players.length}/12)`;
+                `Начать игру (${gameState.players.length}/${gameState.maxPlayers || 12})`;
         }
         if (waitingInfo) {
             waitingInfo.style.display = 'none';
+        }
+        if (maxPlayersSelector) {
+            maxPlayersSelector.style.display = 'block';
         }
     } else {
         if (startBtn) {
@@ -285,6 +311,25 @@ function updateHostControls() {
         if (waitingInfo) {
             waitingInfo.style.display = 'block';
         }
+        if (maxPlayersSelector) {
+            maxPlayersSelector.style.display = 'none';
+        }
+    }
+}
+
+// НОВАЯ функция изменения максимального количества игроков
+function changeMaxPlayers() {
+    const selector = document.getElementById('maxPlayersSelect');
+    const maxPlayers = parseInt(selector.value);
+    
+    console.log('🔧 Changing max players to:', maxPlayers);
+    socket.emit('change-max-players', { maxPlayers });
+}
+
+function updateMaxPlayersSelector() {
+    const selector = document.getElementById('maxPlayersSelect');
+    if (selector && gameState.maxPlayers) {
+        selector.value = gameState.maxPlayers;
     }
 }
 

@@ -94,14 +94,16 @@ io.on('connection', (socket) => {
         io.to('game-room').emit('player-joined', {
             players: gameRoom.players,
             newPlayer: data.playerName,
-            gameState: gameRoom.gameState
+            gameState: gameRoom.gameState,
+            maxPlayers: gameRoom.maxPlayers // ДОБАВИЛИ maxPlayers
         });
         
         // Подтверждение присоединения
         socket.emit('join-confirmed', {
             playerId: socket.id,
             playerName: data.playerName,
-            isHost: newPlayer.isHost
+            isHost: newPlayer.isHost,
+            maxPlayers: gameRoom.maxPlayers // ДОБАВИЛИ maxPlayers
         });
     });
     
@@ -257,6 +259,42 @@ io.on('connection', (socket) => {
                 gameState: gameRoom.gameState
             });
         }
+    });
+    
+    socket.on('change-max-players', (data) => {
+        console.log('🔧 Changing max players to:', data.maxPlayers);
+        
+        const player = gameRoom.players.find(p => p.id === socket.id);
+        
+        if (!player || !player.isHost) {
+            socket.emit('error', 'Только хост может изменить количество игроков!');
+            return;
+        }
+        
+        if (gameRoom.gameState !== 'lobby') {
+            socket.emit('error', 'Нельзя изменить количество игроков во время игры!');
+            return;
+        }
+        
+        const newMaxPlayers = parseInt(data.maxPlayers);
+        if (![8, 12, 16].includes(newMaxPlayers)) {
+            socket.emit('error', 'Недопустимое количество игроков!');
+            return;
+        }
+        
+        // Проверяем, что текущее количество игроков не превышает новый лимит
+        if (gameRoom.players.length > newMaxPlayers) {
+            socket.emit('error', `Сейчас в игре ${gameRoom.players.length} игроков. Нельзя установить лимит ${newMaxPlayers}.`);
+            return;
+        }
+        
+        gameRoom.maxPlayers = newMaxPlayers;
+        
+        // Уведомляем всех игроков об изменении
+        io.to('game-room').emit('max-players-changed', {
+            maxPlayers: gameRoom.maxPlayers,
+            players: gameRoom.players
+        });
     });
 });
 
