@@ -58,8 +58,8 @@ socket.on('room-created', function(data) {
     console.log('Room created:', data);
     
     if (data.redirect && data.roomUrl) {
-        // Перенаправляем на поддомен
-        alert(`Комната ${data.roomCode} создана! Переходим к комнате...`);
+        // Убираем alert и сразу перенаправляем
+        console.log('Redirecting to:', data.roomUrl);
         window.location.href = data.roomUrl;
     } else {
         // Остаемся на текущей странице (мы уже на поддомене)
@@ -75,8 +75,8 @@ socket.on('room-joined', function(data) {
     console.log('Room joined:', data);
     
     if (data.redirect && data.roomUrl) {
-        // Перенаправляем на поддомен
-        alert(`Присоединяемся к комнате ${data.roomCode}...`);
+        // Убираем alert и сразу перенаправляем
+        console.log('Redirecting to:', data.roomUrl);
         window.location.href = data.roomUrl;
     } else {
         // Остаемся на поддомене
@@ -132,6 +132,8 @@ function createRoom() {
         alert('Нет соединения с сервером');
         return;
     }
+    
+    console.log('Sending create-room request with playerName:', playerName);
     
     gameState.playerName = playerName;
     gameState.currentPlayerName = playerName;

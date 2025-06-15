@@ -1029,3 +1029,38 @@ body {
     color: #bdc3c7;
     margin-bottom: 30px;
 }
+
+/* СТИЛИ ДЛЯ ПАНЕЛИ ДЕЙСТВИЙ */
+.game-actions {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+
+.action-btn {
+    background: linear-gradient(45deg, #8e44ad, #9b59b6);
+    color: white;
+    border: none;
+    padding: 15px 25px;
+    border-radius: 10px;
+    font-size: 1.1em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: bold;
+    min-width: 180px;
+}
+
+.action-btn:hover {
+    background: linear-gradient(45deg, #7d3c98, #8e44ad);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(142, 68, 173, 0.3);
+}
+
+.action-btn:disabled {
+    background: #7f8c8d;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
