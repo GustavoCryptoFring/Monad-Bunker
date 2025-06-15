@@ -1,62 +1,239 @@
-const socket = io(); // Без URL - подключится к тому же домену где запущен сайт
+console.log('Client.js loading...');
 
-// Замените объявление gameState на var или инициализируйте сразу
-var gameState = {
+// Объединенное состояние игры из обоих файлов
+let gameState = {
+    // Из script.js
+    players: [],
+    currentRound: 1,
+    gamePhase: 'login',
+    votingResults: {},
+    maxRounds: 3,
+    currentPlayerName: '',
+    currentPlayerId: null,
+    roomCode: '',
+    isRoomHost: false,
+    currentTurnPlayerId: null,
+    revealedThisRound: 0,
+    timer: null,
+    timeLeft: 0,
+    playersWhoVoted: [],
+    skipVotes: 0,
+    playersToEliminateNextRound: 0,
+    
+    // Из client.js (дополнительные поля)
     currentPhase: 'waiting',
     round: 1,
-    players: {},
     maxPlayers: 8,
-    roomCode: '',
     playerId: '',
     playerName: '',
     isHost: false,
-    timer: 0,
     skipVotes: {
         discussion: new Set(),
         voting: new Set()
     }
 };
 
-// Или альтернативный вариант - переместите функцию createRoom после объявления gameState
-function createRoom() {
-    console.log('createRoom called'); // Для отладки
-    
-    const playerName = document.getElementById('playerName').value.trim();
-    
-    if (!playerName) {
-        alert('Пожалуйста, введите ваше имя');
-        return;
-    }
-    
-    if (!socket) {
-        console.error('Socket not initialized');
-        return;
-    }
-    
-    gameState.playerName = playerName;
-    gameState.isHost = true;
-    
-    socket.emit('create-room', { playerName });
-}
+// Инициализация Socket.IO
+const socket = io();
 
-// Инициализация при загрузке
-document.addEventListener('DOMContentLoaded', function() {
-    socket = io();
-    
-    // Добавьте обработчики событий сокета здесь
-    socket.on('room-created', function(data) {
-        console.log('Room created:', data);
-        // Обработка создания комнаты
-    });
-    
-    socket.on('error', function(error) {
-        console.error('Socket error:', error);
-        alert('Ошибка: ' + error);
-    });
+// Socket.IO обработчики
+socket.on('connect', function() {
+    console.log('✅ Connected to server:', socket.id);
+    gameState.playerId = socket.id;
+    gameState.currentPlayerId = socket.id;
 });
 
-// Функции интерфейса
+socket.on('disconnect', function() {
+    console.log('❌ Disconnected from server');
+});
+
+socket.on('connect_error', function(error) {
+    console.error('❌ Connection error:', error);
+    alert('Не удалось подключиться к серверу');
+});
+
+socket.on('room-created', function(data) {
+    console.log('Room created:', data);
+    gameState.roomCode = data.roomCode;
+    gameState.isHost = data.isHost;
+    gameState.isRoomHost = data.isHost;
+    gameState.players = [];
+    
+    // Конвертируем данные сервера в формат script.js
+    data.players.forEach(player => {
+        gameState.players.push({
+            id: player.id,
+            name: player.name,
+            isHost: player.isHost,
+            characteristics: {
+                profession: null,
+                health: null,
+                hobby: null,
+                phobia: null,
+                baggage: null,
+                fact: null
+            },
+            actionCards: [],
+            isAlive: true,
+            votes: 0,
+            hasRevealed: false
+        });
+    });
+    
+    showRoomSetup();
+});
+
+socket.on('room-joined', function(data) {
+    console.log('Room joined:', data);
+    gameState.roomCode = data.roomCode;
+    gameState.isHost = data.isHost;
+    gameState.isRoomHost = data.isHost;
+    gameState.players = [];
+    
+    data.players.forEach(player => {
+        gameState.players.push({
+            id: player.id,
+            name: player.name,
+            isHost: player.isHost,
+            characteristics: {
+                profession: null,
+                health: null,
+                hobby: null,
+                phobia: null,
+                baggage: null,
+                fact: null
+            },
+            actionCards: [],
+            isAlive: true,
+            votes: 0,
+            hasRevealed: false
+        });
+    });
+    
+    showRoomSetup();
+});
+
+socket.on('player-joined', function(data) {
+    console.log('Player joined:', data);
+    gameState.players = [];
+    
+    data.players.forEach(player => {
+        gameState.players.push({
+            id: player.id,
+            name: player.name,
+            isHost: player.isHost,
+            characteristics: {
+                profession: null,
+                health: null,
+                hobby: null,
+                phobia: null,
+                baggage: null,
+                fact: null
+            },
+            actionCards: [],
+            isAlive: true,
+            votes: 0,
+            hasRevealed: false
+        });
+    });
+    
+    updatePlayersList();
+});
+
+socket.on('player-left', function(data) {
+    console.log('Player left:', data);
+    gameState.players = [];
+    
+    data.players.forEach(player => {
+        gameState.players.push({
+            id: player.id,
+            name: player.name,
+            isHost: player.isHost,
+            characteristics: {
+                profession: null,
+                health: null,
+                hobby: null,
+                phobia: null,
+                baggage: null,
+                fact: null
+            },
+            actionCards: [],
+            isAlive: true,
+            votes: 0,
+            hasRevealed: false
+        });
+    });
+    
+    updatePlayersList();
+});
+
+socket.on('error', function(error) {
+    console.error('Server error:', error);
+    alert('Ошибка: ' + error);
+});
+
+// Все данные игры из script.js (вставьте сюда все массивы из script.js)
+const professions = [
+    "Врач", "Учитель", "Инженер", "Повар", "Программист", "Механик",
+    "Писатель", "Художник", "Музыкант", "Строитель", "Фермер", "Пилот",
+    "Медсестра", "Полицейский", "Пожарный", "Ветеринар", "Переводчик",
+    "Дизайнер", "Фотограф", "Журналист", "Психолог", "Бухгалтер"
+];
+
+const healthConditions = [
+    "Отличное здоровье", "Хорошее здоровье", "Удовлетворительное здоровье",
+    "Близорукость", "Дальнозоркость", "Астма", "Аллергия на пыль",
+    "Аллергия на животных", "Диабет", "Гипертония", "Артрит",
+    "Хроническая усталость", "Мигрени", "Бессонница", "Депрессия",
+    "Тревожность", "Боязнь высоты", "Клаустрофобия"
+];
+
+const hobbies = [
+    "Чтение", "Кулинария", "Садоводство", "Рисование", "Музыка",
+    "Спорт", "Танцы", "Фотография", "Путешествия", "Коллекционирование",
+    "Рукоделие", "Игры", "Рыбалка", "Охота", "Йога", "Медитация",
+    "Волонтерство", "Изучение языков", "Астрономия", "Археология"
+];
+
+const phobias = [
+    "Боязнь темноты", "Боязнь высоты", "Боязнь замкнутых пространств",
+    "Боязнь пауков", "Боязнь змей", "Боязнь собак", "Боязнь воды",
+    "Боязнь огня", "Боязнь толпы", "Боязнь публичных выступлений",
+    "Боязнь игл", "Боязнь крови", "Боязнь самолетов", "Боязнь лифтов",
+    "Боязнь микробов", "Боязнь клоунов", "Боязнь зеркал"
+];
+
+const baggage = [
+    "Рюкзак с едой", "Аптечка", "Инструменты", "Оружие", "Книги",
+    "Семена растений", "Радио", "Фонарик", "Одеяла", "Одежда",
+    "Документы", "Деньги", "Украшения", "Лекарства", "Компьютер",
+    "Музыкальный инструмент", "Спортивное снаряжение", "Игрушки"
+];
+
+const facts = [
+    "Был в тюрьме", "Спас чью-то жизнь", "Выиграл в лотерею",
+    "Знает 5 языков", "Чемпион по шахматам", "Бывший военный",
+    "Имеет двойное гражданство", "Работал в цирке", "Писал книги",
+    "Изобрел что-то важное", "Путешествовал по всему миру",
+    "Выживал в дикой природе", "Знает боевые искусства",
+    "Бывший актер", "Работал спасателем", "Имеет фотографическую память"
+];
+
+const actionCards = [
+    { id: 1, name: "Целитель", description: "Можете спасти одного игрока от исключения", type: "protective", usesLeft: 1 },
+    { id: 2, name: "Детектив", description: "Узнайте одну характеристику любого игрока", type: "investigative", usesLeft: 1 },
+    { id: 3, name: "Саботажник", description: "Отмените раскрытие характеристики другого игрока", type: "disruptive", usesLeft: 1 },
+    { id: 4, name: "Лидер", description: "Ваш голос считается за два", type: "influential", usesLeft: 1 },
+    { id: 5, name: "Шпион", description: "Посмотрите все карты действий других игроков", type: "investigative", usesLeft: 1 },
+    { id: 6, name: "Медик", description: "Излечите игрока с плохим здоровьем", type: "supportive", usesLeft: 1 },
+    { id: 7, name: "Стратег", description: "Измените порядок голосования", type: "tactical", usesLeft: 1 },
+    { id: 8, name: "Дипломат", description: "Предотвратите исключение игрока на один раунд", type: "protective", usesLeft: 1 }
+];
+
+// Основные функции
 function createRoom() {
+    console.log('Creating room...');
+    
     const playerName = document.getElementById('playerName').value.trim();
     
     if (!playerName) {
@@ -64,10 +241,13 @@ function createRoom() {
         return;
     }
     
-    // Теперь gameState уже определен и можно его использовать
-    gameState.playerName = playerName;
-    gameState.isHost = true;
+    if (!socket.connected) {
+        alert('Нет соединения с сервером');
+        return;
+    }
     
+    gameState.playerName = playerName;
+    gameState.currentPlayerName = playerName;
     socket.emit('create-room', { playerName });
 }
 
@@ -86,302 +266,328 @@ function joinRoom() {
     }
 
     gameState.playerName = playerName;
-    socket.emit('joinRoom', { roomCode, playerName });
+    gameState.currentPlayerName = playerName;
+    socket.emit('join-room', { roomCode, playerName });
 }
 
-function updateMaxPlayers() {
-    if (!gameState.isRoomHost) return;
-    
-    const maxPlayers = parseInt(document.getElementById('maxPlayers').value);
-    socket.emit('updateMaxPlayers', { 
-        roomCode: gameState.roomCode, 
-        maxPlayers 
-    });
-}
-
-function startGame() {
-    if (!gameState.isRoomHost) return;
-    socket.emit('startGame', { roomCode: gameState.roomCode });
-}
-
-function revealCharacteristic(playerId, characteristic) {
-    if (gameState.playerId !== playerId) return;
-    socket.emit('revealCharacteristic', { 
-        roomCode: gameState.roomCode, 
-        characteristic 
-    });
-}
-
-function voteForPlayer(targetId) {
-    socket.emit('voteForPlayer', { 
-        roomCode: gameState.roomCode, 
-        targetId 
-    });
-}
-
-function voteToSkip(phase) {
-    socket.emit('voteToSkip', { 
-        roomCode: gameState.roomCode, 
-        phase 
-    });
-}
-
-function showActionCard(playerId) {
-    if (gameState.playerId !== playerId || !gameState.myActionCard) return;
-    
-    document.getElementById('actionCardName').textContent = gameState.myActionCard.name;
-    document.getElementById('actionCardDescription').textContent = gameState.myActionCard.description;
-    document.getElementById('actionCardModal').style.display = 'block';
-}
-
-function useActionCard() {
-    // Здесь нужна логика выбора цели в зависимости от типа карты
-    // Пока просто закрываем модальное окно
-    closeActionCardModal();
-    
-    socket.emit('useActionCard', { 
-        roomCode: gameState.roomCode,
-        targetId: null,
-        additionalData: null
-    });
-}
-
-function closeActionCardModal() {
-    document.getElementById('actionCardModal').style.display = 'none';
-}
-
-function closeTargetSelectionModal() {
-    document.getElementById('targetSelectionModal').style.display = 'none';
-}
-
-function closeCharacteristicSelectionModal() {
-    document.getElementById('characteristicSelectionModal').style.display = 'none';
-}
-
-// Вспомогательные функции
-function updateRoomDisplay() {
+function showRoomSetup() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('roomSetup').style.display = 'block';
     document.getElementById('roomCode').textContent = gameState.roomCode;
-    document.getElementById('currentPlayersCount').textContent = gameState.players.length;
-    document.getElementById('maxPlayersCount').textContent = gameState.maxPlayers;
-    
+    updatePlayersList();
+}
+
+function updatePlayersList() {
     const playersList = document.getElementById('playersList');
-    playersList.innerHTML = gameState.players.map(player => 
-        `<li class="${player.isHost ? 'host' : ''}">${player.name} ${player.isHost ? '(Хост)' : ''}</li>`
-    ).join('');
+    const currentPlayersCount = document.getElementById('currentPlayersCount');
+    
+    if (!playersList || !currentPlayersCount) return;
+    
+    playersList.innerHTML = '';
+    
+    gameState.players.forEach(player => {
+        const li = document.createElement('li');
+        li.textContent = player.name + (player.isHost ? ' (Хост)' : '');
+        li.className = player.isHost ? 'host' : '';
+        playersList.appendChild(li);
+    });
+    
+    currentPlayersCount.textContent = gameState.players.length;
     
     const startBtn = document.getElementById('startGameBtn');
-    const canStart = gameState.isRoomHost && gameState.players.length >= 4;
-    startBtn.disabled = !canStart;
-    startBtn.textContent = gameState.players.length < 4 ? 
-        `Начать игру (минимум 4 игрока)` : 
-        `Начать игру (${gameState.players.length}/${gameState.maxPlayers})`;
-}
-
-function updatePlayersDisplay() {
-    const playersGrid = document.getElementById('playersGrid');
-    if (!playersGrid) return;
-    
-    const playerCount = gameState.players.length;
-    playersGrid.className = `players-grid players-${playerCount}`;
-    playersGrid.innerHTML = gameState.players.map(player => createPlayerCard(player)).join('');
-}
-
-function createPlayerCard(player) {
-    const isCurrentPlayer = gameState.playerId === player.id;
-    const isCurrentTurn = gameState.currentTurnPlayerId === player.id && gameState.currentPhase === 'playing';
-    const canInteract = isCurrentPlayer && !player.eliminated && isCurrentTurn;
-    const isVotingPhase = gameState.currentPhase === 'voting';
-    const hasVoted = gameState.playersWhoVoted.includes(gameState.playerId);
-    
-    return `
-        <div class="player-card ${player.eliminated ? 'eliminated' : ''} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''}" 
-             data-player-id="${player.id}">
-            <div class="player-header">
-                <div class="player-info">
-                    <div class="player-avatar-container">
-                        <div class="player-avatar ${player.eliminated ? 'eliminated-avatar' : ''}">
-                            ${getPlayerEmoji(player.id)}
-                        </div>
-                        ${(isCurrentPlayer && gameState.myActionCard) ? `
-                            <div class="action-card-indicator ${player.actionCardUsed ? 'used' : 'active'}" 
-                                 onclick="showActionCard(${player.id})"
-                                 title="${gameState.myActionCard.name}">
-                                ⭐
-                            </div>
-                        ` : (player.actionCard ? `
-                            <div class="action-card-indicator ${player.actionCardUsed ? 'used' : 'active'}" 
-                                 title="У игрока есть карта действия">
-                                ⭐
-                            </div>
-                        ` : '')}
-                        ${isVotingPhase && !player.eliminated ? `
-                            <div class="vote-section">
-                                <button class="vote-player-btn" onclick="voteForPlayer(${player.id})" 
-                                        ${hasVoted ? 'disabled' : ''}>
-                                    VOTE
-                                </button>
-                                <div class="voters-list">
-                                    ${getVotersForPlayer(player.id)}
-                                </div>
-                            </div>
-                        ` : ''}
-                    </div>
-                    <div>
-                        <div class="player-name ${player.eliminated ? 'eliminated-name' : ''}">${player.name}</div>
-                        <div class="player-biology">
-                            <span onclick="${canInteract ? `revealCharacteristic(${player.id}, 'Биология')` : ''}" 
-                                  class="biology-info ${player.revealedCharacteristics && player.revealedCharacteristics.includes('Биология') ? 'revealed' : ''} ${canInteract ? 'clickable' : ''}">
-                                ${getCharacteristicDisplay(player, 'Биология', isCurrentPlayer)}
-                            </span>
-                        </div>
-                        ${player.eliminated ? '<div class="eliminated-status">ИСКЛЮЧЕН</div>' : ''}
-                        ${isCurrentPlayer ? '<div class="player-status current">ВЫ</div>' : ''}
-                        ${isCurrentTurn ? '<div class="player-status turn">ВАШ ХОД</div>' : ''}
-                    </div>
-                </div>
-            </div>
-            <ul class="characteristics">
-                ${['Профессия', 'Здоровье', 'Хобби', 'Фобия', 'Багаж', 'Факт 1', 'Факт 2'].map(char => `
-                    <li class="characteristic ${player.revealedCharacteristics && player.revealedCharacteristics.includes(char) ? 'revealed' : ''} ${isCurrentPlayer && (!player.revealedCharacteristics || !player.revealedCharacteristics.includes(char)) ? 'own-hidden' : ''}" 
-                        onclick="${canInteract && canRevealCharacteristic(player, char) ? `revealCharacteristic(${player.id}, '${char}')` : ''}">
-                        <span class="characteristic-name">${char}</span>
-                        <span class="characteristic-value">
-                            ${getCharacteristicDisplay(player, char, isCurrentPlayer)}
-                        </span>
-                    </li>
-                `).join('')}
-            </ul>
-            ${player.votesAgainst > 0 ? `<div class="votes-against">Голосов против: ${player.votesAgainst}</div>` : ''}
-        </div>
-    `;
-}
-
-function getCharacteristicDisplay(player, characteristic, isCurrentPlayer) {
-    // Если характеристика раскрыта для всех - показываем всем
-    if (player.revealedCharacteristics && player.revealedCharacteristics.includes(characteristic)) {
-        return `<span class="revealed-value">${player.revealedCharacteristics.includes(characteristic) ? '(известно всем)' : ''}</span>`;
-    }
-    
-    // Если это текущий игрок - показываем ему его характеристики
-    if (isCurrentPlayer && gameState.myCharacteristics) {
-        return `<span class="own-characteristic">${gameState.myCharacteristics[characteristic]}</span>`;
-    }
-    
-    // Для других игроков показываем заглушки
-    if (characteristic === 'Биология') {
-        return 'GA - ???';
-    }
-    return '???';
-}
-
-function canRevealCharacteristic(player, characteristic) {
-    if (gameState.currentPhase !== 'playing') return false;
-    if (player.revealedThisRound >= 2) return false;
-    if (player.revealedCharacteristics && player.revealedCharacteristics.includes(characteristic)) return false;
-    
-    // В первом раунде обязательно должна быть профессия
-    if (gameState.round === 1 && player.revealedThisRound === 0 && characteristic !== 'Профессия') {
-        return false;
-    }
-    
-    return true;
-}
-
-function getVotersForPlayer(playerId) {
-    // Эта информация будет приходить от сервера
-    return '';
-}
-
-function getPlayerEmoji(id) {
-    const emojis = ['👨‍💼', '👩‍💼', '👨‍⚕️', '👩‍⚕️', '👨‍🔧', '👩‍🔧', '👨‍🎨', '👩‍🎨', '👨‍🚀', '👩‍🚀', '👨‍🏫', '👩‍🏫', '👨‍💻', '👩‍💻', '👨‍🍳', '👩‍🍳'];
-    return emojis[id % emojis.length];
-}
-
-function updateRoundInfo() {
-    const roundElement = document.getElementById('currentRound');
-    if (roundElement) {
-        roundElement.textContent = gameState.round;
-    }
-}
-
-function updateGameStatus(status) {
-    const statusElement = document.getElementById('gameStatus');
-    if (statusElement) {
-        statusElement.textContent = status;
-    }
-}
-
-function updateTimer(timeLeft, phase) {
-    const timerElement = document.getElementById('timerDisplay');
-    const phaseElement = document.getElementById('phaseDisplay');
-    
-    if (timerElement) {
-        const mins = Math.floor(timeLeft / 60);
-        const secs = timeLeft % 60;
-        timerElement.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
-    
-    if (phaseElement) {
-        const phaseNames = {
-            'playing': 'Раскрытие карт',
-            'discussion': 'Обсуждение', 
-            'voting': 'Голосование'
-        };
-        phaseElement.textContent = phaseNames[phase] || phase;
+    if (startBtn) {
+        const canStart = gameState.players.length >= 2 && gameState.isHost;
+        startBtn.disabled = !canStart;
+        startBtn.textContent = gameState.players.length < 2 ? 
+            `Начать игру (минимум 2 игрока)` : 
+            `Начать игру (${gameState.players.length}/${gameState.maxPlayers})`;
     }
 }
 
 function copyRoomCode() {
-    navigator.clipboard.writeText(gameState.roomCode).then(() => {
-        alert('Код комнаты скопирован в буфер обмена!');
+    const roomCode = document.getElementById('roomCode').textContent;
+    navigator.clipboard.writeText(roomCode).then(() => {
+        alert('Код комнаты скопирован: ' + roomCode);
     }).catch(() => {
         const textArea = document.createElement('textarea');
-        textArea.value = gameState.roomCode;
+        textArea.value = roomCode;
         document.body.appendChild(textArea);
         textArea.select();
         document.execCommand('copy');
         document.body.removeChild(textArea);
-        alert('Код комнаты скопирован!');
+        alert('Код комнаты скопирован: ' + roomCode);
     });
 }
 
-// Обработчики закрытия модальных окон
-document.addEventListener('click', function(event) {
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-        if (event.target === modal) {
-            modal.style.display = 'none';
-        }
-    });
-});
+function updateMaxPlayers() {
+    if (!gameState.isHost) return;
+    
+    const maxPlayers = parseInt(document.getElementById('maxPlayers').value);
+    gameState.maxPlayers = maxPlayers;
+    updatePlayersList();
+}
 
-document.addEventListener('keydown', function(event) {
-    if (event.key === 'Escape') {
-        const modals = document.querySelectorAll('.modal');
-        modals.forEach(modal => {
-            if (modal.style.display === 'block') {
-                modal.style.display = 'none';
+function startGame() {
+    if (!gameState.isHost) return;
+    
+    if (gameState.players.length < 2) {
+        alert('Для начала игры нужно минимум 2 игрока!');
+        return;
+    }
+    
+    // Начинаем игру
+    gameState.gamePhase = 'setup';
+    gameState.currentRound = 1;
+    
+    // Раздаем характеристики и карты действий
+    distributeCharacteristics();
+    distributeActionCards();
+    
+    // Переходим к игровому экрану
+    document.getElementById('roomSetup').style.display = 'none';
+    document.getElementById('gameBoard').style.display = 'block';
+    
+    updateGameDisplay();
+    startDiscussionPhase();
+}
+
+// Функции игровой логики из script.js
+function distributeCharacteristics() {
+    gameState.players.forEach(player => {
+        player.characteristics = {
+            profession: getRandomItem(professions),
+            health: getRandomItem(healthConditions),
+            hobby: getRandomItem(hobbies),
+            phobia: getRandomItem(phobias),
+            baggage: getRandomItem(baggage),
+            fact: getRandomItem(facts)
+        };
+    });
+}
+
+function distributeActionCards() {
+    gameState.players.forEach(player => {
+        // Каждый игрок получает случайную карту действия
+        const randomCard = { ...getRandomItem(actionCards) };
+        player.actionCards = [randomCard];
+    });
+}
+
+function getRandomItem(array) {
+    return array[Math.floor(Math.random() * array.length)];
+}
+
+function updateGameDisplay() {
+    const currentRoundElement = document.getElementById('currentRound');
+    const gameStatusElement = document.getElementById('gameStatus');
+    const phaseDisplayElement = document.getElementById('phaseDisplay');
+    
+    if (currentRoundElement) {
+        currentRoundElement.textContent = gameState.currentRound;
+    }
+    
+    if (gameStatusElement) {
+        gameStatusElement.textContent = getGameStatusText();
+    }
+    
+    if (phaseDisplayElement) {
+        phaseDisplayElement.textContent = getPhaseDisplayText();
+    }
+    
+    updatePlayersGrid();
+}
+
+function getGameStatusText() {
+    switch (gameState.gamePhase) {
+        case 'setup': return 'Подготовка к игре...';
+        case 'discussion': return 'Фаза обсуждения';
+        case 'voting': return 'Фаза голосования';
+        case 'results': return 'Подведение итогов раунда';
+        case 'finished': return 'Игра завершена';
+        default: return 'Ожидание...';
+    }
+}
+
+function getPhaseDisplayText() {
+    switch (gameState.gamePhase) {
+        case 'discussion': return 'ОБСУЖДЕНИЕ';
+        case 'voting': return 'ГОЛОСОВАНИЕ';
+        case 'results': return 'РЕЗУЛЬТАТЫ';
+        default: return 'ПОДГОТОВКА';
+    }
+}
+
+function updatePlayersGrid() {
+    const playersGrid = document.getElementById('playersGrid');
+    if (!playersGrid) return;
+    
+    playersGrid.innerHTML = '';
+    
+    gameState.players.forEach(player => {
+        const playerCard = createPlayerCard(player);
+        playersGrid.appendChild(playerCard);
+    });
+}
+
+function createPlayerCard(player) {
+    const card = document.createElement('div');
+    card.className = `player-card ${player.isAlive ? '' : 'eliminated'}`;
+    card.innerHTML = `
+        <div class="player-name">${player.name}</div>
+        <div class="player-characteristics">
+            ${Object.entries(player.characteristics).map(([key, value]) => 
+                `<div class="characteristic ${player.hasRevealed ? 'revealed' : 'hidden'}">
+                    <strong>${translateCharacteristic(key)}:</strong> 
+                    ${player.hasRevealed || key === 'profession' ? value : '???'}
+                </div>`
+            ).join('')}
+        </div>
+        <div class="player-actions">
+            ${player.id === gameState.playerId ? 
+                `<button onclick="revealCharacteristic('${player.id}')">Раскрыть характеристику</button>` : 
+                `<button onclick="voteForPlayer('${player.id}')">Голосовать за исключение</button>`
             }
-        });
+        </div>
+    `;
+    return card;
+}
+
+function translateCharacteristic(key) {
+    const translations = {
+        profession: 'Профессия',
+        health: 'Здоровье',
+        hobby: 'Хобби',
+        phobia: 'Фобия',
+        baggage: 'Багаж',
+        fact: 'Факт'
+    };
+    return translations[key] || key;
+}
+
+function startDiscussionPhase() {
+    gameState.gamePhase = 'discussion';
+    gameState.timeLeft = 180; // 3 минуты на обсуждение
+    
+    updateGameDisplay();
+    startTimer();
+}
+
+function startTimer() {
+    if (gameState.timer) {
+        clearInterval(gameState.timer);
+    }
+    
+    gameState.timer = setInterval(() => {
+        gameState.timeLeft--;
+        updateTimerDisplay();
+        
+        if (gameState.timeLeft <= 0) {
+            clearInterval(gameState.timer);
+            nextPhase();
+        }
+    }, 1000);
+}
+
+function updateTimerDisplay() {
+    const timerDisplay = document.getElementById('timerDisplay');
+    if (timerDisplay) {
+        const minutes = Math.floor(gameState.timeLeft / 60);
+        const seconds = gameState.timeLeft % 60;
+        timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+}
+
+function nextPhase() {
+    switch (gameState.gamePhase) {
+        case 'discussion':
+            startVotingPhase();
+            break;
+        case 'voting':
+            showResults();
+            break;
+        case 'results':
+            nextRound();
+            break;
+    }
+}
+
+function startVotingPhase() {
+    gameState.gamePhase = 'voting';
+    gameState.timeLeft = 60; // 1 минута на голосование
+    gameState.playersWhoVoted = [];
+    
+    updateGameDisplay();
+    startTimer();
+}
+
+function showResults() {
+    gameState.gamePhase = 'results';
+    // Логика подсчета голосов и исключения игроков
+    updateGameDisplay();
+    
+    setTimeout(() => {
+        nextRound();
+    }, 5000);
+}
+
+function nextRound() {
+    gameState.currentRound++;
+    gameState.revealedThisRound = 0;
+    
+    if (gameState.currentRound > gameState.maxRounds) {
+        endGame();
+    } else {
+        startDiscussionPhase();
+    }
+}
+
+function endGame() {
+    gameState.gamePhase = 'finished';
+    updateGameDisplay();
+    alert('Игра завершена!');
+}
+
+// Функции взаимодействия
+function revealCharacteristic(playerId) {
+    // Логика раскрытия характеристики
+    console.log('Revealing characteristic for player:', playerId);
+}
+
+function voteForPlayer(playerId) {
+    // Логика голосования
+    console.log('Voting for player:', playerId);
+}
+
+function voteToSkip() {
+    // Логика пропуска
+    console.log('Voting to skip');
+}
+
+function showActionCard() {
+    // Показать карты действий
+    console.log('Showing action cards');
+}
+
+function useActionCard(cardId) {
+    // Использовать карту действия
+    console.log('Using action card:', cardId);
+}
+
+// Заглушки для модальных окон
+function closeActionCardModal() {}
+function closeTargetSelectionModal() {}
+function closeCharacteristicSelectionModal() {}
+
+// Проверка загрузки DOM
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded');
+    
+    const playerNameInput = document.getElementById('playerName');
+    console.log('PlayerName input found:', !!playerNameInput);
+    
+    if (!playerNameInput) {
+        console.error('❌ PlayerName input not found in HTML!');
     }
 });
 
-// Инициализация при загрузке страницы
-document.addEventListener('DOMContentLoaded', function() {
-    initSocket();
-});
-
-// Глобальные функции для совместимости
-window.createRoom = createRoom;
-window.joinRoom = joinRoom;
-window.copyRoomCode = copyRoomCode;
-window.updateMaxPlayers = updateMaxPlayers;
-window.startGame = startGame;
-window.revealCharacteristic = revealCharacteristic;
-window.voteForPlayer = voteForPlayer;
-window.voteToSkip = voteToSkip;
-window.showActionCard = showActionCard;
-window.useActionCard = useActionCard;
-window.closeActionCardModal = closeActionCardModal;
-window.closeTargetSelectionModal = closeTargetSelectionModal;
-window.closeCharacteristicSelectionModal = closeCharacteristicSelectionModal;
+console.log('Client.js loaded with full game logic');

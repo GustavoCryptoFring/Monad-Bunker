@@ -39,14 +39,6 @@
                 <label>Количество игроков: 
                     <select id="maxPlayers" onchange="updateMaxPlayers()">
                         <option value="8">8 игроков</option>
-                        <option value="9">9 игроков</option>
-                        <option value="10">10 игроков</option>
-                        <option value="11">11 игроков</option>
-                        <option value="12">12 игроков</option>
-                        <option value="13">13 игроков</option>
-                        <option value="14">14 игроков</option>
-                        <option value="15">15 игроков</option>
-                        <option value="16">16 игроков</option>
                     </select>
                 </label>
             </div>
@@ -63,9 +55,6 @@
                 <div class="round-info">
                     <h2>РАУНД <span id="currentRound">1</span></h2>
                     <p id="gameStatus">Ожидание начала игры...</p>
-                    <div class="game-tips" id="gameTips">
-                        <p><strong>💡 Подсказка:</strong> Ваши характеристики выделены золотым цветом. Нажмите на них, чтобы раскрыть другим игрокам!</p>
-                    </div>
                 </div>
                 <div class="timer-info">
                     <div class="phase-display" id="phaseDisplay">Подготовка</div>
@@ -76,44 +65,12 @@
             <div class="players-grid" id="playersGrid">
                 <!-- Карточки игроков будут добавлены динамически -->
             </div>
-
-            <div class="game-controls">
-                <button id="skipDiscussionBtn" class="skip-btn" onclick="voteToSkip('discussion')" style="display: none;">Пропустить обсуждение</button>
-                <button id="skipVotingBtn" class="skip-btn" onclick="voteToSkip('voting')" style="display: none;">Пропустить голосование</button>
-            </div>
-        </div>
-
-        <!-- Модальное окно карты действия -->
-        <div id="actionCardModal" class="modal" style="display: none;">
-            <div class="modal-content">
-                <h3 id="actionCardName"></h3>
-                <p id="actionCardDescription"></p>
-                <div class="modal-buttons">
-                    <button id="useActionCardBtn" onclick="useActionCard()">Использовать</button>
-                    <button onclick="closeActionCardModal()">Назад</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Модальное окно выбора цели -->
-        <div id="targetSelectionModal" class="modal" style="display: none;">
-            <div class="modal-content">
-                <h3 id="targetSelectionTitle"></h3>
-                <div id="targetSelectionOptions"></div>
-                <button onclick="closeTargetSelectionModal()">Отмена</button>
-            </div>
-        </div>
-
-        <!-- Модальное окно выбора характеристики -->
-        <div id="characteristicSelectionModal" class="modal" style="display: none;">
-            <div class="modal-content">
-                <h3 id="characteristicSelectionTitle"></h3>
-                <div id="characteristicSelectionOptions"></div>
-                <button onclick="closeCharacteristicSelectionModal()">Отмена</button>
-            </div>
         </div>
     </div>
 
+    <!-- ВАЖНО: Добавьте Socket.IO и используйте правильный JS файл -->
+    <script src="/socket.io/socket.io.js"></script>
     <script src="client.js"></script>
+    <!-- НЕ загружайте script.js отдельно -->
 </body>
 </html>
