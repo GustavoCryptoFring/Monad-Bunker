@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎭 РОЛЕВАЯ ИГРА</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <header class="game-header">
+            <h1>🎭 РОЛЕВАЯ ИГРА</h1>
+            <p>Добро пожаловать в ролевую игру "Бункер"!</p>
+        </header>
+
+        <!-- Экран входа -->
+        <div class="login-screen" id="loginScreen">
+            <h2>Добро пожаловать!</h2>
+            <div class="login-form">
+                <label>Ваше имя: <input type="text" id="playerName" placeholder="Введите ваше имя" maxlength="20"></label>
+                <div class="room-options">
+                    <button id="createRoomBtn" class="room-btn" onclick="createRoom()">Создать новую комнату</button>
+                    <div class="join-room">
+                        <input type="text" id="roomCodeInput" placeholder="Код комнаты" maxlength="6">
+                        <button id="joinRoomBtn" class="room-btn" onclick="joinRoom()">Войти в комнату</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Экран создания комнаты -->
+        <div class="room-setup" id="roomSetup" style="display: none;">
+            <h2>Настройка комнаты</h2>
+            <div class="room-info">
+                <p>Код комнаты: <span id="roomCode" class="room-code"></span></p>
+                <button id="copyCodeBtn" class="copy-btn" onclick="copyRoomCode()">Копировать код</button>
+            </div>
+            <div class="room-settings">
+                <label>Количество игроков: 
+                    <select id="maxPlayers" onchange="updateMaxPlayers()">
+                        <option value="8">8 игроков</option>
+                    </select>
+                </label>
+            </div>
+            <div class="players-waiting" id="playersWaiting">
+                <h3>Игроки в комнате (<span id="currentPlayersCount">1</span>/<span id="maxPlayersCount">8</span>):</h3>
+                <ul id="playersList"></ul>
+            </div>
+            <button id="startGameBtn" class="start-game-btn" onclick="startGame()" disabled>Начать игру</button>
+        </div>
+
+        <!-- Экран игры -->
+        <div class="game-board" id="gameBoard" style="display: none;">
+            <div class="game-info">
+                <div class="round-info">
+                    <h2>РАУНД <span id="currentRound">1</span></h2>
+                    <p id="gameStatus">Ожидание начала игры...</p>
+                </div>
+                <div class="timer-info">
+                    <div class="phase-display" id="phaseDisplay">Подготовка</div>
+                    <div class="timer-display" id="timerDisplay">0:00</div>
+                </div>
+            </div>
+
+            <div class="players-grid" id="playersGrid">
+                <!-- Карточки игроков будут добавлены динамически -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ВАЖНО: Добавьте Socket.IO и используйте правильный JS файл -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js"></script>
+    <!-- НЕ загружайте script.js отдельно -->
+</body>
+</html>
