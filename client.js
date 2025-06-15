@@ -1,5 +1,19 @@
 console.log('Client.js loading...');
 
+// Функция для присоединения к существующей комнате (с URL)
+function joinExistingRoom(roomCode) {
+    const playerName = document.getElementById('playerName').value.trim();
+    
+    if (!playerName) {
+        alert('Пожалуйста, введите ваше имя!');
+        return;
+    }
+    
+    gameState.playerName = playerName;
+    gameState.currentPlayerName = playerName;
+    socket.emit('join-room', { roomCode, playerName });
+}
+
 // Объединенное состояние игры из обоих файлов
 let gameState = {
     // Из script.js
@@ -53,34 +67,10 @@ socket.on('connect_error', function(error) {
 });
 
 socket.on('room-created', function(data) {
-    console.log('Room created:', data);
-    gameState.roomCode = data.roomCode;
-    gameState.isHost = data.isHost;
-    gameState.isRoomHost = data.isHost;
-    gameState.players = [];
+    console.log('Room created, redirecting to:', data.roomUrl);
     
-    // Конвертируем данные сервера в формат script.js
-    data.players.forEach(player => {
-        gameState.players.push({
-            id: player.id,
-            name: player.name,
-            isHost: player.isHost,
-            characteristics: {
-                profession: null,
-                health: null,
-                hobby: null,
-                phobia: null,
-                baggage: null,
-                fact: null
-            },
-            actionCards: [],
-            isAlive: true,
-            votes: 0,
-            hasRevealed: false
-        });
-    });
-    
-    showRoomSetup();
+    // Перенаправляем на URL комнаты
+    window.location.href = data.roomUrl;
 });
 
 socket.on('room-joined', function(data) {
@@ -310,16 +300,18 @@ function updatePlayersList() {
 
 function copyRoomCode() {
     const roomCode = document.getElementById('roomCode').textContent;
-    navigator.clipboard.writeText(roomCode).then(() => {
-        alert('Код комнаты скопирован: ' + roomCode);
+    const roomUrl = `${window.location.origin}/${roomCode}`;
+    
+    navigator.clipboard.writeText(roomUrl).then(() => {
+        alert(`Ссылка на комнату скопирована:\n${roomUrl}`);
     }).catch(() => {
         const textArea = document.createElement('textarea');
-        textArea.value = roomCode;
+        textArea.value = roomUrl;
         document.body.appendChild(textArea);
         textArea.select();
         document.execCommand('copy');
         document.body.removeChild(textArea);
-        alert('Код комнаты скопирован: ' + roomCode);
+        alert(`Ссылка на комнату скопирована:\n${roomUrl}`);
     });
 }
 

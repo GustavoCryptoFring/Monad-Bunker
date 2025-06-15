@@ -81,6 +81,15 @@ body {
     transform: translateY(-2px);
 }
 
+.room-btn.secondary {
+    background: rgba(149, 165, 166, 0.8);
+    margin-top: 10px;
+}
+
+.room-btn.secondary:hover {
+    background: rgba(149, 165, 166, 1);
+}
+
 .join-room {
     margin-top: 20px;
 }
@@ -998,4 +1007,25 @@ body {
 .game-tips p {
     margin: 0;
     color: #f39c12;
+}
+
+/* Добавьте в конец файла: */
+
+.error-screen {
+    text-align: center;
+    padding: 50px 20px;
+    background: rgba(231, 76, 60, 0.1);
+    border-radius: 20px;
+    margin: 50px auto;
+    max-width: 500px;
+}
+
+.error-screen h1 {
+    color: #e74c3c;
+    margin-bottom: 20px;
+}
+
+.error-screen p {
+    color: #bdc3c7;
+    margin-bottom: 30px;
 }
