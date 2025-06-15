@@ -1,5 +1,9 @@
 console.log('Client.js loading...');
 
+// Проверяем, на какой странице мы находимся
+const IS_ROOM_PAGE = window.IS_ROOM_PAGE || false;
+const ROOM_CODE = window.ROOM_CODE || null;
+
 // Объединенное состояние игры
 let gameState = {
     players: [],
@@ -9,7 +13,7 @@ let gameState = {
     maxRounds: 3,
     currentPlayerName: '',
     currentPlayerId: null,
-    roomCode: '',
+    roomCode: ROOM_CODE || '',
     isRoomHost: false,
     currentTurnPlayerId: null,
     revealedThisRound: 0,
@@ -49,99 +53,56 @@ socket.on('connect_error', function(error) {
     alert('Не удалось подключиться к серверу');
 });
 
-// ИСПРАВЛЕННЫЙ обработчик создания комнаты
+// Обработчик создания комнаты - с перенаправлением
 socket.on('room-created', function(data) {
     console.log('Room created:', data);
-    gameState.roomCode = data.roomCode;
-    gameState.isHost = data.isHost;
-    gameState.isRoomHost = data.isHost;
-    gameState.players = [];
     
-    // Конвертируем данные сервера в формат игры
-    data.players.forEach(player => {
-        gameState.players.push({
-            id: player.id,
-            name: player.name,
-            isHost: player.isHost,
-            characteristics: generateCharacteristics(), // Сразу генерируем характеристики
-            actionCards: [getRandomActionCard()], // Сразу даем карту действия
-            isAlive: true,
-            votes: 0,
-            hasRevealed: false
-        });
-    });
-    
-    // СРАЗУ показываем экран настройки комнаты
-    showRoomSetup();
+    if (data.redirect && data.roomUrl) {
+        // Перенаправляем на поддомен
+        alert(`Комната ${data.roomCode} создана! Переходим к комнате...`);
+        window.location.href = data.roomUrl;
+    } else {
+        // Остаемся на текущей странице (мы уже на поддомене)
+        gameState.roomCode = data.roomCode;
+        gameState.isHost = data.isHost;
+        gameState.isRoomHost = data.isHost;
+        updatePlayersFromServer(data.players);
+        showRoomSetup();
+    }
 });
 
 socket.on('room-joined', function(data) {
     console.log('Room joined:', data);
-    gameState.roomCode = data.roomCode;
-    gameState.isHost = data.isHost;
-    gameState.isRoomHost = data.isHost;
-    gameState.players = [];
     
-    data.players.forEach(player => {
-        gameState.players.push({
-            id: player.id,
-            name: player.name,
-            isHost: player.isHost,
-            characteristics: generateCharacteristics(),
-            actionCards: [getRandomActionCard()],
-            isAlive: true,
-            votes: 0,
-            hasRevealed: false
-        });
-    });
-    
-    showRoomSetup();
+    if (data.redirect && data.roomUrl) {
+        // Перенаправляем на поддомен
+        alert(`Присоединяемся к комнате ${data.roomCode}...`);
+        window.location.href = data.roomUrl;
+    } else {
+        // Остаемся на поддомене
+        gameState.roomCode = data.roomCode;
+        gameState.isHost = data.isHost;
+        gameState.isRoomHost = data.isHost;
+        updatePlayersFromServer(data.players);
+        showRoomSetup();
+    }
 });
 
 socket.on('player-joined', function(data) {
     console.log('Player joined:', data);
-    gameState.players = [];
-    
-    data.players.forEach(player => {
-        gameState.players.push({
-            id: player.id,
-            name: player.name,
-            isHost: player.isHost,
-            characteristics: generateCharacteristics(),
-            actionCards: [getRandomActionCard()],
-            isAlive: true,
-            votes: 0,
-            hasRevealed: false
-        });
-    });
-    
+    updatePlayersFromServer(data.players);
     updatePlayersList();
 });
 
 socket.on('player-left', function(data) {
     console.log('Player left:', data);
-    gameState.players = [];
-    
-    data.players.forEach(player => {
-        gameState.players.push({
-            id: player.id,
-            name: player.name,
-            isHost: player.isHost,
-            characteristics: generateCharacteristics(),
-            actionCards: [getRandomActionCard()],
-            isAlive: true,
-            votes: 0,
-            hasRevealed: false
-        });
-    });
-    
+    updatePlayersFromServer(data.players);
     updatePlayersList();
 });
 
 socket.on('game-started', function(data) {
     console.log('Game started:', data);
     
-    // Переходим к игровому экрану
     document.getElementById('roomSetup').style.display = 'none';
     document.getElementById('gameBoard').style.display = 'block';
     
@@ -156,7 +117,169 @@ socket.on('error', function(error) {
     alert('Ошибка: ' + error);
 });
 
-// Данные игры
+// Функции для разных типов страниц
+function createRoom() {
+    console.log('Creating room...');
+    
+    const playerName = document.getElementById('playerName').value.trim();
+    
+    if (!playerName) {
+        alert('Пожалуйста, введите ваше имя');
+        return;
+    }
+    
+    if (!socket.connected) {
+        alert('Нет соединения с сервером');
+        return;
+    }
+    
+    gameState.playerName = playerName;
+    gameState.currentPlayerName = playerName;
+    
+    socket.emit('create-room', { playerName });
+}
+
+function joinRoom() {
+    const playerName = document.getElementById('playerName').value.trim();
+    const roomCode = document.getElementById('roomCodeInput').value.trim().toUpperCase();
+    
+    if (!playerName) {
+        alert('Пожалуйста, введите ваше имя!');
+        return;
+    }
+    
+    if (!roomCode) {
+        alert('Пожалуйста, введите код комнаты!');
+        return;
+    }
+
+    gameState.playerName = playerName;
+    gameState.currentPlayerName = playerName;
+    
+    socket.emit('join-room', { 
+        roomCode, 
+        playerName,
+        fromMainPage: true  // Указываем, что присоединяемся с главной страницы
+    });
+}
+
+// Функция для присоединения с поддомена
+function joinRoomFromSubdomain(roomCode) {
+    const playerName = document.getElementById('playerName').value.trim();
+    
+    if (!playerName) {
+        alert('Пожалуйста, введите ваше имя!');
+        return;
+    }
+    
+    gameState.playerName = playerName;
+    gameState.currentPlayerName = playerName;
+    gameState.roomCode = roomCode;
+    
+    socket.emit('join-room', { 
+        roomCode, 
+        playerName,
+        fromMainPage: false  // Мы уже на поддомене
+    });
+}
+
+function showRoomSetup() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('roomSetup').style.display = 'block';
+    
+    // Показываем настройки только хосту
+    if (gameState.isHost) {
+        document.getElementById('roomSettings').style.display = 'block';
+        document.getElementById('startGameBtn').style.display = 'block';
+    }
+    
+    updatePlayersList();
+}
+
+function updatePlayersFromServer(players) {
+    gameState.players = [];
+    
+    players.forEach(player => {
+        gameState.players.push({
+            id: player.id,
+            name: player.name,
+            isHost: player.isHost,
+            characteristics: generateCharacteristics(),
+            actionCards: [getRandomActionCard()],
+            isAlive: true,
+            votes: 0,
+            hasRevealed: false
+        });
+    });
+}
+
+function updatePlayersList() {
+    const playersList = document.getElementById('playersList');
+    const currentPlayersCount = document.getElementById('currentPlayersCount');
+    const maxPlayersCount = document.getElementById('maxPlayersCount');
+    
+    if (!playersList || !currentPlayersCount) return;
+    
+    playersList.innerHTML = '';
+    
+    gameState.players.forEach(player => {
+        const li = document.createElement('li');
+        li.textContent = player.name + (player.isHost ? ' 👑' : '');
+        li.className = player.isHost ? 'host' : '';
+        playersList.appendChild(li);
+    });
+    
+    currentPlayersCount.textContent = gameState.players.length;
+    if (maxPlayersCount) {
+        maxPlayersCount.textContent = gameState.maxPlayers;
+    }
+    
+    const startBtn = document.getElementById('startGameBtn');
+    if (startBtn) {
+        const canStart = gameState.players.length >= 2 && gameState.isHost;
+        startBtn.disabled = !canStart;
+        startBtn.textContent = gameState.players.length < 2 ? 
+            `Начать игру (минимум 2 игрока)` : 
+            `Начать игру (${gameState.players.length}/${gameState.maxPlayers})`;
+    }
+}
+
+function copyRoomUrl() {
+    const roomUrl = window.location.href;
+    
+    navigator.clipboard.writeText(roomUrl).then(() => {
+        alert(`Ссылка на комнату скопирована:\n${roomUrl}`);
+    }).catch(() => {
+        const textArea = document.createElement('textarea');
+        textArea.value = roomUrl;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        alert(`Ссылка на комнату скопирована:\n${roomUrl}`);
+    });
+}
+
+function updateMaxPlayers() {
+    if (!gameState.isHost) return;
+    
+    const maxPlayers = parseInt(document.getElementById('maxPlayers').value);
+    gameState.maxPlayers = maxPlayers;
+    updatePlayersList();
+}
+
+function startGame() {
+    if (!gameState.isHost) return;
+    
+    if (gameState.players.length < 2) {
+        alert('Для начала игры нужно минимум 2 игрока!');
+        return;
+    }
+    
+    socket.emit('start-game', { roomCode: gameState.roomCode });
+}
+
+// Данные игры (все массивы остаются те же)
 const professions = [
     "Врач", "Учитель", "Инженер", "Повар", "Программист", "Механик",
     "Писатель", "Художник", "Музыкант", "Строитель", "Фермер", "Пилот",
@@ -214,124 +337,7 @@ const actionCards = [
     { id: 8, name: "Дипломат", description: "Предотвратите исключение игрока на один раунд", type: "protective", usesLeft: 1 }
 ];
 
-// Основные функции
-function createRoom() {
-    console.log('Creating room...');
-    
-    const playerName = document.getElementById('playerName').value.trim();
-    
-    if (!playerName) {
-        alert('Пожалуйста, введите ваше имя');
-        return;
-    }
-    
-    if (!socket.connected) {
-        alert('Нет соединения с сервером');
-        return;
-    }
-    
-    gameState.playerName = playerName;
-    gameState.currentPlayerName = playerName;
-    
-    // Отправляем запрос на создание комнаты
-    socket.emit('create-room', { playerName });
-}
-
-function joinRoom() {
-    const playerName = document.getElementById('playerName').value.trim();
-    const roomCode = document.getElementById('roomCodeInput').value.trim().toUpperCase();
-    
-    if (!playerName) {
-        alert('Пожалуйста, введите ваше имя!');
-        return;
-    }
-    
-    if (!roomCode) {
-        alert('Пожалуйста, введите код комнаты!');
-        return;
-    }
-
-    gameState.playerName = playerName;
-    gameState.currentPlayerName = playerName;
-    
-    socket.emit('join-room', { roomCode, playerName });
-}
-
-function showRoomSetup() {
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('roomSetup').style.display = 'block';
-    document.getElementById('roomCode').textContent = gameState.roomCode;
-    updatePlayersList();
-}
-
-function updatePlayersList() {
-    const playersList = document.getElementById('playersList');
-    const currentPlayersCount = document.getElementById('currentPlayersCount');
-    const maxPlayersCount = document.getElementById('maxPlayersCount');
-    
-    if (!playersList || !currentPlayersCount) return;
-    
-    playersList.innerHTML = '';
-    
-    gameState.players.forEach(player => {
-        const li = document.createElement('li');
-        li.textContent = player.name + (player.isHost ? ' 👑' : '');
-        li.className = player.isHost ? 'host' : '';
-        playersList.appendChild(li);
-    });
-    
-    currentPlayersCount.textContent = gameState.players.length;
-    if (maxPlayersCount) {
-        maxPlayersCount.textContent = gameState.maxPlayers;
-    }
-    
-    const startBtn = document.getElementById('startGameBtn');
-    if (startBtn) {
-        const canStart = gameState.players.length >= 2 && gameState.isHost;
-        startBtn.disabled = !canStart;
-        startBtn.textContent = gameState.players.length < 2 ? 
-            `Начать игру (минимум 2 игрока)` : 
-            `Начать игру (${gameState.players.length}/${gameState.maxPlayers})`;
-    }
-}
-
-function copyRoomCode() {
-    const roomCode = document.getElementById('roomCode').textContent;
-    
-    navigator.clipboard.writeText(roomCode).then(() => {
-        alert(`Код комнаты скопирован: ${roomCode}`);
-    }).catch(() => {
-        const textArea = document.createElement('textarea');
-        textArea.value = roomCode;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        alert(`Код комнаты скопирован: ${roomCode}`);
-    });
-}
-
-function updateMaxPlayers() {
-    if (!gameState.isHost) return;
-    
-    const maxPlayers = parseInt(document.getElementById('maxPlayers').value);
-    gameState.maxPlayers = maxPlayers;
-    updatePlayersList();
-}
-
-function startGame() {
-    if (!gameState.isHost) return;
-    
-    if (gameState.players.length < 2) {
-        alert('Для начала игры нужно минимум 2 игрока!');
-        return;
-    }
-    
-    // Отправляем сигнал начала игры на сервер
-    socket.emit('start-game', { roomCode: gameState.roomCode });
-}
-
-// Функции генерации данных
+// Остальные функции игры остаются те же...
 function generateCharacteristics() {
     return {
         profession: getRandomItem(professions),
@@ -351,7 +357,6 @@ function getRandomItem(array) {
     return array[Math.floor(Math.random() * array.length)];
 }
 
-// Остальные функции игры...
 function updateGameDisplay() {
     const currentRoundElement = document.getElementById('currentRound');
     const gameStatusElement = document.getElementById('gameStatus');
@@ -401,8 +406,6 @@ function updatePlayersGrid() {
     
     const playerCount = gameState.players.length;
     playersGrid.classList.add(`players-${playerCount}`);
-    
-    console.log(`Setting grid for ${playerCount} players`);
     
     gameState.players.forEach(player => {
         const playerCard = createPlayerCard(player);
@@ -483,7 +486,7 @@ function translateCharacteristic(key) {
 
 function startDiscussionPhase() {
     gameState.gamePhase = 'discussion';
-    gameState.timeLeft = 180; // 3 минуты на обсуждение
+    gameState.timeLeft = 180;
     
     updateGameDisplay();
     startTimer();
@@ -530,7 +533,7 @@ function nextPhase() {
 
 function startVotingPhase() {
     gameState.gamePhase = 'voting';
-    gameState.timeLeft = 60; // 1 минута на голосование
+    gameState.timeLeft = 60;
     gameState.playersWhoVoted = [];
     
     updateGameDisplay();
@@ -563,33 +566,17 @@ function endGame() {
     alert('Игра завершена!');
 }
 
-// Заглушки для функций взаимодействия
-function revealCharacteristic(playerId) {
-    console.log('Revealing characteristic for player:', playerId);
-}
-
-function voteForPlayer(playerId) {
-    console.log('Voting for player:', playerId);
-}
-
-function voteToSkip() {
-    console.log('Voting to skip');
-}
-
-function showActionCard() {
-    console.log('Showing action cards');
-}
-
-function useActionCard(cardId) {
-    console.log('Using action card:', cardId);
-}
-
+// Заглушки функций
+function revealCharacteristic(playerId) { console.log('Revealing characteristic for player:', playerId); }
+function voteForPlayer(playerId) { console.log('Voting for player:', playerId); }
+function voteToSkip() { console.log('Voting to skip'); }
+function showActionCard() { console.log('Showing action cards'); }
 function closeActionCardModal() {}
 function closeTargetSelectionModal() {}
 function closeCharacteristicSelectionModal() {}
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded');
+    console.log('DOM loaded, IS_ROOM_PAGE:', IS_ROOM_PAGE, 'ROOM_CODE:', ROOM_CODE);
 });
 
-console.log('Client.js loaded with full game logic');
+console.log('Client.js loaded with subdomain support');
