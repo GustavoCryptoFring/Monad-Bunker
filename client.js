@@ -423,7 +423,14 @@ function getPhaseDisplayText() {
 
 function updateGameActions() {
     const gameActionsElement = document.getElementById('gameActions');
+    const roundActionsElement = document.getElementById('roundActions');
     
+    // ИСПРАВЛЕНО: убираем кнопку из roundActions
+    if (roundActionsElement) {
+        roundActionsElement.style.display = 'none';
+    }
+    
+    // Управляем кнопками действий внизу
     if (gameState.gamePhase === 'preparation' && gameState.isHost) {
         gameActionsElement.innerHTML = `
             <button id="startRoundBtn" class="action-btn" onclick="startRound()">
@@ -485,6 +492,9 @@ function createPlayerCard(player) {
     
     card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''}`;
     
+    // ИСПРАВЛЕНО: порядок характеристик с двумя фактами внизу
+    const characteristicOrder = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
+    
     card.innerHTML = `
         <div class="player-header">
             <div class="player-info">
@@ -504,15 +514,17 @@ function createPlayerCard(player) {
         </div>
         
         <div class="characteristics">
-            ${Object.entries(player.characteristics).map(([key, value]) => {
-                // ИСПРАВЛЕНО: проверяем, была ли раскрыта конкретная характеристика
+            ${characteristicOrder.map(key => {
+                if (!player.characteristics[key]) return '';
+                
+                // ИСПРАВЛЕНО: логика раскрытия характеристик
                 const isRevealed = player.revealedCharacteristics && player.revealedCharacteristics.includes(key);
                 const isOwnCard = isCurrentPlayer;
                 
                 return `<div class="characteristic ${isRevealed ? 'revealed' : (isOwnCard ? 'own-hidden' : 'hidden')}">
                     <span class="characteristic-name">${translateCharacteristic(key)}:</span>
                     <span class="characteristic-value ${isOwnCard && !isRevealed ? 'own-characteristic' : ''}">
-                        ${isRevealed ? value : (isOwnCard ? value : '???')}
+                        ${isRevealed ? player.characteristics[key] : (isOwnCard ? player.characteristics[key] : '???')}
                     </span>
                 </div>`;
             }).join('')}
@@ -547,12 +559,13 @@ function translateCharacteristic(key) {
         hobby: 'Хобби',
         phobia: 'Фобия',
         baggage: 'Багаж',
-        fact: 'Факт'
+        fact1: 'Факт 1',
+        fact2: 'Факт 2'
     };
     return translations[key] || key;
 }
 
-// Функции взаимодействия
+// ИСПРАВЛЕНО: модальное окно с учетом правил раскрытия
 function openCharacteristicModal() {
     const player = gameState.players.find(p => p.id === gameState.playerId);
     if (!player || !player.characteristics) return;
@@ -562,15 +575,47 @@ function openCharacteristicModal() {
     
     options.innerHTML = '';
     
-    Object.keys(player.characteristics).forEach(key => {
-        if (key !== 'profession') { // Профессия всегда видна
+    // НОВАЯ ЛОГИКА: определяем что можно раскрыть
+    const revealedCount = player.revealedCharacteristics ? player.revealedCharacteristics.length : 0;
+    const isProfessionRevealed = player.revealedCharacteristics && player.revealedCharacteristics.includes('profession');
+    
+    // В первом раунде обязательно профессия + 1 любая
+    if (gameState.currentRound === 1) {
+        if (revealedCount === 0) {
+            // Первое раскрытие - только профессия
             const button = document.createElement('button');
             button.className = 'room-btn';
-            button.textContent = `${translateCharacteristic(key)}: ${player.characteristics[key]}`;
-            button.onclick = () => revealCharacteristic(key);
+            button.textContent = `${translateCharacteristic('profession')}: ${player.characteristics['profession']}`;
+            button.onclick = () => revealCharacteristic('profession');
             options.appendChild(button);
+        } else if (revealedCount === 1 && isProfessionRevealed) {
+            // Второе раскрытие в первом раунде - любая кроме профессии
+            Object.keys(player.characteristics).forEach(key => {
+                if (key !== 'profession' && (!player.revealedCharacteristics.includes(key))) {
+                    const button = document.createElement('button');
+                    button.className = 'room-btn';
+                    button.textContent = `${translateCharacteristic(key)}: ${player.characteristics[key]}`;
+                    button.onclick = () => revealCharacteristic(key);
+                    options.appendChild(button);
+                }
+            });
         }
-    });
+    } else {
+        // В последующих раундах - по 1 любой нераскрытой
+        Object.keys(player.characteristics).forEach(key => {
+            if (!player.revealedCharacteristics.includes(key)) {
+                const button = document.createElement('button');
+                button.className = 'room-btn';
+                button.textContent = `${translateCharacteristic(key)}: ${player.characteristics[key]}`;
+                button.onclick = () => revealCharacteristic(key);
+                options.appendChild(button);
+            }
+        });
+    }
+    
+    if (options.children.length === 0) {
+        options.innerHTML = '<p>Нет доступных характеристик для раскрытия</p>';
+    }
     
     modal.style.display = 'flex';
 }

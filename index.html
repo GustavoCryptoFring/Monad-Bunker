@@ -37,8 +37,8 @@
                 <div class="room-settings" id="maxPlayersSelector" style="display: none;">
                     <label>Максимум игроков: 
                         <select id="maxPlayersSelect" onchange="changeMaxPlayers()">
-                            <option value="8">8 игроков</option>
-                            <option value="12" selected>12 игроков</option>
+                            <option value="8" selected>8 игроков</option>
+                            <option value="12">12 игроков</option>
                             <option value="16">16 игроков</option>
                         </select>
                     </label>
@@ -65,13 +65,7 @@
                 <div class="round-info">
                     <h2>РАУНД <span id="currentRound">1</span></h2>
                     <p id="gameStatus">Ожидание начала игры...</p>
-                    
-                    <!-- ПЕРЕМЕСТИЛИ кнопку сюда -->
-                    <div class="round-actions" id="roundActions" style="display: none;">
-                        <button id="startRoundBtn" class="start-round-btn" onclick="startRound()">
-                            🚀 Начать раунд
-                        </button>
-                    </div>
+                    <!-- УБРАЛИ кнопку отсюда -->
                 </div>
                 <div class="timer-info">
                     <div class="phase-display" id="phaseDisplay">Подготовка</div>
@@ -83,6 +77,7 @@
                 <!-- Карточки игроков -->
             </div>
 
+            <!-- КНОПКА ТЕПЕРЬ ЗДЕСЬ -->
             <div class="game-actions" id="gameActions">
                 <!-- Кнопки действий будут добавлены динамически -->
             </div>

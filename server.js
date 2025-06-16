@@ -33,7 +33,7 @@ app.get('/api/health', (req, res) => {
 const gameRoom = {
     players: [],
     gameState: 'lobby', // lobby, playing, finished
-    maxPlayers: 12,
+    maxPlayers: 8, // ИЗМЕНЕНО: по умолчанию 8 игроков
     gamePhase: 'waiting', // waiting, preparation, revelation, discussion, voting, results
     currentRound: 1,
     maxRounds: 3,
@@ -256,18 +256,51 @@ io.on('connection', (socket) => {
             return;
         }
         
-        if (player.hasRevealed) {
-            socket.emit('error', 'Вы уже раскрыли характеристику в этом ходу!');
-            return;
-        }
-        
-        // ИСПРАВЛЕНО: добавляем характеристику в список раскрытых
         if (!player.revealedCharacteristics) {
             player.revealedCharacteristics = [];
         }
+        
+        const revealedCount = player.revealedCharacteristics.length;
+        const isProfessionRevealed = player.revealedCharacteristics.includes('profession');
+        
+        // НОВАЯ ЛОГИКА ВАЛИДАЦИИ
+        if (gameRoom.currentRound === 1) {
+            // Первый раунд: профессия + 1 любая
+            if (revealedCount === 0 && data.characteristic !== 'profession') {
+                socket.emit('error', 'В первом раунде сначала нужно раскрыть профессию!');
+                return;
+            }
+            if (revealedCount === 1 && data.characteristic === 'profession') {
+                socket.emit('error', 'Профессия уже раскрыта! Выберите другую характеристику.');
+                return;
+            }
+            if (revealedCount >= 2) {
+                socket.emit('error', 'В первом раунде можно раскрыть только 2 характеристики!');
+                return;
+            }
+        } else {
+            // Последующие раунды: по 1 характеристике
+            if (revealedCount >= gameRoom.currentRound + 1) { // +1 потому что в первом раунде 2 характеристики
+                socket.emit('error', 'В этом раунде вы уже раскрыли характеристику!');
+                return;
+            }
+        }
+        
+        // Проверяем, не раскрыта ли уже эта характеристика
+        if (player.revealedCharacteristics.includes(data.characteristic)) {
+            socket.emit('error', 'Эта характеристика уже раскрыта!');
+            return;
+        }
+        
+        // Раскрываем характеристику
         player.revealedCharacteristics.push(data.characteristic);
-        player.hasRevealed = true;
-        gameRoom.playersWhoRevealed.push(player.id);
+        
+        // Проверяем, завершил ли игрок раскрытие для этого раунда
+        const expectedReveals = gameRoom.currentRound === 1 ? 2 : gameRoom.currentRound + 1;
+        if (player.revealedCharacteristics.length >= expectedReveals) {
+            player.hasRevealed = true;
+            gameRoom.playersWhoRevealed.push(player.id);
+        }
         
         // Отправляем обновление всем игрокам
         io.to('game-room').emit('characteristic-revealed', {
@@ -278,11 +311,13 @@ io.on('connection', (socket) => {
             players: gameRoom.players
         });
         
-        // Переходим к следующему игроку
-        clearInterval(gameRoom.timer);
-        setTimeout(() => {
-            nextPlayerTurn();
-        }, 2000); // 2 секунды на просмотр раскрытой характеристики
+        // Если игрок завершил раскрытие, переходим к следующему
+        if (player.hasRevealed) {
+            clearInterval(gameRoom.timer);
+            setTimeout(() => {
+                nextPlayerTurn();
+            }, 2000);
+        }
     });
     
     socket.on('disconnect', () => {
@@ -400,8 +435,22 @@ function nextPlayerTurn() {
     const nextIndex = currentIndex + 1;
     
     if (nextIndex >= alivePlayers.length) {
-        // Все игроки раскрыли - переходим к обсуждению
-        startDiscussionPhase();
+        // Проверяем, все ли игроки завершили раскрытие
+        const allRevealed = alivePlayers.every(player => player.hasRevealed);
+        
+        if (allRevealed) {
+            // Все игроки раскрыли - переходим к обсуждению
+            startDiscussionPhase();
+        } else {
+            // Возвращаемся к первому игроку, который еще не завершил
+            const nextPlayer = alivePlayers.find(p => !p.hasRevealed);
+            if (nextPlayer) {
+                gameRoom.currentTurnPlayer = nextPlayer.id;
+                startPlayerTurn();
+            } else {
+                startDiscussionPhase();
+            }
+        }
     } else {
         // Следующий игрок
         gameRoom.currentTurnPlayer = alivePlayers[nextIndex].id;
@@ -652,7 +701,11 @@ const facts = [
     "Был в тюрьме", "Спас чью-то жизнь", "Выиграл в лотерею",
     "Знает 5 языков", "Чемпион по шахматам", "Бывший военный",
     "Имеет двойное гражданство", "Работал в цирке", "Писал книги",
-    "Изобрел что-то важное", "Путешествовал по всему миру"
+    "Изобрел что-то важное", "Путешествовал по всему миру",
+    "Выжил в авиакатастрофе", "Встречал знаменитость", "Умеет читать мысли",
+    "Владеет недвижимостью", "Участвовал в реалити-шоу", "Говорит на 3+ языках",
+    "Имеет татуировку", "Боится темноты", "Коллекционирует что-то редкое",
+    "Работал в другой стране", "Имеет необычное хобби", "Был на телевидении"
 ];
 
 const actionCards = [
@@ -663,13 +716,23 @@ const actionCards = [
 ];
 
 function generateCharacteristics() {
+    const availableFacts = [...facts]; // Копия массива
+    const fact1 = getRandomItem(availableFacts);
+    
+    // Удаляем выбранный факт из доступных
+    const fact1Index = availableFacts.indexOf(fact1);
+    availableFacts.splice(fact1Index, 1);
+    
+    const fact2 = getRandomItem(availableFacts);
+    
     return {
         profession: getRandomItem(professions),
         health: getRandomItem(healthConditions),
         hobby: getRandomItem(hobbies),
         phobia: getRandomItem(phobias),
         baggage: getRandomItem(baggage),
-        fact: getRandomItem(facts)
+        fact1: fact1,
+        fact2: fact2
     };
 }
 
