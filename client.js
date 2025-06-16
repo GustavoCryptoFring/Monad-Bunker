@@ -14,7 +14,11 @@ let gameState = {
     myVote: null,
     timer: null,
     maxPlayers: 12,
-    currentTurnPlayer: null
+    currentTurnPlayer: null,
+    // НОВЫЕ ПОЛЯ ДЛЯ ОПРАВДАНИЙ
+    currentJustifyingPlayer: null,
+    canChangeVote: {},
+    hasChangedVote: false
 };
 
 // Инициализация Socket.IO
@@ -424,6 +428,13 @@ function getGameStatusText() {
             return 'Фаза обсуждения';
         case 'voting': 
             return 'Фаза голосования';
+        case 'justification':
+            const justifyingPlayer = gameState.players.find(p => p.id === gameState.currentJustifyingPlayer);
+            if (justifyingPlayer) {
+                const isMyJustification = justifyingPlayer.id === gameState.playerId;
+                return `Оправдание: ${isMyJustification ? 'Ваш черед' : justifyingPlayer.name}`;
+            }
+            return 'Фаза оправдания';
         case 'results': 
             return 'Подведение итогов раунда';
         case 'finished': 
@@ -439,6 +450,7 @@ function getPhaseDisplayText() {
         case 'revelation': return 'РАСКРЫТИЕ';
         case 'discussion': return 'ОБСУЖДЕНИЕ';
         case 'voting': return 'ГОЛОСОВАНИЕ';
+        case 'justification': return 'ОПРАВДАНИЕ';
         case 'results': return 'РЕЗУЛЬТАТЫ';
         default: return 'ОЖИДАНИЕ';
     }
@@ -459,10 +471,9 @@ function updateGameActions() {
             `;
             roundActionsElement.style.display = 'block';
         } else if (gameState.gamePhase === 'discussion') {
-            // ИСПРАВЛЕНО: Кнопка "Пропустить обсуждение" для ВСЕХ игроков
-            const alivePlayers = gameState.players.filter(p => p.isAlive);
+            // Кнопка "Пропустить обсуждение" для ВСЕХ игроков
             const skipVotes = gameState.skipDiscussionVotes || 0;
-            const requiredVotes = Math.max(2, Math.ceil(alivePlayers.length / 2));
+            const requiredVotes = 2;
             const hasVotedToSkip = gameState.mySkipVote || false;
             
             roundActionsElement.innerHTML = `
@@ -475,19 +486,44 @@ function updateGameActions() {
                 </div>
             `;
             roundActionsElement.style.display = 'block';
+        } else if (gameState.gamePhase === 'justification') {
+            // НОВОЕ: кнопки для фазы оправдания
+            const isMyJustification = gameState.currentJustifyingPlayer === gameState.playerId;
+            
+            if (isMyJustification) {
+                roundActionsElement.innerHTML = `
+                    <div class="justification-actions">
+                        <button id="finishJustificationBtn" class="start-round-btn" onclick="finishJustification()">
+                            ✅ Закончить оправдание
+                        </button>
+                        <button id="surrenderBtn" class="surrender-btn" onclick="surrender()">
+                            🏳️ Сдаться
+                        </button>
+                    </div>
+                `;
+            } else {
+                roundActionsElement.innerHTML = `
+                    <div class="justification-info">
+                        <p>🎤 Игрок оправдывается...</p>
+                    </div>
+                `;
+            }
+            roundActionsElement.style.display = 'block';
         } else {
             roundActionsElement.style.display = 'none';
         }
     }
     
-    // Кнопки внизу только для голосования
+    // Кнопки внизу для голосования
     if (gameState.gamePhase === 'voting') {
         const alivePlayers = gameState.players.filter(p => p.isAlive);
         const votedPlayers = alivePlayers.filter(p => p.hasVoted);
+        const canChange = gameState.canChangeVote[gameState.playerId] && !gameState.hasChangedVote;
         
         gameActionsElement.innerHTML = `
             <div class="vote-progress">
                 <span id="voteProgress">Проголосовало: ${votedPlayers.length}/${alivePlayers.length}</span>
+                ${canChange ? '<div class="change-vote-info">💡 Вы можете сменить свой голос</div>' : ''}
             </div>
         `;
     } else {
@@ -495,89 +531,94 @@ function updateGameActions() {
     }
 }
 
-// НОВАЯ функция для голосования за пропуск обсуждения
-function voteToSkipDiscussion() {
-    if (gameState.gamePhase !== 'discussion') {
-        showNotification('Ошибка', 'Сейчас не фаза обсуждения');
+// НОВЫЕ функции для оправданий
+function finishJustification() {
+    if (gameState.gamePhase !== 'justification') {
+        showNotification('Ошибка', 'Сейчас не фаза оправдания');
         return;
     }
     
-    if (gameState.mySkipVote) {
-        showNotification('Ошибка', 'Вы уже проголосовали за пропуск');
+    if (gameState.currentJustifyingPlayer !== gameState.playerId) {
+        showNotification('Ошибка', 'Сейчас не ваше время для оправдания');
         return;
     }
     
-    console.log('⏭️ Voting to skip discussion...');
-    socket.emit('vote-skip-discussion');
+    console.log('✅ Finishing justification...');
+    socket.emit('finish-justification');
 }
 
-// УБИРАЕМ старую функцию пропуска только для хоста
-// function skipDiscussion() {
-//     if (!gameState.isHost) {
-//         showNotification('Ошибка', 'Только хост может пропустить обсуждение');
-//         return;
-//     }
-    
-//     if (gameState.gamePhase !== 'discussion') {
-//         showNotification('Ошибка', 'Сейчас не фаза обсуждения');
-//         return;
-//     }
-    
-//     console.log('⏭️ Skipping discussion...');
-//     socket.emit('skip-discussion');
-// }
-
-// Функции для модальных окон
-function closeCharacteristicModal() {
-    document.getElementById('characteristicModal').style.display = 'none';
-}
-
-function closeNotificationModal() {
-    document.getElementById('notificationModal').style.display = 'none';
-}
-
-function showNotification(title, message) {
-    document.getElementById('notificationTitle').textContent = title;
-    document.getElementById('notificationMessage').textContent = message;
-    document.getElementById('notificationModal').style.display = 'flex';
-}
-
-function updateTimerDisplay() {
-    const timerElement = document.getElementById('timerDisplay');
-    if (timerElement && gameState.timeLeft >= 0) {
-        const minutes = Math.floor(gameState.timeLeft / 60);
-        const seconds = gameState.timeLeft % 60;
-        timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    }
-}
-
-function updatePlayersGrid() {
-    const playersGrid = document.getElementById('playersGrid');
-    
-    if (!playersGrid) {
+function surrender() {
+    if (gameState.gamePhase !== 'justification') {
+        showNotification('Ошибка', 'Сейчас не фаза оправдания');
         return;
     }
     
-    // Очищаем сетку
-    playersGrid.innerHTML = '';
+    if (gameState.currentJustifyingPlayer !== gameState.playerId) {
+        showNotification('Ошибка', 'Только оправдывающийся игрок может сдаться');
+        return;
+    }
     
-    // Добавляем класс для адаптивной сетки
-    playersGrid.className = `players-grid players-${gameState.players.length}`;
-    
-    // Создаем карточки игроков
-    gameState.players.forEach(player => {
-        const playerCard = createPlayerCard(player);
-        playersGrid.appendChild(playerCard);
-    });
+    // Подтверждение сдачи
+    if (confirm('Вы действительно хотите сдаться и покинуть игру?')) {
+        console.log('🏳️ Surrendering...');
+        socket.emit('surrender');
+    }
 }
 
-// ИСПРАВЛЕНО: функция создания карточки игрока - исправляем баг с голосованием хоста
+// ОБНОВЛЕННАЯ функция голосования с возможностью смены голоса
+function voteForPlayer(playerId) {
+    if (gameState.gamePhase !== 'voting') {
+        showNotification('Ошибка', 'Сейчас не время для голосования!');
+        return;
+    }
+    
+    const me = gameState.players.find(p => p.id === gameState.playerId);
+    if (!me || !me.isAlive) {
+        showNotification('Ошибка', 'Вы не можете голосовать!');
+        return;
+    }
+    
+    // Если уже голосовал, проверяем возможность смены голоса
+    if (me.hasVoted) {
+        const canChange = gameState.canChangeVote[gameState.playerId] && !gameState.hasChangedVote;
+        
+        if (!canChange) {
+            if (gameState.hasChangedVote) {
+                showNotification('Ошибка', 'Вы уже использовали возможность смены голоса!');
+            } else {
+                showNotification('Ошибка', 'Вы уже проголосовали!');
+            }
+            return;
+        }
+        
+        // Смена голоса
+        if (me.votedFor === playerId) {
+            showNotification('Ошибка', 'Вы уже голосовали за этого игрока!');
+            return;
+        }
+        
+        console.log('🔄 Changing vote to:', playerId);
+        socket.emit('change-vote', { targetId: playerId });
+        gameState.hasChangedVote = true;
+    } else {
+        // Первичное голосование
+        console.log('🗳️ Voting for:', playerId);
+        gameState.myVote = playerId;
+        socket.emit('vote-player', { targetId: playerId });
+    }
+    
+    // Обновляем отображение
+    updatePlayersGrid();
+}
+
+// ОБНОВЛЕННАЯ функция создания карточки игрока
 function createPlayerCard(player) {
     const card = document.createElement('div');
     const isCurrentPlayer = player.id === gameState.playerId;
     const isCurrentTurn = player.id === gameState.currentTurnPlayer;
+    const isJustifying = player.id === gameState.currentJustifyingPlayer;
     
-    card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''}`;
+    card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''} ${isJustifying ? 'justifying' : ''}`;
     
     // ИСПРАВЛЕНО: порядок характеристик с двумя фактами внизу
     const characteristicOrder = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
@@ -596,6 +637,7 @@ function createPlayerCard(player) {
                     </div>
                     ${isCurrentPlayer ? '<div class="player-status current">ВЫ</div>' : ''}
                     ${isCurrentTurn ? '<div class="player-status turn">Ваш ход!</div>' : ''}
+                    ${isJustifying ? '<div class="player-status justifying">🎤 Оправдывается</div>' : ''}
                 </div>
             </div>
         </div>
@@ -622,21 +664,53 @@ function createPlayerCard(player) {
         
         <div class="player-actions">
             ${gameState.gamePhase === 'voting' && !isCurrentPlayer && player.isAlive ? 
-                `<div class="vote-section">
-                    <button class="vote-player-btn ${gameState.myVote === player.id ? 'voted' : ''}" 
-                            onclick="voteForPlayer('${player.id}')" 
-                            ${gameState.myVote ? 'disabled' : ''}>
-                        ${gameState.myVote === player.id ? '✅ Проголосовано' : '📋 Голосовать'}
-                    </button>
-                    <div class="voters-list">
-                        Голосов: ${player.votes || 0}
-                    </div>
-                </div>` : ''
+                getVotingButtons(player) : ''
             }
         </div>
     `;
     
     return card;
+}
+
+// НОВАЯ функция для создания кнопок голосования
+function getVotingButtons(player) {
+    const me = gameState.players.find(p => p.id === gameState.playerId);
+    if (!me) return '';
+    
+    const hasVoted = me.hasVoted;
+    const votedForThis = me.votedFor === player.id;
+    const canChange = gameState.canChangeVote[gameState.playerId] && !gameState.hasChangedVote;
+    
+    let buttonText = '📋 Голосовать';
+    let buttonClass = 'vote-player-btn';
+    let disabled = false;
+    
+    if (hasVoted) {
+        if (votedForThis) {
+            buttonText = '✅ Проголосовано';
+            buttonClass += ' voted';
+            disabled = !canChange;
+        } else if (canChange) {
+            buttonText = '🔄 Сменить голос';
+            buttonClass += ' change-vote';
+        } else {
+            buttonText = '📋 Голосовать';
+            disabled = true;
+        }
+    }
+    
+    return `
+        <div class="vote-section">
+            <button class="${buttonClass}" 
+                    onclick="voteForPlayer('${player.id}')" 
+                    ${disabled ? 'disabled' : ''}>
+                ${buttonText}
+            </button>
+            <div class="voters-list">
+                Голосов: ${player.votes || 0}
+            </div>
+        </div>
+    `;
 }
 
 // НОВАЯ функция подтверждения раскрытия характеристики с дополнительными проверками
@@ -773,4 +847,44 @@ socket.on('phase-changed', function(data) {
     }
     
     updateGameDisplay();
+});
+
+// НОВЫЕ обработчики для фазы оправданий
+socket.on('justification-started', function(data) {
+    console.log('⚖️ Justification started:', data);
+    gameState.gamePhase = 'justification';
+    gameState.currentJustifyingPlayer = data.justifyingPlayer.id;
+    gameState.timeLeft = data.timeLeft;
+    gameState.players = data.players;
+    updateGameDisplay();
+    
+    const isMyJustification = data.justifyingPlayer.id === gameState.playerId;
+    const message = isMyJustification ? 
+        'Ваше время для оправдания! У вас есть 2 минуты.' : 
+        `${data.justifyingPlayer.name} оправдывается. Оставшихся в очереди: ${data.remainingQueue}`;
+    
+    showNotification('Фаза оправдания', message);
+});
+
+socket.on('second-voting-started', function(data) {
+    console.log('🗳️ Second voting started:', data);
+    gameState.gamePhase = data.gamePhase;
+    gameState.timeLeft = data.timeLeft;
+    gameState.players = data.players;
+    gameState.canChangeVote = data.canChangeVote;
+    gameState.hasChangedVote = false;
+    updateGameDisplay();
+    
+    showNotification('Повторное голосование', 'Голоса остались прежними. Вы можете один раз сменить свой голос.');
+});
+
+socket.on('player-surrendered', function(data) {
+    console.log('🏳️ Player surrendered:', data);
+    gameState.players = data.players;
+    updatePlayersGrid();
+    
+    const isMe = data.surrenderedPlayer === gameState.playerName;
+    const message = isMe ? 'Вы сдались и покинули игру.' : `${data.surrenderedPlayer} сдался и покинул игру.`;
+    
+    showNotification('Игрок сдался', message);
 });

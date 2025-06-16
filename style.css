@@ -503,326 +503,100 @@ body {
     animation: pulse-turn 2s infinite;
 }
 
-@keyframes pulse-turn {
+/* НОВЫЕ СТИЛИ ДЛЯ ФАЗЫ ОПРАВДАНИЯ */
+.player-card.justifying {
+    border-color: #f1c40f;
+    box-shadow: 0 0 25px rgba(241, 196, 15, 0.6);
+    animation: pulse-justifying 2s infinite;
+}
+
+@keyframes pulse-justifying {
     0% { 
-        box-shadow: 0 0 25px rgba(231, 76, 60, 0.6);
+        box-shadow: 0 0 25px rgba(241, 196, 15, 0.6);
     }
     50% { 
-        box-shadow: 0 0 35px rgba(231, 76, 60, 0.9);
+        box-shadow: 0 0 35px rgba(241, 196, 15, 0.9);
     }
     100% { 
-        box-shadow: 0 0 25px rgba(231, 76, 60, 0.6);
+        box-shadow: 0 0 25px rgba(241, 196, 15, 0.6);
     }
 }
 
-.player-card.eliminated {
-    opacity: 0.5;
-    border-color: #7f8c8d;
-    background: rgba(52, 73, 94, 0.5);
+.player-status.justifying {
+    background: #f1c40f;
+    color: #2c3e50;
+    animation: blink-justifying 1s infinite;
 }
 
-.player-header {
-    margin-bottom: 15px;
-}
-
-.player-info {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.player-avatar-container {
-    flex-shrink: 0;
-}
-
-.player-avatar {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background: linear-gradient(45deg, #3498db, #2980b9);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5em;
-    font-weight: bold;
-    color: white;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-.player-avatar.eliminated-avatar {
-    background: linear-gradient(45deg, #7f8c8d, #95a5a6);
-}
-
-.player-name {
-    font-size: 1.2em;
-    font-weight: bold;
-    color: #ecf0f1;
-    margin-bottom: 5px;
-}
-
-.player-name.eliminated-name {
-    color: #bdc3c7;
-    text-decoration: line-through;
-}
-
-.player-status {
-    font-size: 0.9em;
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-weight: bold;
-    margin-bottom: 3px;
-}
-
-.player-status.current {
-    background: #f39c12;
-    color: white;
-    font-size: 0.8em;
-    padding: 2px 6px;
-    border-radius: 8px;
-    display: inline-block;
-}
-
-.player-status.turn {
-    background: #e74c3c;
-    color: white;
-    animation: blink-status 1s infinite;
-}
-
-@keyframes blink-status {
+@keyframes blink-justifying {
     0%, 50% { opacity: 1; }
-    51%, 100% { opacity: 0.7; }
+    51%, 100% { opacity: 0.8; }
 }
 
-/* СТИЛИ ДЛЯ ХАРАКТЕРИСТИК */
-.characteristics {
-    flex-grow: 1;
-    margin-bottom: 15px;
-}
-
-.characteristic {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
-    margin-bottom: 6px;
-    border-radius: 8px;
-    font-size: 0.95em;
-    transition: all 0.3s ease;
-    position: relative;
-}
-
-.characteristic.revealed {
-    background: rgba(46, 204, 113, 0.2);
-    border-left: 4px solid #2ecc71;
-}
-
-.characteristic.own-hidden {
-    background: rgba(243, 156, 18, 0.2);
-    border-left: 4px solid #f39c12;
-}
-
-.characteristic.hidden {
-    background: rgba(149, 165, 166, 0.2);
-    border-left: 4px solid #95a5a6;
-}
-
-/* ОБНОВЛЕННЫЕ СТИЛИ ДЛЯ КЛИКАБЕЛЬНЫХ ХАРАКТЕРИСТИК */
-.characteristic.clickable {
-    cursor: pointer;
-    border: 2px solid rgba(231, 76, 60, 0.6);
-    background: rgba(231, 76, 60, 0.1);
-    animation: pulse-clickable 2s infinite;
-}
-
-.characteristic.clickable:hover {
-    background: rgba(231, 76, 60, 0.2);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
-}
-
-@keyframes pulse-clickable {
-    0% { 
-        border-color: rgba(231, 76, 60, 0.6);
-        background: rgba(231, 76, 60, 0.1);
-    }
-    50% { 
-        border-color: rgba(231, 76, 60, 0.9);
-        background: rgba(231, 76, 60, 0.2);
-    }
-    100% { 
-        border-color: rgba(231, 76, 60, 0.6);
-        background: rgba(231, 76, 60, 0.1);
-    }
-}
-
-.characteristic-name {
-    font-weight: bold;
-    color: #ecf0f1;
-    flex-shrink: 0;
-    margin-right: 10px;
-}
-
-.characteristic-value {
-    text-align: right;
-    color: #bdc3c7;
-    word-break: break-word;
-}
-
-.characteristic-value.own-characteristic {
-    color: #f39c12;
-    font-weight: bold;
-}
-
-/* СТИЛИ ДЛЯ НОВОГО МОДАЛЬНОГО ОКНА ПОДТВЕРЖДЕНИЯ */
-.reveal-confirmation {
-    background: rgba(44, 62, 80, 0.6);
-    padding: 15px 20px;
-    border-radius: 10px;
-    margin: 20px 0;
-    border-left: 4px solid #f39c12;
-    font-size: 1.1em;
-}
-
-.reveal-confirmation strong {
-    color: #f39c12;
-}
-
-.modal-actions {
-    display: flex;
-    gap: 15px;
-    justify-content: center;
-    margin-top: 20px;
-}
-
-.confirm-btn {
-    background: #e74c3c !important;
-    color: white !important;
-}
-
-.confirm-btn:hover {
-    background: #c0392b !important;
-}
-
-/* МОДАЛЬНЫЕ ОКНА */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    z-index: 1000;
-    justify-content: center;
-    align-items: center;
-}
-
-.modal-content {
-    background: rgba(52, 73, 94, 0.95);
-    padding: 30px;
-    border-radius: 15px;
-    max-width: 500px;
-    width: 90%;
-    text-align: center;
-    border: 2px solid #3498db;
-}
-
-.modal-content h3 {
-    color: #f39c12;
-    margin-bottom: 20px;
-}
-
-.modal-buttons {
+.justification-actions {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-bottom: 20px;
+    gap: 15px;
+    align-items: center;
 }
 
-.modal-buttons button {
-    padding: 12px;
+.surrender-btn {
+    background: linear-gradient(45deg, #e74c3c, #c0392b) !important;
+    color: white !important;
     border: none;
-    border-radius: 8px;
-    background: #3498db;
-    color: white;
-    font-size: 1em;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.modal-buttons button:hover {
-    background: #2980b9;
-    transform: translateY(-2px);
-}
-
-/* СТИЛИ ДЛЯ ДЕЙСТВИЙ ИГРОКОВ */
-.player-actions {
-    margin-top: auto;
-}
-
-.vote-section {
-    text-align: center;
-}
-
-.vote-player-btn {
-    background: #e74c3c;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-size: 0.9em;
+    padding: 12px 30px;
+    border-radius: 20px;
+    font-size: 1.1em;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.3s ease;
-    width: 100%;
-    margin-bottom: 8px;
+    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
 }
 
-.vote-player-btn:hover {
-    background: #c0392b;
+.surrender-btn:hover {
+    background: linear-gradient(45deg, #c0392b, #a93226) !important;
     transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(231, 76, 60, 0.6);
 }
 
-.vote-player-btn.voted {
-    background: #2ecc71;
-    cursor: not-allowed;
-}
-
-.vote-player-btn.voted:hover {
-    background: #2ecc71;
-    transform: none;
-}
-
-.voters-list {
-    font-size: 0.8em;
-    color: #bdc3c7;
+.justification-info {
     text-align: center;
+    padding: 20px;
+    background: rgba(241, 196, 15, 0.1);
+    border-radius: 10px;
+    border: 2px solid rgba(241, 196, 15, 0.3);
 }
 
-/* НОВЫЕ СТИЛИ ДЛЯ ГОЛОСОВАНИЯ ЗА ПРОПУСК ОБСУЖДЕНИЯ */
-.voted-skip {
-    background: linear-gradient(45deg, #2ecc71, #27ae60) !important;
-    cursor: not-allowed !important;
+.justification-info p {
+    color: #f1c40f;
+    font-size: 1.2em;
+    font-weight: bold;
+    margin: 0;
 }
 
-.voted-skip:hover {
-    background: linear-gradient(45deg, #2ecc71, #27ae60) !important;
-    transform: none !important;
-}
-
-.skip-votes-info {
+/* СТИЛИ ДЛЯ СМЕНЫ ГОЛОСА */
+.change-vote-info {
     margin-top: 10px;
     font-size: 0.9em;
-    color: #f39c12;
+    color: #3498db;
     font-weight: bold;
     text-align: center;
     padding: 5px 10px;
-    background: rgba(44, 62, 80, 0.6);
+    background: rgba(52, 152, 219, 0.1);
     border-radius: 8px;
-    border: 1px solid rgba(243, 156, 18, 0.3);
+    border: 1px solid rgba(52, 152, 219, 0.3);
 }
 
-/* ИСПРАВЛЕНИЕ СТИЛЕЙ ДЛЯ КНОПОК ГОЛОСОВАНИЯ */
+.vote-player-btn.change-vote {
+    background: #f39c12 !important;
+    color: white !important;
+}
+
+.vote-player-btn.change-vote:hover {
+    background: #e67e22 !important;
+}
+
+/* Обновляем стили кнопок голосования */
 .vote-player-btn:disabled {
     background: #7f8c8d !important;
     cursor: not-allowed !important;
