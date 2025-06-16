@@ -133,12 +133,9 @@ socket.on('characteristic-revealed', function(data) {
     gameState.players = data.players;
     updatePlayersGrid();
     
-    // ИСПРАВЛЕНО: показываем правильное имя в уведомлении
-    const isMe = data.playerId === gameState.playerId;
-    const playerName = isMe ? 'Вы' : data.playerName;
-    
-    showNotification('Характеристика раскрыта', 
-        `${playerName} раскрыл${isMe ? 'и' : ''}: ${translateCharacteristic(data.characteristic)} - ${data.value}`);
+    // УБРАНО: уведомление о раскрытии характеристики
+    // showNotification('Характеристика раскрыта', 
+    //     `${playerName} раскрыл${isMe ? 'и' : ''}: ${translateCharacteristic(data.characteristic)} - ${data.value}`);
 });
 
 socket.on('round-results', function(data) {
@@ -550,7 +547,8 @@ function createPlayerCard(player) {
                 // ИСПРАВЛЕНО: логика раскрытия характеристик
                 const isRevealed = player.revealedCharacteristics && player.revealedCharacteristics.includes(key);
                 const isOwnCard = isCurrentPlayer;
-                const canReveal = isCurrentTurn && !isRevealed && gameState.gamePhase === 'revelation';
+                // ИСПРАВЛЕНО: можно кликать только на свои карточки
+                const canReveal = isCurrentPlayer && isCurrentTurn && !isRevealed && gameState.gamePhase === 'revelation';
                 
                 return `<div class="characteristic ${isRevealed ? 'revealed' : (isOwnCard ? 'own-hidden' : 'hidden')} ${canReveal ? 'clickable' : ''}" 
                     ${canReveal ? `onclick="confirmRevealCharacteristic('${key}')"` : ''}>
@@ -558,7 +556,6 @@ function createPlayerCard(player) {
                     <span class="characteristic-value ${isOwnCard && !isRevealed ? 'own-characteristic' : ''}">
                         ${isRevealed ? player.characteristics[key] : (isOwnCard ? player.characteristics[key] : '???')}
                     </span>
-                    ${canReveal ? '<div class="reveal-hint">Нажмите для раскрытия</div>' : ''}
                 </div>`;
             }).join('')}
         </div>
@@ -593,10 +590,26 @@ function translateCharacteristic(key) {
     return translations[key] || key;
 }
 
-// НОВАЯ функция подтверждения раскрытия характеристики
+// НОВАЯ функция подтверждения раскрытия характеристики с дополнительными проверками
 function confirmRevealCharacteristic(characteristic) {
     const player = gameState.players.find(p => p.id === gameState.playerId);
     if (!player || !player.characteristics) return;
+    
+    // ДОБАВЛЕНО: дополнительные проверки безопасности
+    if (gameState.gamePhase !== 'revelation') {
+        console.log('❌ Not revelation phase');
+        return;
+    }
+    
+    if (gameState.currentTurnPlayer !== gameState.playerId) {
+        console.log('❌ Not my turn');
+        return;
+    }
+    
+    if (player.revealedCharacteristics && player.revealedCharacteristics.includes(characteristic)) {
+        console.log('❌ Already revealed');
+        return;
+    }
     
     const characteristicName = translateCharacteristic(characteristic);
     const characteristicValue = player.characteristics[characteristic];
@@ -612,6 +625,7 @@ function confirmRevealCharacteristic(characteristic) {
 
 function confirmReveal() {
     if (window.characteristicToReveal) {
+        console.log('🔍 Revealing characteristic:', window.characteristicToReveal);
         socket.emit('reveal-characteristic', { characteristic: window.characteristicToReveal });
         document.getElementById('confirmRevealModal').style.display = 'none';
         window.characteristicToReveal = null;

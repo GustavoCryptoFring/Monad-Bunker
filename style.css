@@ -580,7 +580,7 @@ body {
     border-left: 4px solid #95a5a6;
 }
 
-/* НОВЫЕ СТИЛИ ДЛЯ КЛИКАБЕЛЬНЫХ ХАРАКТЕРИСТИК */
+/* ОБНОВЛЕННЫЕ СТИЛИ ДЛЯ КЛИКАБЕЛЬНЫХ ХАРАКТЕРИСТИК */
 .characteristic.clickable {
     cursor: pointer;
     border: 2px solid rgba(231, 76, 60, 0.6);
@@ -607,17 +607,6 @@ body {
         border-color: rgba(231, 76, 60, 0.6);
         background: rgba(231, 76, 60, 0.1);
     }
-}
-
-.reveal-hint {
-    position: absolute;
-    bottom: -20px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 0.7em;
-    color: #e74c3c;
-    font-weight: bold;
-    opacity: 0.8;
 }
 
 .characteristic-name {
