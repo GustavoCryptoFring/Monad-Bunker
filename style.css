@@ -432,12 +432,25 @@ body {
 @media (max-width: 768px) {
     .round-actions {
         flex-direction: column;
+        gap: 10px;
     }
     
     .start-round-btn {
         min-width: 250px;
         font-size: 1.1em;
         padding: 12px 25px;
+    }
+    
+    .notification-options {
+        max-width: 100%;
+    }
+    
+    .notification-checkbox {
+        padding: 10px;
+    }
+    
+    .notification-checkbox span {
+        font-size: 0.9em;
     }
 }
 

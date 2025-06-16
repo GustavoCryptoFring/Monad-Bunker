@@ -93,6 +93,7 @@ socket.on('player-joined', function(data) {
     console.log('👋 Player joined:', data);
     gameState.players = data.players;
     gameState.maxPlayers = data.maxPlayers;
+    gameState.notificationSettings = data.notificationSettings || gameState.notificationSettings; // ДОБАВИЛИ
     updateLobbyDisplay();
     
     if (data.newPlayer !== gameState.playerName) {
@@ -113,6 +114,7 @@ socket.on('max-players-changed', function(data) {
     console.log('🔧 Max players changed:', data);
     gameState.maxPlayers = data.maxPlayers;
     gameState.players = data.players;
+    gameState.notificationSettings = data.notificationSettings || gameState.notificationSettings; // ДОБАВИЛИ
     updateLobbyDisplay();
 });
 
@@ -139,6 +141,11 @@ socket.on('game-reset', function(data) {
     gameState.currentRound = 1;
     gameState.timeLeft = 0;
     gameState.currentTurnPlayer = null;
+    gameState.notificationSettings = data.notificationSettings || { // ДОБАВИЛИ
+        gameStart: false,
+        discussionSkipped: false,
+        newRound: false
+    };
     showLobbyScreen();
     
     showNotification('Игра сброшена', 'Возвращаемся в лобби');
