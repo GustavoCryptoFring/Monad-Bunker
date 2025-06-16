@@ -20,13 +20,29 @@ app.get('/', (req, res) => {
 
 // API для здоровья сервера
 app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'OK', 
-        timestamp: new Date().toISOString(),
-        players: gameRoom.players.length,
-        gameState: gameRoom.gameState,
-        connections: io.engine.clientsCount
-    });
+    try {
+        res.json({ 
+            status: 'OK', 
+            timestamp: new Date().toISOString(),
+            players: gameRoom ? gameRoom.players.length : 0,
+            gameState: gameRoom ? gameRoom.gameState : 'unknown',
+            connections: io.engine ? io.engine.clientsCount : 0,
+            uptime: process.uptime(),
+            memory: process.memoryUsage()
+        });
+    } catch (error) {
+        console.error('Health check error:', error);
+        res.status(500).json({ 
+            status: 'ERROR', 
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// Catch-all для неопределенных роутов
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Единая игровая комната для всех
@@ -251,7 +267,9 @@ io.on('connection', (socket) => {
         if (votedPlayers.length >= alivePlayers.length) {
             console.log('✅ All players voted - starting justification phase');
             clearInterval(gameRoom.timer);
-            startJustificationPhase();
+            setTimeout(() => {
+                startJustificationPhase();
+            }, 1000);
         }
     });
 
@@ -746,8 +764,9 @@ function startJustificationPhase() {
 
 function nextJustification() {
     if (gameRoom.justificationQueue.length === 0) {
-        // Все оправдались - начинаем новое голосование
-        startSecondVoting();
+        // Все оправдались - показываем результаты
+        console.log('✅ All justifications completed - showing results');
+        showResults();
         return;
     }
     
@@ -814,30 +833,7 @@ function startVotingPhase() {
     });
 }
 
-function startGameTimer() {
-    if (gameRoom.timer) {
-        clearInterval(gameRoom.timer);
-    }
-    
-    gameRoom.timer = setInterval(() => {
-        gameRoom.timeLeft--;
-        
-        // Отправляем обновление таймера каждые 10 секунд или в последние 10 секунд
-        if (gameRoom.timeLeft % 10 === 0 || gameRoom.timeLeft <= 10) {
-            io.to('game-room').emit('timer-update', {
-                timeLeft: gameRoom.timeLeft,
-                gamePhase: gameRoom.gamePhase,
-                currentTurnPlayer: gameRoom.currentTurnPlayer
-            });
-        }
-        
-        if (gameRoom.timeLeft <= 0) {
-            clearInterval(gameRoom.timer);
-            handlePhaseTimeout();
-        }
-    }, 1000);
-}
-
+// ИСПРАВЛЯЕМ обработчик timeout - добавляем недостающие переходы
 function handlePhaseTimeout() {
     console.log('⏰ Phase timeout:', gameRoom.gamePhase);
     
@@ -850,7 +846,17 @@ function handlePhaseTimeout() {
             startVotingPhase();
             break;
         case 'voting':
-            startJustificationPhase();
+            // ИСПРАВЛЕНО: проверяем, были ли голоса перед переходом к оправданиям
+            const hasVotes = Object.keys(gameRoom.votingResults).some(playerId => 
+                gameRoom.votingResults[playerId] && gameRoom.votingResults[playerId].length > 0
+            );
+            
+            if (hasVotes) {
+                startJustificationPhase();
+            } else {
+                // Если никто не голосовал - переходим к следующему раунду
+                nextRound();
+            }
             break;
         case 'justification':
             // Время оправдания истекло - переходим к следующему
@@ -895,6 +901,7 @@ function showResults() {
         // НЕ сбрасываем revealedCharacteristics - они остаются на всю игру
     });
     
+    gameRoom.votingResults = {};
     gameRoom.revealedThisRound = 0;
     gameRoom.currentTurnPlayer = null;
     gameRoom.justificationQueue = [];
@@ -1093,10 +1100,30 @@ function getRandomItem(array) {
 }
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🌐 Single Room Bunker Game running on port ${PORT}`);
+const HOST = process.env.HOST || '0.0.0.0';
+
+server.listen(PORT, HOST, () => {
+    console.log(`🌐 Single Room Bunker Game running on ${HOST}:${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🎮 Game room initialized with max ${gameRoom.maxPlayers} players`);
+    console.log(`⚡ Server ready to accept connections`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('🛑 SIGTERM received, shutting down gracefully');
+    server.close(() => {
+        console.log('✅ Server closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('🛑 SIGINT received, shutting down gracefully');
+    server.close(() => {
+        console.log('✅ Server closed');
+        process.exit(0);
+    });
 });
 
 // Обработка ошибок
