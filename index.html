@@ -65,6 +65,13 @@
                 <div class="round-info">
                     <h2>РАУНД <span id="currentRound">1</span></h2>
                     <p id="gameStatus">Ожидание начала игры...</p>
+                    
+                    <!-- ПЕРЕМЕСТИЛИ кнопку сюда -->
+                    <div class="round-actions" id="roundActions" style="display: none;">
+                        <button id="startRoundBtn" class="start-round-btn" onclick="startRound()">
+                            🚀 Начать раунд
+                        </button>
+                    </div>
                 </div>
                 <div class="timer-info">
                     <div class="phase-display" id="phaseDisplay">Подготовка</div>
@@ -77,8 +84,7 @@
             </div>
 
             <div class="game-actions" id="gameActions">
-                <button id="skipPhaseBtn" onclick="voteToSkip()" class="action-btn">⏭️ Пропустить фазу</button>
-                <button id="showActionCardsBtn" onclick="showActionCard()" class="action-btn">🃏 Карты действий</button>
+                <!-- Кнопки действий будут добавлены динамически -->
             </div>
         </div>
 

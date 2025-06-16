@@ -505,7 +505,8 @@ function createPlayerCard(player) {
         
         <div class="characteristics">
             ${Object.entries(player.characteristics).map(([key, value]) => {
-                const isRevealed = player.hasRevealed || key === 'profession';
+                // ИСПРАВЛЕНО: проверяем, была ли раскрыта конкретная характеристика
+                const isRevealed = player.revealedCharacteristics && player.revealedCharacteristics.includes(key);
                 const isOwnCard = isCurrentPlayer;
                 
                 return `<div class="characteristic ${isRevealed ? 'revealed' : (isOwnCard ? 'own-hidden' : 'hidden')}">

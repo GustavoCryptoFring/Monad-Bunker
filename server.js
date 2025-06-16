@@ -85,6 +85,7 @@ io.on('connection', (socket) => {
             isAlive: true,
             votes: 0,
             hasRevealed: false,
+            revealedCharacteristics: [], // ДОБАВИЛИ массив раскрытых характеристик
             characteristics: null, // Будут созданы при старте игры
             actionCards: [],
             hasVoted: false // Отслеживаем голосование
@@ -138,6 +139,7 @@ io.on('connection', (socket) => {
             player.actionCards = [getRandomActionCard()];
             player.hasRevealed = false;
             player.hasVoted = false;
+            player.revealedCharacteristics = []; // ДОБАВИЛИ сброс раскрытых характеристик
         });
         
         gameRoom.gameState = 'playing';
@@ -255,10 +257,15 @@ io.on('connection', (socket) => {
         }
         
         if (player.hasRevealed) {
-            socket.emit('error', 'Вы уже раскрыли характеристику!');
+            socket.emit('error', 'Вы уже раскрыли характеристику в этом ходу!');
             return;
         }
         
+        // ИСПРАВЛЕНО: добавляем характеристику в список раскрытых
+        if (!player.revealedCharacteristics) {
+            player.revealedCharacteristics = [];
+        }
+        player.revealedCharacteristics.push(data.characteristic);
         player.hasRevealed = true;
         gameRoom.playersWhoRevealed.push(player.id);
         
@@ -506,6 +513,7 @@ function showResults() {
         player.hasRevealed = false;
         player.votes = 0;
         player.hasVoted = false;
+        // НЕ сбрасываем revealedCharacteristics - они остаются на всю игру
     });
     
     gameRoom.revealedThisRound = 0;
@@ -585,6 +593,7 @@ function resetGame() {
         player.votes = 0;
         player.hasRevealed = false;
         player.hasVoted = false;
+        player.revealedCharacteristics = []; // СБРАСЫВАЕМ при новой игре
         player.characteristics = null;
         player.actionCards = [];
     });
