@@ -13,7 +13,7 @@ let gameState = {
     votingResults: {},
     myVote: null,
     timer: null,
-    maxPlayers: 12,
+    maxPlayers: 8,
     currentTurnPlayer: null,
     currentJustifyingPlayer: null,
     canChangeVote: {},
@@ -31,6 +31,8 @@ const socket = io();
 
 socket.on('connect', function() {
     console.log('🌐 Connected to server');
+    // При подключении показываем экран входа
+    showLoginScreen();
 });
 
 socket.on('disconnect', function() {
@@ -51,9 +53,13 @@ socket.on('room-state', function(data) {
     gameState.currentRound = data.currentRound || 1;
     gameState.timeLeft = data.timeLeft || 0;
     gameState.currentTurnPlayer = data.currentTurnPlayer || null;
+    gameState.maxPlayers = data.maxPlayers || 8;
     
-    if (gameState.gamePhase !== 'login') {
-        updateGameDisplay();
+    // Если мы уже в игре, показываем соответствующий экран
+    if (gameState.playerId && gameState.serverGameState === 'lobby') {
+        showLobbyScreen();
+    } else if (gameState.playerId && gameState.serverGameState === 'playing') {
+        showGameScreen();
     }
 });
 
@@ -64,14 +70,14 @@ socket.on('join-confirmed', function(data) {
     gameState.isHost = data.isHost;
     gameState.maxPlayers = data.maxPlayers;
     gameState.gamePhase = 'lobby';
-    updateGameDisplay();
+    showLobbyScreen();
 });
 
 socket.on('player-joined', function(data) {
     console.log('👋 Player joined:', data);
     gameState.players = data.players;
     gameState.maxPlayers = data.maxPlayers;
-    updateGameDisplay();
+    updateLobbyDisplay();
     
     if (data.newPlayer !== gameState.playerName) {
         showNotification('Игрок присоединился', `${data.newPlayer} присоединился к игре`);
@@ -82,7 +88,7 @@ socket.on('player-left', function(data) {
     console.log('👋 Player left:', data);
     gameState.players = data.players;
     gameState.serverGameState = data.gameState;
-    updateGameDisplay();
+    updateLobbyDisplay();
     
     showNotification('Игрок покинул игру', `${data.leftPlayer} покинул игру`);
 });
@@ -91,7 +97,7 @@ socket.on('max-players-changed', function(data) {
     console.log('🔧 Max players changed:', data);
     gameState.maxPlayers = data.maxPlayers;
     gameState.players = data.players;
-    updateGameDisplay();
+    updateLobbyDisplay();
 });
 
 socket.on('game-started', function(data) {
@@ -101,9 +107,22 @@ socket.on('game-started', function(data) {
     gameState.gamePhase = data.gamePhase;
     gameState.currentRound = data.currentRound;
     gameState.timeLeft = data.timeLeft;
-    updateGameDisplay();
+    showGameScreen();
     
     showNotification('Игра началась!', 'Характеристики розданы. Подготовьтесь к первому раунду.');
+});
+
+socket.on('game-reset', function(data) {
+    console.log('🔄 Game reset:', data);
+    gameState.players = data.players;
+    gameState.serverGameState = data.gameState;
+    gameState.gamePhase = 'lobby';
+    gameState.currentRound = 1;
+    gameState.timeLeft = 0;
+    gameState.currentTurnPlayer = null;
+    showLobbyScreen();
+    
+    showNotification('Игра сброшена', 'Возвращаемся в лобби');
 });
 
 socket.on('phase-changed', function(data) {
@@ -185,7 +204,7 @@ socket.on('skip-discussion-vote-update', function(data) {
     console.log('⏭️ Skip discussion vote update:', data);
     gameState.skipDiscussionVotes = data.votes;
     gameState.mySkipVote = data.hasVoted;
-    updateGameDisplay();
+    updateGameActions();
 });
 
 socket.on('discussion-skipped', function(data) {
@@ -193,8 +212,10 @@ socket.on('discussion-skipped', function(data) {
     gameState.gamePhase = data.gamePhase;
     gameState.timeLeft = data.timeLeft;
     gameState.players = data.players;
+    gameState.skipDiscussionVotes = 0;
+    gameState.mySkipVote = false;
     updateGameDisplay();
-    showNotification('Обсуждение пропущено', 'Переходим к голосованию');
+    showNotification('Обсуждение пропущено', 'Достаточно игроков проголосовало за пропуск обсуждения');
 });
 
 socket.on('round-results', function(data) {
@@ -231,25 +252,121 @@ socket.on('game-ended', function(data) {
     showNotification('Игра завершена', `Победители: ${winners}`);
 });
 
-socket.on('game-reset', function(data) {
-    console.log('🔄 Game reset:', data);
-    gameState.players = data.players;
-    gameState.serverGameState = data.gameState;
-    gameState.gamePhase = 'lobby';
-    gameState.currentRound = 1;
-    gameState.timeLeft = 0;
-    gameState.currentTurnPlayer = null;
-    updateGameDisplay();
-    
-    showNotification('Игра сброшена', 'Возвращаемся в лобби');
-});
-
 socket.on('player-surrendered', function(data) {
     console.log('🏳️ Player surrendered:', data);
     gameState.players = data.players;
-    updateGameDisplay();
-    showNotification('Игрок сдался', `${data.surrenderedPlayer} покинул игру`);
+    updatePlayersGrid();
+    
+    const isMe = data.surrenderedPlayer === gameState.playerName;
+    const message = isMe ? 'Вы сдались и покинули игру.' : `${data.surrenderedPlayer} сдался и покинул игру.`;
+    
+    showNotification('Игрок сдался', message);
 });
+
+// === ФУНКЦИИ ОТОБРАЖЕНИЯ ЭКРАНОВ ===
+
+function showScreen(screenId) {
+    // Скрываем все экраны
+    const screens = document.querySelectorAll('.screen');
+    screens.forEach(screen => {
+        screen.style.display = 'none';
+    });
+    
+    // Показываем нужный экран
+    const targetScreen = document.getElementById(screenId);
+    if (targetScreen) {
+        targetScreen.style.display = 'block';
+    }
+}
+
+function showLoginScreen() {
+    console.log('📱 Showing login screen');
+    showScreen('loginScreen');
+    
+    // Устанавливаем фокус на поле ввода имени
+    const nameInput = document.getElementById('playerNameInput');
+    if (nameInput) {
+        nameInput.focus();
+    }
+}
+
+function showLobbyScreen() {
+    console.log('📱 Showing lobby screen');
+    showScreen('lobbyScreen');
+    updateLobbyDisplay();
+}
+
+function showGameScreen() {
+    console.log('📱 Showing game screen');
+    showScreen('gameScreen');
+    updateGameDisplay();
+}
+
+function showResultsScreen() {
+    console.log('📱 Showing results screen');
+    showScreen('resultsScreen');
+}
+
+// === ФУНКЦИИ ОБНОВЛЕНИЯ ЛОББИ ===
+
+function updateLobbyDisplay() {
+    // Обновляем счетчик игроков
+    const currentPlayersCount = document.getElementById('currentPlayersCount');
+    const maxPlayersCount = document.getElementById('maxPlayersCount');
+    const playersList = document.getElementById('playersList');
+    const startGameBtn = document.getElementById('startGameBtn');
+    const waitingInfo = document.getElementById('waitingInfo');
+    const maxPlayersSelector = document.getElementById('maxPlayersSelector');
+    
+    if (currentPlayersCount) {
+        currentPlayersCount.textContent = gameState.players.length;
+    }
+    
+    if (maxPlayersCount) {
+        maxPlayersCount.textContent = gameState.maxPlayers;
+    }
+    
+    // Обновляем список игроков
+    if (playersList) {
+        playersList.innerHTML = '';
+        gameState.players.forEach(player => {
+            const li = document.createElement('li');
+            li.className = player.isHost ? 'host' : '';
+            li.textContent = `${player.name}${player.isHost ? ' (Хост)' : ''}`;
+            playersList.appendChild(li);
+        });
+    }
+    
+    // Показываем/скрываем кнопку старта и селектор
+    if (gameState.isHost) {
+        if (startGameBtn) {
+            startGameBtn.style.display = 'block';
+            startGameBtn.disabled = gameState.players.length < 2;
+        }
+        if (waitingInfo) {
+            waitingInfo.style.display = 'none';
+        }
+        if (maxPlayersSelector) {
+            maxPlayersSelector.style.display = 'block';
+        }
+    } else {
+        if (startGameBtn) {
+            startGameBtn.style.display = 'none';
+        }
+        if (waitingInfo) {
+            waitingInfo.style.display = 'block';
+        }
+        if (maxPlayersSelector) {
+            maxPlayersSelector.style.display = 'none';
+        }
+    }
+    
+    // Обновляем селектор максимального количества игроков
+    const maxPlayersSelect = document.getElementById('maxPlayersSelect');
+    if (maxPlayersSelect) {
+        maxPlayersSelect.value = gameState.maxPlayers;
+    }
+}
 
 // === ОСНОВНЫЕ ФУНКЦИИ ИГРЫ ===
 
@@ -281,12 +398,60 @@ function startRound() {
     socket.emit('start-round');
 }
 
+function changeMaxPlayers() {
+    const select = document.getElementById('maxPlayersSelect');
+    const newMaxPlayers = parseInt(select.value);
+    
+    console.log('🔧 Changing max players to:', newMaxPlayers);
+    socket.emit('change-max-players', { maxPlayers: newMaxPlayers });
+}
+
+// === ФУНКЦИИ ИГРОВОГО ПРОЦЕССА ===
+
 function getRequiredCardsForRound(round) {
     if (round === 1) {
         return 2; // Профессия + 1 карта на выбор
     } else {
         return 1; // 1 карта на выбор
     }
+}
+
+function updateGameDisplay() {
+    // Обновляем информацию о раунде
+    const currentRoundElement = document.getElementById('currentRound');
+    const gameStatusElement = document.getElementById('gameStatus');
+    const phaseDisplayElement = document.getElementById('phaseDisplay');
+    const roundActionsElement = document.getElementById('roundActions');
+    const gameActionsElement = document.getElementById('gameActions');
+    
+    if (currentRoundElement) {
+        currentRoundElement.textContent = gameState.currentRound;
+    }
+    
+    if (gameStatusElement) {
+        gameStatusElement.textContent = getGameStatusText();
+    }
+    
+    if (phaseDisplayElement) {
+        phaseDisplayElement.textContent = getPhaseDisplayText();
+    }
+    
+    // Показываем кнопку начала раунда только хосту в фазе подготовки
+    if (roundActionsElement) {
+        if (gameState.isHost && gameState.gamePhase === 'preparation') {
+            roundActionsElement.style.display = 'block';
+        } else {
+            roundActionsElement.style.display = 'none';
+        }
+    }
+    
+    // Обновляем действия игры
+    if (gameActionsElement) {
+        gameActionsElement.innerHTML = updateGameActions();
+    }
+    
+    updatePlayersGrid();
+    updateTimerDisplay();
 }
 
 function getGameStatusText() {
@@ -345,93 +510,13 @@ function getPhaseDisplayText() {
     const statusText = getGameStatusText();
     
     if (gameState.gamePhase === 'revelation' && gameState.currentTurnPlayer === gameState.playerId) {
-        return `<span class="my-turn">${statusText}</span>`;
+        return `${statusText}`;
     }
     
     return statusText;
 }
 
-function updateGameDisplay() {
-    const gameContainer = document.querySelector('.game-container');
-    
-    if (gameState.gamePhase === 'login') {
-        gameContainer.innerHTML = `
-            <div class="login-screen">
-                <h2>🎭 Добро пожаловать в Бункер!</h2>
-                <div class="login-form">
-                    <input type="text" id="playerNameInput" placeholder="Введите ваше имя" maxlength="20" />
-                    <button onclick="joinGame()" class="room-btn primary">Присоединиться к игре</button>
-                </div>
-            </div>
-        `;
-        
-        const nameInput = document.getElementById('playerNameInput');
-        if (nameInput) {
-            nameInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    joinGame();
-                }
-            });
-            nameInput.focus();
-        }
-        return;
-    }
-    
-    gameContainer.innerHTML = `
-        <div class="game-header">
-            <h1>🎭 БУНКЕР</h1>
-            <div class="game-info">
-                <span class="game-info-item">👥 Игроков: ${gameState.players.length}/${gameState.maxPlayers}</span>
-                <span class="game-info-item">🎯 Раунд: ${gameState.currentRound}</span>
-                <span class="game-info-item" id="timerDisplay">⏱️ ${Math.floor(gameState.timeLeft / 60)}:${(gameState.timeLeft % 60).toString().padStart(2, '0')}</span>
-            </div>
-        </div>
-        
-        <div class="game-status">
-            <h2>${getPhaseDisplayText()}</h2>
-        </div>
-        
-        <div class="game-actions">
-            ${updateGameActions()}
-        </div>
-        
-        <div class="players-section">
-            <h3>Игроки</h3>
-            <div id="playersGrid" class="players-grid">
-                <!-- Игроки будут добавлены динамически -->
-            </div>
-        </div>
-    `;
-    
-    updatePlayersGrid();
-    updateTimerDisplay();
-}
-
 function updateGameActions() {
-    if (gameState.gamePhase === 'lobby') {
-        let actions = '';
-        
-        if (gameState.isHost) {
-            actions += `
-                <button onclick="startGame()" class="room-btn primary">🚀 Начать игру</button>
-                <div class="host-controls">
-                    <label for="maxPlayersSelect">Максимум игроков:</label>
-                    <select id="maxPlayersSelect" onchange="changeMaxPlayers()">
-                        <option value="8" ${gameState.maxPlayers === 8 ? 'selected' : ''}>8 игроков</option>
-                        <option value="12" ${gameState.maxPlayers === 12 ? 'selected' : ''}>12 игроков</option>
-                        <option value="16" ${gameState.maxPlayers === 16 ? 'selected' : ''}>16 игроков</option>
-                    </select>
-                </div>
-            `;
-        }
-        
-        return actions;
-    }
-    
-    if (gameState.gamePhase === 'preparation' && gameState.isHost) {
-        return '<button onclick="startRound()" class="room-btn primary">▶️ Начать раунд</button>';
-    }
-    
     if (gameState.gamePhase === 'discussion') {
         const canSkip = !gameState.mySkipVote;
         const skipText = gameState.mySkipVote ? '✅ Проголосовано за пропуск' : '⏭️ Пропустить обсуждение';
@@ -469,7 +554,7 @@ function updateTimerDisplay() {
     if (timerElement && gameState.timeLeft >= 0) {
         const minutes = Math.floor(gameState.timeLeft / 60);
         const seconds = gameState.timeLeft % 60;
-        timerElement.textContent = `⏱️ ${minutes}:${seconds.toString().padStart(2, '0')}`;
+        timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
 }
 
@@ -753,14 +838,6 @@ function surrender() {
     }
 }
 
-function changeMaxPlayers() {
-    const select = document.getElementById('maxPlayersSelect');
-    const newMaxPlayers = parseInt(select.value);
-    
-    console.log('🔧 Changing max players to:', newMaxPlayers);
-    socket.emit('change-max-players', { maxPlayers: newMaxPlayers });
-}
-
 function voteToSkipDiscussion() {
     if (gameState.gamePhase !== 'discussion') {
         showNotification('Ошибка', 'Сейчас не фаза обсуждения');
@@ -797,7 +874,15 @@ function closeNotificationModal() {
     }
 }
 
+// === ИНИЦИАЛИЗАЦИЯ ===
+
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('📱 DOM loaded, initializing...');
+    
+    // Показываем экран входа при загрузке
+    showLoginScreen();
+    
+    // Добавляем обработчик Enter для поля ввода имени
     const playerNameInput = document.getElementById('playerNameInput');
     if (playerNameInput) {
         playerNameInput.addEventListener('keypress', function(e) {
@@ -809,213 +894,3 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 console.log('🎮 Bunker Game Client Loaded');
-
-// НОВЫЕ обработчики для пропуска обсуждения
-socket.on('skip-discussion-vote-update', function(data) {
-    console.log('⏭️ Skip discussion vote update:', data);
-    gameState.skipDiscussionVotes = data.votes;
-    gameState.mySkipVote = data.hasVoted;
-    updateGameActions();
-});
-
-socket.on('discussion-skipped', function(data) {
-    console.log('⏭️ Discussion skipped:', data);
-    gameState.gamePhase = data.gamePhase;
-    gameState.timeLeft = data.timeLeft;
-    gameState.players = data.players;
-    gameState.skipDiscussionVotes = 0;
-    gameState.mySkipVote = false;
-    updateGameDisplay();
-    showNotification('Обсуждение пропущено', 'Достаточно игроков проголосовало за пропуск обсуждения');
-});
-
-// ИСПРАВЛЕНО: сброс состояния голосования при смене фазы
-socket.on('phase-changed', function(data) {
-    console.log('🔄 Phase changed:', data);
-    gameState.gamePhase = data.gamePhase;
-    gameState.timeLeft = data.timeLeft;
-    gameState.players = data.players;
-    gameState.currentTurnPlayer = data.currentTurnPlayer || null;
-    
-    // ДОБАВЛЕНО: сброс голосования за пропуск при смене фазы
-    if (data.gamePhase !== 'discussion') {
-        gameState.skipDiscussionVotes = 0;
-        gameState.mySkipVote = false;
-    }
-    
-    // ДОБАВЛЕНО: сброс голосования за игроков при смене фазы
-    if (data.gamePhase !== 'voting') {
-        gameState.myVote = null;
-        gameState.hasChangedVote = false;
-    }
-    
-    updateGameDisplay();
-});
-
-// НОВЫЕ обработчики для фазы оправданий
-socket.on('justification-started', function(data) {
-    console.log('⚖️ Justification started:', data);
-    gameState.gamePhase = 'justification';
-    gameState.currentJustifyingPlayer = data.justifyingPlayer.id;
-    gameState.timeLeft = data.timeLeft;
-    gameState.players = data.players;
-    updateGameDisplay();
-    
-    const isMyJustification = data.justifyingPlayer.id === gameState.playerId;
-    const message = isMyJustification ? 
-        'Ваше время для оправдания! У вас есть 2 минуты.' : 
-        `${data.justifyingPlayer.name} оправдывается. Оставшихся в очереди: ${data.remainingQueue}`;
-    
-    showNotification('Фаза оправдания', message);
-});
-
-socket.on('second-voting-started', function(data) {
-    console.log('🗳️ Second voting started:', data);
-    gameState.gamePhase = data.gamePhase;
-    gameState.timeLeft = data.timeLeft;
-    gameState.players = data.players;
-    gameState.canChangeVote = data.canChangeVote;
-    gameState.hasChangedVote = false;
-    updateGameDisplay();
-    
-    showNotification('Повторное голосование', 'Голоса остались прежними. Вы можете один раз сменить свой голос.');
-});
-
-socket.on('player-surrendered', function(data) {
-    console.log('🏳️ Player surrendered:', data);
-    gameState.players = data.players;
-    updatePlayersGrid();
-    
-    const isMe = data.surrenderedPlayer === gameState.playerName;
-    const message = isMe ? 'Вы сдались и покинули игру.' : `${data.surrenderedPlayer} сдался и покинул игру.`;
-    
-    showNotification('Игрок сдался', message);
-});
-
-function updateTimerDisplay() {
-    const timerElement = document.getElementById('timerDisplay');
-    if (timerElement && gameState.timeLeft >= 0) {
-        const minutes = Math.floor(gameState.timeLeft / 60);
-        const seconds = gameState.timeLeft % 60;
-        timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    }
-}
-
-function updatePlayersGrid() {
-    const playersGrid = document.getElementById('playersGrid');
-    
-    if (!playersGrid) {
-        console.error('❌ playersGrid element not found');
-        return;
-    }
-    
-    // Очищаем сетку
-    playersGrid.innerHTML = '';
-    
-    // Добавляем класс для адаптивной сетки
-    playersGrid.className = `players-grid players-${gameState.players.length}`;
-    
-    // Создаем карточки игроков
-    gameState.players.forEach(player => {
-        const playerCard = createPlayerCard(player);
-        playersGrid.appendChild(playerCard);
-    });
-    
-    console.log('🎮 Players grid updated:', gameState.players.length, 'players');
-}
-
-// НОВАЯ функция для голосования за пропуск обсуждения
-function voteToSkipDiscussion() {
-    if (gameState.gamePhase !== 'discussion') {
-        showNotification('Ошибка', 'Сейчас не фаза обсуждения');
-        return;
-    }
-    
-    if (gameState.mySkipVote) {
-        showNotification('Ошибка', 'Вы уже проголосовали за пропуск');
-        return;
-    }
-    
-    console.log('⏭️ Voting to skip discussion...');
-    socket.emit('vote-skip-discussion');
-}
-
-// Функция для показа уведомлений
-function showNotification(title, message) {
-    const modal = document.getElementById('notificationModal');
-    const titleElement = document.getElementById('notificationTitle');
-    const messageElement = document.getElementById('notificationMessage');
-    
-    if (modal && titleElement && messageElement) {
-        titleElement.textContent = title;
-        messageElement.textContent = message;
-        modal.style.display = 'flex';
-    } else {
-        // Fallback: используем alert если модальное окно не найдено
-        alert(`${title}: ${message}`);
-    }
-}
-
-function closeNotificationModal() {
-    const modal = document.getElementById('notificationModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
-// ДОБАВЛЯЕМ недостающие обработчики для раскрытия характеристик
-socket.on('reveal-characteristic', function(data) {
-    console.log('🔍 Revealing characteristic:', data);
-    
-    const player = gameState.players.find(p => p.id === gameState.playerId);
-    if (!player) return;
-    
-    // Проверяем, что это наш ход
-    if (gameState.currentTurnPlayer !== gameState.playerId) {
-        showNotification('Ошибка', 'Сейчас не ваш ход!');
-        return;
-    }
-    
-    if (gameState.gamePhase !== 'revelation') {
-        showNotification('Ошибка', 'Сейчас не фаза раскрытия!');
-        return;
-    }
-    
-    // Отправляем характеристику на сервер
-    socket.emit('reveal-characteristic', data);
-});
-
-// ИСПРАВЛЯЕМ обработчик обновления таймера
-socket.on('timer-update', function(data) {
-    gameState.timeLeft = data.timeLeft;
-    gameState.currentTurnPlayer = data.currentTurnPlayer;
-    updateTimerDisplay();
-    
-    // Обновляем отображение хода игрока
-    if (gameState.gamePhase === 'revelation') {
-        updateGameDisplay();
-    }
-});
-
-// ОБНОВЛЯЕМ обработчик смены фазы
-socket.on('phase-changed', function(data) {
-    console.log('🔄 Phase changed:', data);
-    gameState.gamePhase = data.gamePhase;
-    gameState.timeLeft = data.timeLeft;
-    gameState.players = data.players;
-    gameState.currentTurnPlayer = data.currentTurnPlayer || null;
-    
-    // ДОБАВЛЕНО: сброс голосования за пропуск при смене фазы
-    if (data.gamePhase !== 'discussion') {
-        gameState.skipDiscussionVotes = 0;
-        gameState.mySkipVote = false;
-    }
-    
-    // ДОБАВЛЕНО: сброс голосования за игроков при смене фазы
-    if (data.gamePhase !== 'voting') {
-        gameState.myVote = null;
-        gameState.hasChangedVote = false;
-    }
-    
-    updateGameDisplay();
-});

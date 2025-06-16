@@ -63,7 +63,8 @@ io.on('connection', (socket) => {
         gamePhase: gameRoom.gamePhase,
         currentRound: gameRoom.currentRound,
         timeLeft: gameRoom.timeLeft,
-        currentTurnPlayer: gameRoom.currentTurnPlayer
+        currentTurnPlayer: gameRoom.currentTurnPlayer,
+        maxPlayers: gameRoom.maxPlayers // ДОБАВЛЕНО
     });
     
     socket.on('join-game', (data) => {
@@ -104,19 +105,19 @@ io.on('connection', (socket) => {
         
         console.log('✅ Player joined:', data.playerName, 'Total players:', gameRoom.players.length);
         
+        // Подтверждение присоединения - ОБЯЗАТЕЛЬНО с maxPlayers
+        socket.emit('join-confirmed', {
+            playerId: socket.id,
+            playerName: data.playerName,
+            isHost: newPlayer.isHost,
+            maxPlayers: gameRoom.maxPlayers // ДОБАВЛЕНО
+        });
+        
         // Отправляем обновление всем игрокам
         io.to('game-room').emit('player-joined', {
             players: gameRoom.players,
             newPlayer: data.playerName,
             gameState: gameRoom.gameState,
-            maxPlayers: gameRoom.maxPlayers
-        });
-        
-        // Подтверждение присоединения
-        socket.emit('join-confirmed', {
-            playerId: socket.id,
-            playerName: data.playerName,
-            isHost: newPlayer.isHost,
             maxPlayers: gameRoom.maxPlayers
         });
     });
