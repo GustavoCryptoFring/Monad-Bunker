@@ -511,7 +511,7 @@ body {
     font-size: 1.2em;
     font-weight: bold;
     color: #ecf0f1;
-    margin-bottom: 2px;
+    margin-bottom: 5px;
 }
 
 .player-name.eliminated-name {
@@ -519,26 +519,21 @@ body {
     text-decoration: line-through;
 }
 
-/* НОВЫЕ СТИЛИ ДЛЯ НАСТОЯЩЕГО ИМЕНИ */
-.player-real-name {
-    font-size: 0.9em;
-    color: #f39c12;
-    font-weight: normal;
-    font-style: italic;
-    margin-bottom: 5px;
-    opacity: 0.8;
-}
-
 .player-status {
     font-size: 0.9em;
     padding: 3px 8px;
     border-radius: 12px;
     font-weight: bold;
+    margin-bottom: 3px;
 }
 
 .player-status.current {
     background: #f39c12;
     color: white;
+    font-size: 0.8em;
+    padding: 2px 6px;
+    border-radius: 8px;
+    display: inline-block;
 }
 
 .player-status.turn {

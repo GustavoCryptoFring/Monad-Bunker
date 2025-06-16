@@ -134,12 +134,11 @@ socket.on('characteristic-revealed', function(data) {
     updatePlayersGrid();
     
     // ИСПРАВЛЕНО: показываем правильное имя в уведомлении
-    const revealedPlayer = gameState.players.find(p => p.id === data.playerId);
     const isMe = data.playerId === gameState.playerId;
-    const displayName = getPlayerDisplayName(revealedPlayer, isMe);
+    const playerName = isMe ? 'Вы' : data.playerName;
     
     showNotification('Характеристика раскрыта', 
-        `${displayName} раскрыл: ${translateCharacteristic(data.characteristic)} - ${data.value}`);
+        `${playerName} раскрыл${isMe ? 'и' : ''}: ${translateCharacteristic(data.characteristic)} - ${data.value}`);
 });
 
 socket.on('round-results', function(data) {
@@ -150,9 +149,9 @@ socket.on('round-results', function(data) {
         // ИСПРАВЛЕНО: показываем правильное имя исключенного игрока
         const eliminatedPlayer = gameState.players.find(p => p.name === data.eliminatedPlayer);
         const isMe = eliminatedPlayer && eliminatedPlayer.id === gameState.playerId;
-        const displayName = eliminatedPlayer ? getPlayerDisplayName(eliminatedPlayer, isMe) : data.eliminatedPlayer;
+        const displayName = isMe ? 'Вы' : data.eliminatedPlayer;
         
-        showNotification('Игрок исключен', `${displayName} был исключен из бункера!`);
+        showNotification('Игрок исключен', `${displayName} ${isMe ? 'были исключены' : 'был исключен'} из бункера!`);
     } else {
         showNotification('Результаты голосования', 'Никто не был исключен в этом раунде');
     }
@@ -276,15 +275,9 @@ function showResultsScreen(winners) {
     winners.forEach(winner => {
         const li = document.createElement('li');
         const isMe = winner.id === gameState.playerId;
-        const displayName = getPlayerDisplayName(winner, isMe);
         
         // ИСПРАВЛЕНО: показываем правильные имена победителей
-        if (isMe) {
-            li.textContent = `${displayName} (${winner.name})`;
-        } else {
-            li.textContent = displayName;
-        }
-        
+        li.textContent = isMe ? `${winner.name} (ВЫ)` : winner.name;
         li.className = 'host';
         winnersList.appendChild(li);
     });
@@ -320,15 +313,9 @@ function updatePlayersDisplay() {
         gameState.players.forEach(player => {
             const li = document.createElement('li');
             const isMe = player.id === gameState.playerId;
-            const displayName = getPlayerDisplayName(player, isMe);
             
-            // ИСПРАВЛЕНО: показываем номер игрока и настоящее имя
-            if (isMe) {
-                li.textContent = `${displayName} (${player.name})${player.isHost ? ' 👑' : ''}`;
-            } else {
-                li.textContent = `${displayName}${player.isHost ? ' 👑' : ''}`;
-            }
-            
+            // ИСПРАВЛЕНО: показываем только настоящее имя
+            li.textContent = `${player.name}${player.isHost ? ' 👑' : ''}`;
             li.className = player.isHost ? 'host' : '';
             playersList.appendChild(li);
         });
@@ -434,8 +421,7 @@ function getGameStatusText() {
             const currentPlayer = gameState.players.find(p => p.id === gameState.currentTurnPlayer);
             if (currentPlayer) {
                 const isMyTurn = currentPlayer.id === gameState.playerId;
-                const displayName = getPlayerDisplayName(currentPlayer, isMyTurn);
-                return `Ход игрока: ${displayName}`;
+                return `Ход игрока: ${isMyTurn ? 'Ваш ход' : currentPlayer.name}`;
             }
             return 'Раскрытие характеристик';
         case 'discussion': 
@@ -525,11 +511,8 @@ function updatePlayersGrid() {
 }
 
 function getPlayerDisplayName(player, isCurrentPlayer) {
-    if (isCurrentPlayer) {
-        return 'Вы';
-    } else {
-        return `Игрок ${player.playerNumber}`;
-    }
+    // Всегда возвращаем настоящее имя игрока
+    return player.name;
 }
 
 function createPlayerCard(player) {
@@ -542,24 +525,19 @@ function createPlayerCard(player) {
     // ИСПРАВЛЕНО: порядок характеристик с двумя фактами внизу
     const characteristicOrder = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
     
-    // ДОБАВЛЕНО: получаем отображаемое имя
-    const displayName = getPlayerDisplayName(player, isCurrentPlayer);
-    
     card.innerHTML = `
         <div class="player-header">
             <div class="player-info">
                 <div class="player-avatar-container">
                     <div class="player-avatar ${player.isAlive ? '' : 'eliminated-avatar'}">
-                        ${player.playerNumber}
+                        ${player.name.charAt(0).toUpperCase()}
                     </div>
                 </div>
                 <div>
                     <div class="player-name ${player.isAlive ? '' : 'eliminated-name'}">
-                        ${displayName}${player.isHost ? ' 👑' : ''}
+                        ${player.name}${player.isHost ? ' 👑' : ''}
                     </div>
-                    <div class="player-real-name">
-                        ${isCurrentPlayer ? player.name : ''}
-                    </div>
+                    ${isCurrentPlayer ? '<div class="player-status current">ВЫ</div>' : ''}
                     ${isCurrentTurn ? '<div class="player-status turn">Ваш ход!</div>' : ''}
                 </div>
             </div>
@@ -656,5 +634,48 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Функция голосования за игрока
+function voteForPlayer(playerId) {
+    if (gameState.gamePhase !== 'voting') {
+        showNotification('Ошибка', 'Сейчас не время для голосования!');
+        return;
+    }
+    
+    if (gameState.myVote) {
+        showNotification('Ошибка', 'Вы уже проголосовали!');
+        return;
+    }
+    
+    gameState.myVote = playerId;
+    socket.emit('vote-player', { targetId: playerId });
+    
+    // Обновляем отображение кнопки
+    updatePlayersGrid();
+}
+
+// Заглушки для других функций
+function voteToSkip() {
+    showNotification('Информация', 'Функция пропуска фазы пока не реализована');
+}
+
+function showActionCard() {
+    showNotification('Информация', 'Карты действий пока не реализованы');
+}
+
+// Функции для модальных окон
+function closeCharacteristicModal() {
+    document.getElementById('characteristicModal').style.display = 'none';
+}
+
+function closeNotificationModal() {
+    document.getElementById('notificationModal').style.display = 'none';
+}
+
+function showNotification(title, message) {
+    document.getElementById('notificationTitle').textContent = title;
+    document.getElementById('notificationMessage').textContent = message;
+    document.getElementById('notificationModal').style.display = 'flex';
+}
 
 console.log('🎮 Bunker Game Client Loaded');

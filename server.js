@@ -80,7 +80,7 @@ io.on('connection', (socket) => {
         const newPlayer = {
             id: socket.id,
             name: data.playerName,
-            playerNumber: gameRoom.players.length + 1, // ДОБАВЛЕНО: номер игрока
+            // УБРАЛИ: playerNumber: gameRoom.players.length + 1,
             isHost: gameRoom.players.length === 0, // Первый игрок становится хостом
             joinedAt: new Date(),
             isAlive: true,
@@ -332,10 +332,7 @@ io.on('connection', (socket) => {
             
             gameRoom.players.splice(playerIndex, 1);
             
-            // ДОБАВЛЕНО: перенумеровываем игроков после удаления
-            gameRoom.players.forEach((p, index) => {
-                p.playerNumber = index + 1;
-            });
+            // УБРАЛИ: перенумерацию игроков
             
             // Если хост отключился, назначаем нового хоста
             if (wasHost && gameRoom.players.length > 0) {
@@ -649,7 +646,7 @@ function resetGame() {
     }
     
     // Оставляем игроков, но сбрасываем игровое состояние
-    gameRoom.players.forEach((player, index) => {
+    gameRoom.players.forEach((player) => {
         player.isAlive = true;
         player.votes = 0;
         player.hasRevealed = false;
@@ -657,7 +654,7 @@ function resetGame() {
         player.revealedCharacteristics = []; // СБРАСЫВАЕМ при новой игре
         player.characteristics = null;
         player.actionCards = [];
-        player.playerNumber = index + 1; // ДОБАВЛЕНО: перенумеровываем при сбросе
+        // УБРАЛИ: player.playerNumber = index + 1;
     });
     
     gameRoom.gameState = 'lobby';
