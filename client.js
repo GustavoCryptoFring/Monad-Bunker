@@ -13,141 +13,69 @@ let gameState = {
     votingResults: {},
     myVote: null,
     timer: null,
-    maxPlayers: 8,
-    currentTurnPlayer: null,
-    currentJustifyingPlayer: null,
-    canChangeVote: {},
-    hasChangedVote: false,
-    cardsRevealedThisRound: 0,
-    requiredCardsThisRound: 1,
-    skipDiscussionVotes: 0,
-    mySkipVote: false,
-    // НОВЫЕ НАСТРОЙКИ УВЕДОМЛЕНИЙ
-    notificationSettings: {
-        gameStart: false,
-        discussionSkipped: false,
-        newRound: false
-    }
+    maxPlayers: 12,
+    currentTurnPlayer: null
 };
 
-// Socket.IO подключение
-const socket = io({
-    transports: ['websocket', 'polling'], // Добавляем fallback транспорты
-    timeout: 10000, // Таймаут подключения 10 секунд
-    reconnection: true, // Автоматическое переподключение
-    reconnectionAttempts: 10, // Максимум попыток
-    reconnectionDelay: 1000 // Задержка между попытками
-});
+// Инициализация Socket.IO
+const socket = io();
 
-// === ОБРАБОТЧИКИ СОБЫТИЙ SOCKET.IO ===
-
+// === SOCKET ОБРАБОТЧИКИ ===
 socket.on('connect', function() {
-    console.log('🌐 Connected to server');
-    console.log('🔗 Socket ID:', socket.id);
-    
-    // При подключении показываем экран входа
-    showLoginScreen();
-    
-    // Скрываем сообщение о потере соединения если оно есть
-    const connectionError = document.getElementById('connectionError');
-    if (connectionError) {
-        connectionError.style.display = 'none';
-    }
+    console.log('✅ Connected to server:', socket.id);
+    gameState.playerId = socket.id;
+    updatePlayerCount();
 });
 
-socket.on('connect_error', function(error) {
-    console.error('❌ Connection error:', error);
-    showConnectionError('Ошибка подключения к серверу. Проверьте интернет-соединение.');
-});
-
-socket.on('disconnect', function(reason) {
-    console.log('❌ Disconnected from server:', reason);
-    showConnectionError('Соединение потеряно. Попытка переподключения...');
-});
-
-socket.on('reconnect', function(attemptNumber) {
-    console.log('🔄 Reconnected after', attemptNumber, 'attempts');
-    showNotification('Подключение восстановлено', 'Соединение с сервером восстановлено');
-});
-
-socket.on('reconnect_error', function(error) {
-    console.error('❌ Reconnection error:', error);
-    showConnectionError('Не удается восстановить соединение. Перезагрузите страницу.');
+socket.on('disconnect', function() {
+    console.log('❌ Disconnected from server');
+    showNotification('Отключение', 'Соединение с сервером потеряно');
 });
 
 socket.on('room-state', function(data) {
-    console.log('🏠 Room state received:', data);
-    gameState.players = data.players || [];
-    gameState.serverGameState = data.gameState || 'lobby';
-    gameState.gamePhase = data.gamePhase || 'waiting';
-    gameState.currentRound = data.currentRound || 1;
-    gameState.timeLeft = data.timeLeft || 0;
-    gameState.currentTurnPlayer = data.currentTurnPlayer || null;
-    gameState.maxPlayers = data.maxPlayers || 8;
-    gameState.notificationSettings = data.notificationSettings || { // НОВОЕ
-        gameStart: false,
-        discussionSkipped: false,
-        newRound: false
-    };
-    
-    // Если мы уже в игре, показываем соответствующий экран
-    if (gameState.playerId && gameState.serverGameState === 'lobby') {
-        showLobbyScreen();
-    } else if (gameState.playerId && gameState.serverGameState === 'playing') {
-        showGameScreen();
-    }
+    console.log('📊 Room state received:', data);
+    updateGameState(data);
 });
 
 socket.on('join-confirmed', function(data) {
     console.log('✅ Join confirmed:', data);
-    
-    // ДОБАВЛЕНО: Разблокируем кнопку
-    const joinBtn = document.getElementById('joinGameBtn');
-    if (joinBtn) {
-        joinBtn.disabled = false;
-        joinBtn.textContent = 'Присоединиться к игре';
-    }
-    
     gameState.playerId = data.playerId;
     gameState.playerName = data.playerName;
     gameState.isHost = data.isHost;
-    gameState.maxPlayers = data.maxPlayers;
-    gameState.notificationSettings = data.notificationSettings || {
-        gameStart: false,
-        discussionSkipped: false,
-        newRound: false
-    };
-    gameState.gamePhase = 'lobby';
+    gameState.maxPlayers = data.maxPlayers || 12;
     showLobbyScreen();
 });
 
 socket.on('player-joined', function(data) {
     console.log('👋 Player joined:', data);
     gameState.players = data.players;
-    gameState.maxPlayers = data.maxPlayers;
-    gameState.notificationSettings = data.notificationSettings || gameState.notificationSettings; // ДОБАВИЛИ
-    updateLobbyDisplay();
-    
-    if (data.newPlayer !== gameState.playerName) {
-        showNotification('Игрок присоединился', `${data.newPlayer} присоединился к игре`);
+    if (data.maxPlayers) {
+        gameState.maxPlayers = data.maxPlayers;
     }
-});
-
-socket.on('player-left', function(data) {
-    console.log('👋 Player left:', data);
-    gameState.players = data.players;
-    gameState.serverGameState = data.gameState;
-    updateLobbyDisplay();
-    
-    showNotification('Игрок покинул игру', `${data.leftPlayer} покинул игру`);
+    updatePlayersDisplay();
+    updatePlayerCount();
 });
 
 socket.on('max-players-changed', function(data) {
     console.log('🔧 Max players changed:', data);
     gameState.maxPlayers = data.maxPlayers;
     gameState.players = data.players;
-    gameState.notificationSettings = data.notificationSettings || gameState.notificationSettings; // ДОБАВИЛИ
-    updateLobbyDisplay();
+    updatePlayersDisplay();
+    updateMaxPlayersSelector();
+});
+
+socket.on('player-left', function(data) {
+    console.log('👋 Player left:', data);
+    gameState.players = data.players;
+    gameState.serverGameState = data.gameState;
+    updatePlayersDisplay();
+    updatePlayerCount();
+    
+    const me = gameState.players.find(p => p.id === gameState.playerId);
+    if (me) {
+        gameState.isHost = me.isHost;
+        updateHostControls();
+    }
 });
 
 socket.on('game-started', function(data) {
@@ -158,29 +86,16 @@ socket.on('game-started', function(data) {
     gameState.currentRound = data.currentRound;
     gameState.timeLeft = data.timeLeft;
     showGameScreen();
-    
-    // УСЛОВНОЕ УВЕДОМЛЕНИЕ О НАЧАЛЕ ИГРЫ
-    if (gameState.notificationSettings.gameStart) {
-        showNotification('Игра началась!', 'Характеристики розданы. Подготовьтесь к первому раунду.');
-    }
 });
 
-socket.on('game-reset', function(data) {
-    console.log('🔄 Game reset:', data);
+// НОВЫЙ обработчик начала хода игрока
+socket.on('player-turn-started', function(data) {
+    console.log('🎯 Player turn started:', data);
+    gameState.gamePhase = data.gamePhase;
+    gameState.currentTurnPlayer = data.currentTurnPlayer;
+    gameState.timeLeft = data.timeLeft;
     gameState.players = data.players;
-    gameState.serverGameState = data.gameState;
-    gameState.gamePhase = 'lobby';
-    gameState.currentRound = 1;
-    gameState.timeLeft = 0;
-    gameState.currentTurnPlayer = null;
-    gameState.notificationSettings = data.notificationSettings || { // ДОБАВИЛИ
-        gameStart: false,
-        discussionSkipped: false,
-        newRound: false
-    };
-    showLobbyScreen();
-    
-    showNotification('Игра сброшена', 'Возвращаемся в лобби');
+    updateGameDisplay();
 });
 
 socket.on('phase-changed', function(data) {
@@ -188,111 +103,57 @@ socket.on('phase-changed', function(data) {
     gameState.gamePhase = data.gamePhase;
     gameState.timeLeft = data.timeLeft;
     gameState.players = data.players;
-    gameState.currentTurnPlayer = data.currentTurnPlayer || null;
-    gameState.currentRound = data.currentRound || gameState.currentRound;
-    
-    gameState.requiredCardsThisRound = getRequiredCardsForRound(gameState.currentRound);
-    
-    if (data.gamePhase !== 'discussion') {
-        gameState.skipDiscussionVotes = 0;
-        gameState.mySkipVote = false;
-    }
-    
-    if (data.gamePhase !== 'voting') {
-        gameState.myVote = null;
-        gameState.hasChangedVote = false;
-    }
-    
-    if (data.gamePhase === 'revelation') {
-        gameState.cardsRevealedThisRound = 0;
-    }
-    
+    gameState.currentTurnPlayer = data.currentTurnPlayer || null; // ИСПРАВЛЕНО: сохраняем currentTurnPlayer
     updateGameDisplay();
-});
-
-socket.on('characteristic-revealed', function(data) {
-    console.log('🔍 Characteristic revealed:', data);
-    gameState.players = data.players;
-    
-    if (data.playerId === gameState.playerId) {
-        gameState.cardsRevealedThisRound = data.cardsRevealedThisRound;
-        gameState.requiredCardsThisRound = data.requiredCards;
-    }
-    
-    updatePlayersGrid();
 });
 
 socket.on('timer-update', function(data) {
     gameState.timeLeft = data.timeLeft;
     gameState.currentTurnPlayer = data.currentTurnPlayer;
     updateTimerDisplay();
-    
-    if (gameState.gamePhase === 'revelation') {
-        updateGameDisplay();
-    }
 });
 
 socket.on('vote-update', function(data) {
     console.log('🗳️ Vote update:', data);
     gameState.players = data.players;
     gameState.votingResults = data.votingResults;
-    gameState.canChangeVote = data.canChangeVote || {};
     updatePlayersGrid();
-});
-
-socket.on('justification-started', function(data) {
-    console.log('⚖️ Justification started:', data);
-    gameState.currentJustifyingPlayer = data.justifyingPlayer?.id;
-    gameState.timeLeft = data.timeLeft;
-    gameState.players = data.players;
-    gameState.gamePhase = 'justification';
-    updateGameDisplay();
-});
-
-socket.on('second-voting-started', function(data) {
-    console.log('🗳️ Second voting started:', data);
-    gameState.gamePhase = data.gamePhase;
-    gameState.timeLeft = data.timeLeft;
-    gameState.players = data.players;
-    gameState.canChangeVote = data.canChangeVote || {};
-    updateGameDisplay();
-});
-
-socket.on('skip-discussion-vote-update', function(data) {
-    console.log('⏭️ Skip discussion vote update:', data);
-    gameState.skipDiscussionVotes = data.votes;
-    gameState.mySkipVote = data.hasVoted;
     
-    // ОБНОВЛЯЕМ кнопку в верхней части
-    updateRoundActions();
-});
-
-socket.on('discussion-skipped', function(data) {
-    console.log('⏭️ Discussion skipped:', data);
-    gameState.gamePhase = data.gamePhase;
-    gameState.timeLeft = data.timeLeft;
-    gameState.players = data.players;
-    gameState.skipDiscussionVotes = 0;
-    gameState.mySkipVote = false;
-    updateGameDisplay();
-    
-    // УСЛОВНОЕ УВЕДОМЛЕНИЕ О ПРОПУСКЕ ОБСУЖДЕНИЯ
-    if (gameState.notificationSettings.discussionSkipped) {
-        showNotification('Обсуждение пропущено', 'Достаточно игроков проголосовало за пропуск обсуждения');
+    // Показываем прогресс голосования
+    if (data.votedCount !== undefined && data.totalPlayers !== undefined) {
+        const voteProgress = document.getElementById('voteProgress');
+        if (voteProgress) {
+            voteProgress.textContent = `Проголосовало: ${data.votedCount}/${data.totalPlayers}`;
+        }
     }
+});
+
+socket.on('characteristic-revealed', function(data) {
+    console.log('🔍 Characteristic revealed:', data);
+    gameState.players = data.players;
+    updatePlayersGrid();
+    
+    // УБРАНО: уведомление о раскрытии характеристики
+    // showNotification('Характеристика раскрыта', 
+    //     `${playerName} раскрыл${isMe ? 'и' : ''}: ${translateCharacteristic(data.characteristic)} - ${data.value}`);
 });
 
 socket.on('round-results', function(data) {
     console.log('📊 Round results:', data);
     gameState.players = data.players;
-    gameState.votingResults = data.votingResults;
-    updateGameDisplay();
     
     if (data.eliminatedPlayer) {
-        showNotification('Игрок исключен', `${data.eliminatedPlayer} покидает бункер`);
+        // ИСПРАВЛЕНО: показываем правильное имя исключенного игрока
+        const eliminatedPlayer = gameState.players.find(p => p.name === data.eliminatedPlayer);
+        const isMe = eliminatedPlayer && eliminatedPlayer.id === gameState.playerId;
+        const displayName = isMe ? 'Вы' : data.eliminatedPlayer;
+        
+        showNotification('Игрок исключен', `${displayName} ${isMe ? 'были исключены' : 'был исключен'} из бункера!`);
     } else {
-        showNotification('Ничья', 'Никто не был исключен в этом раунде');
+        showNotification('Результаты голосования', 'Никто не был исключен в этом раунде');
     }
+    
+    updatePlayersGrid();
 });
 
 socket.on('new-round', function(data) {
@@ -301,121 +162,191 @@ socket.on('new-round', function(data) {
     gameState.gamePhase = data.gamePhase;
     gameState.timeLeft = data.timeLeft;
     gameState.players = data.players;
+    gameState.myVote = null;
+    gameState.currentTurnPlayer = null;
     updateGameDisplay();
-    
-    // УСЛОВНОЕ УВЕДОМЛЕНИЕ О НОВОМ РАУНДЕ
-    if (gameState.notificationSettings.newRound) {
-        showNotification(`Раунд ${data.currentRound}`, 'Новый раунд начинается!');
-    }
 });
 
 socket.on('game-ended', function(data) {
     console.log('🏁 Game ended:', data);
     gameState.players = data.players;
-    gameState.gamePhase = 'finished';
-    updateGameDisplay();
-    
-    const winners = data.winners.map(p => p.name).join(', ');
-    showNotification('Игра завершена', `Победители: ${winners}`);
+    showResultsScreen(data.winners);
 });
 
-socket.on('player-surrendered', function(data) {
-    console.log('🏳️ Player surrendered:', data);
+socket.on('game-reset', function(data) {
+    console.log('🔄 Game reset:', data);
     gameState.players = data.players;
-    updatePlayersGrid();
-    
-    const isMe = data.surrenderedPlayer === gameState.playerName;
-    const message = isMe ? 'Вы сдались и покинули игру.' : `${data.surrenderedPlayer} сдался и покинул игру.`;
-    
-    showNotification('Игрок сдался', message);
+    gameState.serverGameState = data.gameState;
+    gameState.gamePhase = 'lobby';
+    gameState.currentRound = 1;
+    gameState.myVote = null;
+    gameState.currentTurnPlayer = null;
+    showLobbyScreen();
 });
 
-socket.on('notification-settings-updated', function(data) {
-    console.log('⚙️ Notification settings updated:', data);
-    gameState.notificationSettings = data.settings;
-    updateNotificationCheckboxes();
+socket.on('error', function(error) {
+    console.error('❌ Server error:', error);
+    showNotification('Ошибка', error);
 });
 
-// === ФУНКЦИИ ОТОБРАЖЕНИЯ ЭКРАНОВ ===
-
-function showScreen(screenId) {
-    // Скрываем все экраны
-    const screens = document.querySelectorAll('.screen');
-    screens.forEach(screen => {
-        screen.style.display = 'none';
-    });
+// === ОСНОВНЫЕ ФУНКЦИИ ===
+function joinGame() {
+    const playerName = document.getElementById('playerNameInput').value.trim();
     
-    // Показываем нужный экран
-    const targetScreen = document.getElementById(screenId);
-    if (targetScreen) {
-        targetScreen.style.display = 'block';
+    if (!playerName) {
+        showNotification('Ошибка', 'Пожалуйста, введите ваше имя');
+        return;
     }
+    
+    if (playerName.length < 2) {
+        showNotification('Ошибка', 'Имя должно содержать минимум 2 символа');
+        return;
+    }
+    
+    if (!socket.connected) {
+        showNotification('Ошибка', 'Нет соединения с сервером');
+        return;
+    }
+    
+    console.log('🎯 Joining game as:', playerName);
+    socket.emit('join-game', { playerName });
 }
 
-function showLoginScreen() {
-    console.log('📱 Showing login screen');
-    showScreen('loginScreen');
-    
-    // Устанавливаем фокус на поле ввода имени
-    const nameInput = document.getElementById('playerNameInput');
-    if (nameInput) {
-        nameInput.focus();
+function startGame() {
+    if (!gameState.isHost) {
+        showNotification('Ошибка', 'Только хост может начать игру');
+        return;
     }
+    
+    socket.emit('start-game');
 }
 
+// ОБНОВЛЕННАЯ функция для начала раунда
+function startRound() {
+    if (!gameState.isHost) {
+        showNotification('Ошибка', 'Только хост может начать раунд');
+        return;
+    }
+    
+    if (gameState.gamePhase !== 'preparation') {
+        showNotification('Ошибка', 'Раунд уже начался');
+        return;
+    }
+    
+    console.log('🚀 Starting round...');
+    socket.emit('start-round');
+}
+
+// Функции для отображения экранов
 function showLobbyScreen() {
-    console.log('📱 Showing lobby screen');
-    showScreen('lobbyScreen');
-    updateLobbyDisplay();
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('lobbyScreen').style.display = 'block';
+    document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('resultsScreen').style.display = 'none';
+    
+    updatePlayersDisplay();
+    updatePlayerCount();
+    updateHostControls();
 }
 
 function showGameScreen() {
-    console.log('📱 Showing game screen');
-    showScreen('gameScreen');
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('lobbyScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'block';
+    document.getElementById('resultsScreen').style.display = 'none';
+    
     updateGameDisplay();
+    updatePlayersGrid();
 }
 
-function showResultsScreen() {
-    console.log('📱 Showing results screen');
-    showScreen('resultsScreen');
+function showResultsScreen(winners) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('lobbyScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('resultsScreen').style.display = 'block';
+    
+    const winnersList = document.getElementById('winnersList');
+    winnersList.innerHTML = '';
+    
+    winners.forEach(winner => {
+        const li = document.createElement('li');
+        const isMe = winner.id === gameState.playerId;
+        
+        // ИСПРАВЛЕНО: показываем правильные имена победителей
+        li.textContent = isMe ? `${winner.name} (ВЫ)` : winner.name;
+        li.className = 'host';
+        winnersList.appendChild(li);
+    });
 }
 
-// === ФУНКЦИИ ОБНОВЛЕНИЯ ЛОББИ ===
+// Функции для обновления отображения
+function updateGameState(data) {
+    gameState.players = data.players || [];
+    gameState.serverGameState = data.gameState;
+    gameState.gamePhase = data.gamePhase;
+    gameState.currentRound = data.currentRound || 1;
+    gameState.timeLeft = data.timeLeft || 0;
+    gameState.currentTurnPlayer = data.currentTurnPlayer;
+    
+    updatePlayerCount();
+    
+    if (gameState.players.length > 0) {
+        const me = gameState.players.find(p => p.id === gameState.playerId);
+        if (me) {
+            gameState.isHost = me.isHost;
+        }
+    }
+}
 
-function updateLobbyDisplay() {
-    // Обновляем счетчик игроков
+function updatePlayersDisplay() {
+    const playersList = document.getElementById('playersList');
     const currentPlayersCount = document.getElementById('currentPlayersCount');
     const maxPlayersCount = document.getElementById('maxPlayersCount');
-    const playersList = document.getElementById('playersList');
-    const startGameBtn = document.getElementById('startGameBtn');
-    const waitingInfo = document.getElementById('waitingInfo');
-    const maxPlayersSelector = document.getElementById('maxPlayersSelector');
-    const notificationSettings = document.getElementById('notificationSettings'); // НОВОЕ
+    
+    if (playersList) {
+        playersList.innerHTML = '';
+        
+        gameState.players.forEach(player => {
+            const li = document.createElement('li');
+            const isMe = player.id === gameState.playerId;
+            
+            // ИСПРАВЛЕНО: показываем только настоящее имя
+            li.textContent = `${player.name}${player.isHost ? ' 👑' : ''}`;
+            li.className = player.isHost ? 'host' : '';
+            playersList.appendChild(li);
+        });
+    }
     
     if (currentPlayersCount) {
         currentPlayersCount.textContent = gameState.players.length;
     }
     
     if (maxPlayersCount) {
-        maxPlayersCount.textContent = gameState.maxPlayers;
+        maxPlayersCount.textContent = gameState.maxPlayers || 12;
     }
     
-    // Обновляем список игроков
-    if (playersList) {
-        playersList.innerHTML = '';
-        gameState.players.forEach(player => {
-            const li = document.createElement('li');
-            li.className = player.isHost ? 'host' : '';
-            li.textContent = `${player.name}${player.isHost ? ' (Хост)' : ''}`;
-            playersList.appendChild(li);
-        });
+    updateHostControls();
+}
+
+function updatePlayerCount() {
+    const playerCountElement = document.getElementById('playerCount');
+    if (playerCountElement) {
+        playerCountElement.textContent = gameState.players.length;
     }
+}
+
+function updateHostControls() {
+    const startBtn = document.getElementById('startGameBtn');
+    const waitingInfo = document.getElementById('waitingInfo');
+    const maxPlayersSelector = document.getElementById('maxPlayersSelector');
     
-    // Показываем/скрываем кнопку старта и селекторы
     if (gameState.isHost) {
-        if (startGameBtn) {
-            startGameBtn.style.display = 'block';
-            startGameBtn.disabled = gameState.players.length < 2;
+        if (startBtn) {
+            startBtn.style.display = 'block';
+            startBtn.disabled = gameState.players.length < 2;
+            startBtn.textContent = gameState.players.length < 2 ? 
+                'Начать игру (минимум 2 игрока)' : 
+                `Начать игру (${gameState.players.length}/${gameState.maxPlayers || 12})`;
         }
         if (waitingInfo) {
             waitingInfo.style.display = 'none';
@@ -423,13 +354,9 @@ function updateLobbyDisplay() {
         if (maxPlayersSelector) {
             maxPlayersSelector.style.display = 'block';
         }
-        // НОВОЕ: показываем настройки уведомлений для хоста
-        if (notificationSettings) {
-            notificationSettings.style.display = 'block';
-        }
     } else {
-        if (startGameBtn) {
-            startGameBtn.style.display = 'none';
+        if (startBtn) {
+            startBtn.style.display = 'none';
         }
         if (waitingInfo) {
             waitingInfo.style.display = 'block';
@@ -437,143 +364,29 @@ function updateLobbyDisplay() {
         if (maxPlayersSelector) {
             maxPlayersSelector.style.display = 'none';
         }
-        // НОВОЕ: скрываем настройки уведомлений для не-хостов
-        if (notificationSettings) {
-            notificationSettings.style.display = 'none';
-        }
     }
-    
-    // Обновляем селектор максимального количества игроков
-    const maxPlayersSelect = document.getElementById('maxPlayersSelect');
-    if (maxPlayersSelect) {
-        maxPlayersSelect.value = gameState.maxPlayers;
-    }
-    
-    // НОВОЕ: обновляем чекбоксы настроек уведомлений
-    updateNotificationCheckboxes();
-}
-
-// НОВАЯ ФУНКЦИЯ: обновление чекбоксов настроек уведомлений
-function updateNotificationCheckboxes() {
-    const gameStartCheckbox = document.getElementById('notifyGameStart');
-    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
-    const newRoundCheckbox = document.getElementById('notifyNewRound');
-    
-    if (gameStartCheckbox) {
-        gameStartCheckbox.checked = gameState.notificationSettings.gameStart;
-    }
-    if (discussionSkippedCheckbox) {
-        discussionSkippedCheckbox.checked = gameState.notificationSettings.discussionSkipped;
-    }
-    if (newRoundCheckbox) {
-        newRoundCheckbox.checked = gameState.notificationSettings.newRound;
-    }
-}
-
-// НОВАЯ ФУНКЦИЯ: обновление настроек уведомлений
-function updateNotificationSettings() {
-    if (!gameState.isHost) {
-        return; // Только хост может изменять настройки
-    }
-    
-    const gameStartCheckbox = document.getElementById('notifyGameStart');
-    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
-    const newRoundCheckbox = document.getElementById('notifyNewRound');
-    
-    const settings = {
-        gameStart: gameStartCheckbox ? gameStartCheckbox.checked : false,
-        discussionSkipped: discussionSkippedCheckbox ? discussionSkippedCheckbox.checked : false,
-        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false
-    };
-    
-    console.log('⚙️ Updating notification settings:', settings);
-    socket.emit('update-notification-settings', { settings: settings });
-}
-
-// === ОСНОВНЫЕ ФУНКЦИИ ИГРЫ ===
-
-function joinGame() {
-    console.log('🎯 joinGame function called');
-    
-    const nameInput = document.getElementById('playerNameInput');
-    if (!nameInput) {
-        console.error('❌ Name input not found');
-        return;
-    }
-    
-    const playerName = nameInput.value.trim();
-    console.log('🎯 Player name:', playerName);
-    
-    if (!playerName) {
-        showNotification('Ошибка', 'Введите ваше имя!');
-        return;
-    }
-    
-    if (playerName.length < 2 || playerName.length > 20) {
-        showNotification('Ошибка', 'Имя должно быть от 2 до 20 символов!');
-        return;
-    }
-    
-    // ДОБАВЛЕНО: Проверка подключения к сокету
-    if (!socket.connected) {
-        console.error('❌ Socket not connected');
-        showNotification('Ошибка', 'Нет соединения с сервером. Попробуйте перезагрузить страницу.');
-        return;
-    }
-    
-    console.log('🎯 Joining game with name:', playerName);
-    socket.emit('join-game', { playerName: playerName });
-    
-    // ДОБАВЛЕНО: Блокируем кнопку на время запроса
-    const joinBtn = document.getElementById('joinGameBtn');
-    if (joinBtn) {
-        joinBtn.disabled = true;
-        joinBtn.textContent = 'Подключение...';
-        
-        // Разблокируем через 5 секунд если нет ответа
-        setTimeout(() => {
-            if (joinBtn.disabled) {
-                joinBtn.disabled = false;
-                joinBtn.textContent = 'Присоединиться к игре';
-            }
-        }, 5000);
-    }
-}
-
-function startGame() {
-    console.log('🚀 Starting game...');
-    socket.emit('start-game');
-}
-
-function startRound() {
-    console.log('🎯 Starting round...');
-    socket.emit('start-round');
 }
 
 function changeMaxPlayers() {
-    const select = document.getElementById('maxPlayersSelect');
-    const newMaxPlayers = parseInt(select.value);
+    const selector = document.getElementById('maxPlayersSelect');
+    const maxPlayers = parseInt(selector.value);
     
-    console.log('🔧 Changing max players to:', newMaxPlayers);
-    socket.emit('change-max-players', { maxPlayers: newMaxPlayers });
+    console.log('🔧 Changing max players to:', maxPlayers);
+    socket.emit('change-max-players', { maxPlayers });
 }
 
-// === ФУНКЦИИ ИГРОВОГО ПРОЦЕССА ===
-
-function getRequiredCardsForRound(round) {
-    if (round === 1) {
-        return 2; // Профессия + 1 карта на выбор
-    } else {
-        return 1; // 1 карта на выбор
+function updateMaxPlayersSelector() {
+    const selector = document.getElementById('maxPlayersSelect');
+    if (selector && gameState.maxPlayers) {
+        selector.value = gameState.maxPlayers;
     }
 }
 
 function updateGameDisplay() {
-    // Обновляем информацию о раунде
     const currentRoundElement = document.getElementById('currentRound');
     const gameStatusElement = document.getElementById('gameStatus');
     const phaseDisplayElement = document.getElementById('phaseDisplay');
-    const roundActionsElement = document.getElementById('roundActions');
+    const gameActionsElement = document.getElementById('gameActions');
     
     if (currentRoundElement) {
         currentRoundElement.textContent = gameState.currentRound;
@@ -587,76 +400,13 @@ function updateGameDisplay() {
         phaseDisplayElement.textContent = getPhaseDisplayText();
     }
     
-    // ОБНОВЛЯЕМ отображение кнопок в верхней части
-    updateRoundActions();
+    // Обновляем кнопки действий в зависимости от фазы
+    if (gameActionsElement) {
+        updateGameActions();
+    }
     
-    updatePlayersGrid();
     updateTimerDisplay();
-}
-
-// НОВАЯ функция для управления кнопками в верхней части
-function updateRoundActions() {
-    const roundActionsElement = document.getElementById('roundActions');
-    const startRoundBtn = document.getElementById('startRoundBtn');
-    const skipDiscussionBtn = document.getElementById('skipDiscussionBtn');
-    const finishJustificationBtn = document.getElementById('finishJustificationBtn');
-    const surrenderBtn = document.getElementById('surrenderBtn');
-    const skipVotesCount = document.getElementById('skipVotesCount');
-    
-    // Скрываем все кнопки по умолчанию
-    if (startRoundBtn) startRoundBtn.style.display = 'none';
-    if (skipDiscussionBtn) skipDiscussionBtn.style.display = 'none';
-    if (finishJustificationBtn) finishJustificationBtn.style.display = 'none';
-    if (surrenderBtn) surrenderBtn.style.display = 'none';
-    
-    let showActions = false;
-    
-    // Кнопка начала раунда (только для хоста в фазе подготовки)
-    if (gameState.isHost && gameState.gamePhase === 'preparation' && startRoundBtn) {
-        startRoundBtn.style.display = 'inline-block';
-        showActions = true;
-    }
-    
-    // Кнопка пропуска обсуждения (фаза обсуждения)
-    if (gameState.gamePhase === 'discussion' && skipDiscussionBtn && skipVotesCount) {
-        skipDiscussionBtn.style.display = 'inline-block';
-        skipVotesCount.textContent = gameState.skipDiscussionVotes || 0;
-        
-        // Обновляем стиль кнопки в зависимости от того, голосовал ли игрок
-        if (gameState.mySkipVote) {
-            skipDiscussionBtn.className = 'start-round-btn voted-skip';
-            skipDiscussionBtn.disabled = true;
-            skipDiscussionBtn.innerHTML = '✅ Проголосовано за пропуск (' + (gameState.skipDiscussionVotes || 0) + '/2)';
-        } else {
-            skipDiscussionBtn.className = 'start-round-btn';
-            skipDiscussionBtn.disabled = false;
-            skipDiscussionBtn.innerHTML = '⏭️ Пропустить обсуждение (<span id="skipVotesCount">' + (gameState.skipDiscussionVotes || 0) + '</span>/2)';
-        }
-        
-        showActions = true;
-    }
-    
-    // Кнопки для фазы оправдания
-    if (gameState.gamePhase === 'justification') {
-        const justifyingPlayer = gameState.players.find(p => p.id === gameState.currentJustifyingPlayer);
-        
-        if (justifyingPlayer && justifyingPlayer.id === gameState.playerId) {
-            // Кнопки для оправдывающегося игрока
-            if (finishJustificationBtn) {
-                finishJustificationBtn.style.display = 'inline-block';
-                showActions = true;
-            }
-            if (surrenderBtn) {
-                surrenderBtn.style.display = 'inline-block';
-                showActions = true;
-            }
-        }
-    }
-    
-    // Показываем или скрываем контейнер кнопок
-    if (roundActionsElement) {
-        roundActionsElement.style.display = showActions ? 'block' : 'none';
-    }
+    updatePlayersGrid();
 }
 
 function getGameStatusText() {
@@ -667,41 +417,13 @@ function getGameStatusText() {
             const currentPlayer = gameState.players.find(p => p.id === gameState.currentTurnPlayer);
             if (currentPlayer) {
                 const isMyTurn = currentPlayer.id === gameState.playerId;
-                const requiredCards = getRequiredCardsForRound(gameState.currentRound);
-                const revealedCards = currentPlayer.cardsRevealedThisRound || 0;
-                
-                if (isMyTurn) {
-                    if (gameState.currentRound === 1) {
-                        if (revealedCards === 0) {
-                            return 'Ваш ход: Раскройте профессию';
-                        } else if (revealedCards === 1) {
-                            return 'Ваш ход: Выберите любую характеристику';
-                        } else {
-                            return 'Ваш ход завершен';
-                        }
-                    } else {
-                        if (revealedCards === 0) {
-                            return 'Ваш ход: Выберите любую характеристику';
-                        } else {
-                            return 'Ваш ход завершен';
-                        }
-                    }
-                } else {
-                    return `Ход игрока: ${currentPlayer.name} (${revealedCards}/${requiredCards})`;
-                }
+                return `Ход игрока: ${isMyTurn ? 'Ваш ход' : currentPlayer.name}`;
             }
             return 'Раскрытие характеристик';
         case 'discussion': 
             return 'Фаза обсуждения';
         case 'voting': 
             return 'Фаза голосования';
-        case 'justification':
-            const justifyingPlayer = gameState.players.find(p => p.id === gameState.currentJustifyingPlayer);
-            if (justifyingPlayer) {
-                const isMyJustification = justifyingPlayer.id === gameState.playerId;
-                return `Оправдание: ${isMyJustification ? 'Ваш черед' : justifyingPlayer.name}`;
-            }
-            return 'Фаза оправдания';
         case 'results': 
             return 'Подведение итогов раунда';
         case 'finished': 
@@ -712,13 +434,112 @@ function getGameStatusText() {
 }
 
 function getPhaseDisplayText() {
-    const statusText = getGameStatusText();
+    switch (gameState.gamePhase) {
+        case 'preparation': return 'ПОДГОТОВКА';
+        case 'revelation': return 'РАСКРЫТИЕ';
+        case 'discussion': return 'ОБСУЖДЕНИЕ';
+        case 'voting': return 'ГОЛОСОВАНИЕ';
+        case 'results': return 'РЕЗУЛЬТАТЫ';
+        default: return 'ОЖИДАНИЕ';
+    }
+}
+
+function updateGameActions() {
+    const gameActionsElement = document.getElementById('gameActions');
+    const roundActionsElement = document.getElementById('roundActions');
     
-    if (gameState.gamePhase === 'revelation' && gameState.currentTurnPlayer === gameState.playerId) {
-        return `${statusText}`;
+    // Управляем кнопками в верхней части
+    if (roundActionsElement) {
+        if (gameState.gamePhase === 'preparation' && gameState.isHost) {
+            // Кнопка "Начать раунд" в фазе подготовки только для хоста
+            roundActionsElement.innerHTML = `
+                <button id="startRoundBtn" class="start-round-btn" onclick="startRound()">
+                    🚀 Начать раунд
+                </button>
+            `;
+            roundActionsElement.style.display = 'block';
+        } else if (gameState.gamePhase === 'discussion') {
+            // ИСПРАВЛЕНО: Кнопка "Пропустить обсуждение" для ВСЕХ игроков
+            const alivePlayers = gameState.players.filter(p => p.isAlive);
+            const skipVotes = gameState.skipDiscussionVotes || 0;
+            const requiredVotes = Math.max(2, Math.ceil(alivePlayers.length / 2));
+            const hasVotedToSkip = gameState.mySkipVote || false;
+            
+            roundActionsElement.innerHTML = `
+                <button id="skipDiscussionBtn" class="start-round-btn ${hasVotedToSkip ? 'voted-skip' : ''}" 
+                        onclick="voteToSkipDiscussion()" ${hasVotedToSkip ? 'disabled' : ''}>
+                    ${hasVotedToSkip ? '✅ Голос подан' : '⏭️ Пропустить обсуждение'}
+                </button>
+                <div class="skip-votes-info">
+                    Голосов за пропуск: ${skipVotes}/${requiredVotes}
+                </div>
+            `;
+            roundActionsElement.style.display = 'block';
+        } else {
+            roundActionsElement.style.display = 'none';
+        }
     }
     
-    return statusText;
+    // Кнопки внизу только для голосования
+    if (gameState.gamePhase === 'voting') {
+        const alivePlayers = gameState.players.filter(p => p.isAlive);
+        const votedPlayers = alivePlayers.filter(p => p.hasVoted);
+        
+        gameActionsElement.innerHTML = `
+            <div class="vote-progress">
+                <span id="voteProgress">Проголосовало: ${votedPlayers.length}/${alivePlayers.length}</span>
+            </div>
+        `;
+    } else {
+        gameActionsElement.innerHTML = '';
+    }
+}
+
+// НОВАЯ функция для голосования за пропуск обсуждения
+function voteToSkipDiscussion() {
+    if (gameState.gamePhase !== 'discussion') {
+        showNotification('Ошибка', 'Сейчас не фаза обсуждения');
+        return;
+    }
+    
+    if (gameState.mySkipVote) {
+        showNotification('Ошибка', 'Вы уже проголосовали за пропуск');
+        return;
+    }
+    
+    console.log('⏭️ Voting to skip discussion...');
+    socket.emit('vote-skip-discussion');
+}
+
+// УБИРАЕМ старую функцию пропуска только для хоста
+// function skipDiscussion() {
+//     if (!gameState.isHost) {
+//         showNotification('Ошибка', 'Только хост может пропустить обсуждение');
+//         return;
+//     }
+    
+//     if (gameState.gamePhase !== 'discussion') {
+//         showNotification('Ошибка', 'Сейчас не фаза обсуждения');
+//         return;
+//     }
+    
+//     console.log('⏭️ Skipping discussion...');
+//     socket.emit('skip-discussion');
+// }
+
+// Функции для модальных окон
+function closeCharacteristicModal() {
+    document.getElementById('characteristicModal').style.display = 'none';
+}
+
+function closeNotificationModal() {
+    document.getElementById('notificationModal').style.display = 'none';
+}
+
+function showNotification(title, message) {
+    document.getElementById('notificationTitle').textContent = title;
+    document.getElementById('notificationMessage').textContent = message;
+    document.getElementById('notificationModal').style.display = 'flex';
 }
 
 function updateTimerDisplay() {
@@ -734,48 +555,32 @@ function updatePlayersGrid() {
     const playersGrid = document.getElementById('playersGrid');
     
     if (!playersGrid) {
-        console.error('❌ playersGrid element not found');
         return;
     }
     
+    // Очищаем сетку
     playersGrid.innerHTML = '';
+    
+    // Добавляем класс для адаптивной сетки
     playersGrid.className = `players-grid players-${gameState.players.length}`;
     
+    // Создаем карточки игроков
     gameState.players.forEach(player => {
         const playerCard = createPlayerCard(player);
         playersGrid.appendChild(playerCard);
     });
-    
-    console.log('🎮 Players grid updated:', gameState.players.length, 'players');
 }
 
+// ИСПРАВЛЕНО: функция создания карточки игрока - исправляем баг с голосованием хоста
 function createPlayerCard(player) {
     const card = document.createElement('div');
     const isCurrentPlayer = player.id === gameState.playerId;
     const isCurrentTurn = player.id === gameState.currentTurnPlayer;
-    const isJustifying = player.id === gameState.currentJustifyingPlayer;
     
-    card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''} ${isJustifying ? 'justifying' : ''}`;
+    card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''}`;
     
+    // ИСПРАВЛЕНО: порядок характеристик с двумя фактами внизу
     const characteristicOrder = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
-    
-    let turnInfo = '';
-    if (isCurrentTurn && gameState.gamePhase === 'revelation') {
-        const requiredCards = getRequiredCardsForRound(gameState.currentRound);
-        const revealedCards = player.cardsRevealedThisRound || 0;
-        
-        if (gameState.currentRound === 1) {
-            if (revealedCards === 0) {
-                turnInfo = '<div class="turn-info">📋 Раскройте профессию</div>';
-            } else if (revealedCards === 1) {
-                turnInfo = '<div class="turn-info">🎯 Выберите любую характеристику</div>';
-            }
-        } else {
-            if (revealedCards === 0) {
-                turnInfo = '<div class="turn-info">🎯 Выберите любую характеристику</div>';
-            }
-        }
-    }
     
     card.innerHTML = `
         <div class="player-header">
@@ -791,8 +596,6 @@ function createPlayerCard(player) {
                     </div>
                     ${isCurrentPlayer ? '<div class="player-status current">ВЫ</div>' : ''}
                     ${isCurrentTurn ? '<div class="player-status turn">Ваш ход!</div>' : ''}
-                    ${isJustifying ? '<div class="player-status justifying">🎤 Оправдывается</div>' : ''}
-                    ${turnInfo}
                 </div>
             </div>
         </div>
@@ -801,26 +604,11 @@ function createPlayerCard(player) {
             ${characteristicOrder.map(key => {
                 if (!player.characteristics || !player.characteristics[key]) return '';
                 
+                // ИСПРАВЛЕНО: логика раскрытия характеристик
                 const isRevealed = player.revealedCharacteristics && player.revealedCharacteristics.includes(key);
                 const isOwnCard = isCurrentPlayer;
-                
-                let canReveal = false;
-                if (isCurrentPlayer && isCurrentTurn && !isRevealed && gameState.gamePhase === 'revelation') {
-                    const requiredCards = getRequiredCardsForRound(gameState.currentRound);
-                    const revealedCards = player.cardsRevealedThisRound || 0;
-                    
-                    if (revealedCards < requiredCards) {
-                        if (gameState.currentRound === 1) {
-                            if (revealedCards === 0 && key === 'profession') {
-                                canReveal = true;
-                            } else if (revealedCards === 1 && key !== 'profession') {
-                                canReveal = true;
-                            }
-                        } else {
-                            canReveal = true;
-                        }
-                    }
-                }
+                // ИСПРАВЛЕНО: можно кликать только на свои карточки
+                const canReveal = isCurrentPlayer && isCurrentTurn && !isRevealed && gameState.gamePhase === 'revelation';
                 
                 return `<div class="characteristic ${isRevealed ? 'revealed' : (isOwnCard ? 'own-hidden' : 'hidden')} ${canReveal ? 'clickable' : ''}" 
                     ${canReveal ? `onclick="confirmRevealCharacteristic('${key}')"` : ''}>
@@ -834,7 +622,16 @@ function createPlayerCard(player) {
         
         <div class="player-actions">
             ${gameState.gamePhase === 'voting' && !isCurrentPlayer && player.isAlive ? 
-                getVotingButtons(player) : ''
+                `<div class="vote-section">
+                    <button class="vote-player-btn ${gameState.myVote === player.id ? 'voted' : ''}" 
+                            onclick="voteForPlayer('${player.id}')" 
+                            ${gameState.myVote ? 'disabled' : ''}>
+                        ${gameState.myVote === player.id ? '✅ Проголосовано' : '📋 Голосовать'}
+                    </button>
+                    <div class="voters-list">
+                        Голосов: ${player.votes || 0}
+                    </div>
+                </div>` : ''
             }
         </div>
     `;
@@ -842,10 +639,12 @@ function createPlayerCard(player) {
     return card;
 }
 
+// НОВАЯ функция подтверждения раскрытия характеристики с дополнительными проверками
 function confirmRevealCharacteristic(characteristic) {
     const player = gameState.players.find(p => p.id === gameState.playerId);
     if (!player || !player.characteristics) return;
     
+    // ДОБАВЛЕНО: дополнительные проверки безопасности
     if (gameState.gamePhase !== 'revelation') {
         console.log('❌ Not revelation phase');
         return;
@@ -861,42 +660,15 @@ function confirmRevealCharacteristic(characteristic) {
         return;
     }
     
-    const requiredCards = getRequiredCardsForRound(gameState.currentRound);
-    const revealedCards = player.cardsRevealedThisRound || 0;
-    
-    if (revealedCards >= requiredCards) {
-        showNotification('Ошибка', 'Вы уже раскрыли максимальное количество карт в этом раунде!');
-        return;
-    }
-    
-    if (gameState.currentRound === 1 && revealedCards === 0 && characteristic !== 'profession') {
-        showNotification('Ошибка', 'В первом раунде нужно сначала раскрыть профессию!');
-        return;
-    }
-    
     const characteristicName = translateCharacteristic(characteristic);
     const characteristicValue = player.characteristics[characteristic];
     
-    let progressInfo = '';
-    if (gameState.currentRound === 1) {
-        if (revealedCards === 0) {
-            progressInfo = '(Обязательная карта: Профессия)';
-        } else if (revealedCards === 1) {
-            progressInfo = '(Карта на выбор)';
-        }
-    } else {
-        progressInfo = '(Карта на выбор)';
-    }
-    
+    // Показываем модальное окно подтверждения
     document.getElementById('confirmCharacteristicName').textContent = characteristicName;
     document.getElementById('confirmCharacteristicValue').textContent = characteristicValue;
-    
-    const progressElement = document.getElementById('revealProgress');
-    if (progressElement) {
-        progressElement.textContent = progressInfo;
-    }
-    
     document.getElementById('confirmRevealModal').style.display = 'flex';
+    
+    // Сохраняем характеристику для раскрытия
     window.characteristicToReveal = characteristic;
 }
 
@@ -914,6 +686,26 @@ function cancelReveal() {
     window.characteristicToReveal = null;
 }
 
+// Функция голосования за игрока
+function voteForPlayer(playerId) {
+    if (gameState.gamePhase !== 'voting') {
+        showNotification('Ошибка', 'Сейчас не время для голосования!');
+        return;
+    }
+    
+    if (gameState.myVote) {
+        showNotification('Ошибка', 'Вы уже проголосовали!');
+        return;
+    }
+    
+    gameState.myVote = playerId;
+    socket.emit('vote-player', { targetId: playerId });
+    
+    // Обновляем отображение кнопки
+    updatePlayersGrid();
+}
+
+// Функция перевода характеристик
 function translateCharacteristic(key) {
     const translations = {
         'profession': 'Профессия',
@@ -928,152 +720,57 @@ function translateCharacteristic(key) {
     return translations[key] || key;
 }
 
-function getVotingButtons(player) {
-    const me = gameState.players.find(p => p.id === gameState.playerId);
-    if (!me || !me.isAlive) return '';
-    
-    const hasVoted = me.hasVoted;
-    const votedFor = me.votedFor;
-    const canChange = gameState.canChangeVote[gameState.playerId] && !gameState.hasChangedVote;
-    
-    let buttonText = 'Голосовать';
-    let buttonClass = 'vote-player-btn';
-    let isDisabled = false;
-    
-    if (hasVoted) {
-        if (votedFor === player.id) {
-            if (canChange) {
-                buttonText = 'Изменить голос';
-                buttonClass = 'vote-player-btn change-vote';
-                isDisabled = true;
-            } else {
-                buttonText = '✅ Проголосовано';
-                buttonClass = 'vote-player-btn voted';
-                isDisabled = true;
-            }
-        } else {
-            if (canChange) {
-                buttonText = 'Изменить на этого';
-                buttonClass = 'vote-player-btn change-vote';
-            } else {
-                buttonText = 'Голосовать';
-                buttonClass = 'vote-player-btn';
-                isDisabled = true;
-            }
-        }
-    }
-    
-    return `
-        <div class="vote-section">
-            <button class="${buttonClass}" 
-                    onclick="voteForPlayer('${player.id}')" 
-                    ${isDisabled ? 'disabled' : ''}>
-                ${buttonText}
-            </button>
-        </div>
-    `;
-}
-
-function voteForPlayer(targetId) {
-    const me = gameState.players.find(p => p.id === gameState.playerId);
-    if (!me || !me.isAlive) return;
-    
-    if (gameState.gamePhase !== 'voting') {
-        showNotification('Ошибка', 'Сейчас не время для голосования!');
-        return;
-    }
-    
-    if (me.hasVoted && !gameState.canChangeVote[gameState.playerId]) {
-        showNotification('Ошибка', 'Вы уже проголосовали!');
-        return;
-    }
-    
-    if (me.hasVoted && gameState.canChangeVote[gameState.playerId]) {
-        console.log('🔄 Changing vote to:', targetId);
-        socket.emit('change-vote', { targetId: targetId });
-        gameState.hasChangedVote = true;
-    } else {
-        console.log('🗳️ Voting for:', targetId);
-        socket.emit('vote-player', { targetId: targetId });
-    }
-}
-
-function finishJustification() {
-    console.log('✅ Finishing justification...');
-    socket.emit('finish-justification');
-}
-
-function surrender() {
-    if (confirm('Вы уверены, что хотите сдаться и покинуть игру?')) {
-        console.log('🏳️ Surrendering...');
-        socket.emit('surrender');
-    }
-}
-
-function voteToSkipDiscussion() {
-    if (gameState.gamePhase !== 'discussion') {
-        showNotification('Ошибка', 'Сейчас не фаза обсуждения');
-        return;
-    }
-    
-    if (gameState.mySkipVote) {
-        showNotification('Ошибка', 'Вы уже проголосовали за пропуск');
-        return;
-    }
-    
-    console.log('⏭️ Voting to skip discussion...');
-    socket.emit('vote-skip-discussion');
-}
-
-function showNotification(title, message) {
-    const modal = document.getElementById('notificationModal');
-    const titleElement = document.getElementById('notificationTitle');
-    const messageElement = document.getElementById('notificationMessage');
-    
-    if (modal && titleElement && messageElement) {
-        titleElement.textContent = title;
-        messageElement.textContent = message;
-        modal.style.display = 'flex';
-    } else {
-        alert(`${title}: ${message}`);
-    }
-}
-
-function closeNotificationModal() {
-    const modal = document.getElementById('notificationModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
-// === ИНИЦИАЛИЗАЦИЯ ===
-
+// ДОБАВЛЯЕМ обработчик нажатия Enter в поле ввода имени
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('📱 DOM loaded, initializing...');
-    
-    // Показываем экран входа при загрузке
-    showLoginScreen();
-    
-    // Добавляем обработчик Enter для поля ввода имени
     const playerNameInput = document.getElementById('playerNameInput');
     if (playerNameInput) {
         playerNameInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
-                e.preventDefault(); // ДОБАВЛЕНО: предотвращаем стандартное поведение
                 joinGame();
             }
-        });
-    }
-    
-    // ДОБАВЛЕНО: Обработчик для кнопки присоединения
-    const joinGameBtn = document.getElementById('joinGameBtn');
-    if (joinGameBtn) {
-        joinGameBtn.addEventListener('click', function(e) {
-            e.preventDefault(); // Предотвращаем стандартное поведение
-            console.log('🎯 Join button clicked');
-            joinGame();
         });
     }
 });
 
 console.log('🎮 Bunker Game Client Loaded');
+
+// НОВЫЕ обработчики для пропуска обсуждения
+socket.on('skip-discussion-vote-update', function(data) {
+    console.log('⏭️ Skip discussion vote update:', data);
+    gameState.skipDiscussionVotes = data.votes;
+    gameState.mySkipVote = data.hasVoted;
+    updateGameActions();
+});
+
+socket.on('discussion-skipped', function(data) {
+    console.log('⏭️ Discussion skipped:', data);
+    gameState.gamePhase = data.gamePhase;
+    gameState.timeLeft = data.timeLeft;
+    gameState.players = data.players;
+    gameState.skipDiscussionVotes = 0;
+    gameState.mySkipVote = false;
+    updateGameDisplay();
+    showNotification('Обсуждение пропущено', 'Достаточно игроков проголосовало за пропуск обсуждения');
+});
+
+// ИСПРАВЛЕНО: сброс состояния голосования при смене фазы
+socket.on('phase-changed', function(data) {
+    console.log('🔄 Phase changed:', data);
+    gameState.gamePhase = data.gamePhase;
+    gameState.timeLeft = data.timeLeft;
+    gameState.players = data.players;
+    gameState.currentTurnPlayer = data.currentTurnPlayer || null;
+    
+    // ДОБАВЛЕНО: сброс голосования за пропуск при смене фазы
+    if (data.gamePhase !== 'discussion') {
+        gameState.skipDiscussionVotes = 0;
+        gameState.mySkipVote = false;
+    }
+    
+    // ДОБАВЛЕНО: сброс голосования за игроков при смене фазы
+    if (data.gamePhase !== 'voting') {
+        gameState.myVote = null;
+    }
+    
+    updateGameDisplay();
+});

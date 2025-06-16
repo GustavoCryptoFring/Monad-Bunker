@@ -1,20 +1,15 @@
 {
   "name": "bunker-game",
   "version": "1.0.0",
-  "description": "Multiplayer Bunker survival game",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.7.2"
   },
   "engines": {
-    "node": ">=16.0.0"
-  },
-  "keywords": ["game", "multiplayer", "bunker", "survival"],
-  "author": "Your Name",
-  "license": "MIT"
+    "node": "18.x"
+  }
 }

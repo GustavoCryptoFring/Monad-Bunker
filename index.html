@@ -22,7 +22,7 @@
                 <h2>Добро пожаловать в Бункер!</h2>
                 <p>Введите ваше имя для присоединения к общей игре:</p>
                 <input type="text" id="playerNameInput" placeholder="Ваше имя" maxlength="20" autofocus>
-                <button id="joinGameBtn" class="room-btn">
+                <button id="joinGameBtn" class="room-btn" onclick="joinGame()">
                     Присоединиться к игре
                 </button>
             </div>
@@ -42,25 +42,6 @@
                             <option value="16">16 игроков</option>
                         </select>
                     </label>
-                </div>
-                
-                <!-- НОВЫЕ НАСТРОЙКИ УВЕДОМЛЕНИЙ -->
-                <div class="room-settings" id="notificationSettings" style="display: none;">
-                    <h4>⚙️ Настройки уведомлений</h4>
-                    <div class="notification-options">
-                        <label class="notification-checkbox">
-                            <input type="checkbox" id="notifyGameStart" onchange="updateNotificationSettings()">
-                            <span>🚀 Уведомление о начале игры</span>
-                        </label>
-                        <label class="notification-checkbox">
-                            <input type="checkbox" id="notifyDiscussionSkipped" onchange="updateNotificationSettings()">
-                            <span>⏭️ Уведомление о пропуске обсуждения</span>
-                        </label>
-                        <label class="notification-checkbox">
-                            <input type="checkbox" id="notifyNewRound" onchange="updateNotificationSettings()">
-                            <span>🔄 Уведомление о новых раундах</span>
-                        </label>
-                    </div>
                 </div>
                 
                 <div class="players-waiting">
@@ -85,26 +66,10 @@
                     <h2>РАУНД <span id="currentRound">1</span></h2>
                     <p id="gameStatus">Ожидание начала игры...</p>
                     
-                    <!-- ОБНОВЛЕННЫЕ кнопки действий в верхней части -->
+                    <!-- ВОЗВРАЩАЕМ кнопку сюда -->
                     <div class="round-actions" id="roundActions" style="display: none;">
-                        <!-- Кнопка начала раунда (для хоста) -->
-                        <button id="startRoundBtn" class="start-round-btn" onclick="startRound()" style="display: none;">
+                        <button id="startRoundBtn" class="start-round-btn" onclick="startRound()">
                             🚀 Начать раунд
-                        </button>
-                        
-                        <!-- Кнопка пропуска обсуждения -->
-                        <button id="skipDiscussionBtn" class="start-round-btn" onclick="voteToSkipDiscussion()" style="display: none;">
-                            ⏭️ Пропустить обсуждение (<span id="skipVotesCount">0</span>/2)
-                        </button>
-                        
-                        <!-- Кнопка завершения оправдания -->
-                        <button id="finishJustificationBtn" class="start-round-btn" onclick="finishJustification()" style="display: none;">
-                            ✅ Завершить оправдание
-                        </button>
-                        
-                        <!-- Кнопка сдачи -->
-                        <button id="surrenderBtn" class="start-round-btn surrender-btn" onclick="surrender()" style="display: none;">
-                            🏳️ Сдаться
                         </button>
                     </div>
                 </div>
@@ -119,7 +84,7 @@
             </div>
 
             <div class="game-actions" id="gameActions">
-                <!-- Удаляем отсюда все кнопки - они теперь наверху -->
+                <!-- Другие кнопки действий -->
             </div>
         </div>
 
@@ -155,9 +120,6 @@
                 <p>Вы раскрываете:</p>
                 <div class="reveal-confirmation">
                     <strong id="confirmCharacteristicName"></strong>: <span id="confirmCharacteristicValue"></span>
-                </div>
-                <div class="reveal-progress" id="revealProgress">
-                    <!-- Информация о прогрессе раскрытия -->
                 </div>
                 <div class="modal-actions">
                     <button onclick="confirmReveal()" class="room-btn confirm-btn">✅ Раскрыть</button>
