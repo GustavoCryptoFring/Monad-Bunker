@@ -508,6 +508,64 @@ io.on('connection', (socket) => {
     //     clearInterval(gameRoom.timer);
     //     startVotingPhase();
     // });
+    
+    socket.on('reveal-characteristic', (data) => {
+        console.log('🔍 Revealing characteristic:', data);
+        
+        const player = gameRoom.players.find(p => p.id === socket.id);
+        
+        if (!player || !player.isAlive) {
+            socket.emit('error', 'Вы не можете раскрывать характеристики!');
+            return;
+        }
+        
+        if (gameRoom.gamePhase !== 'revelation') {
+            socket.emit('error', 'Сейчас не фаза раскрытия!');
+            return;
+        }
+        
+        if (gameRoom.currentTurnPlayer !== socket.id) {
+            socket.emit('error', 'Сейчас не ваш ход!');
+            return;
+        }
+        
+        const characteristic = data.characteristic;
+        
+        if (!player.characteristics || !player.characteristics[characteristic]) {
+            socket.emit('error', 'Некорректная характеристика!');
+            return;
+        }
+        
+        // Проверяем, не была ли уже раскрыта эта характеристика
+        if (player.revealedCharacteristics && player.revealedCharacteristics.includes(characteristic)) {
+            socket.emit('error', 'Эта характеристика уже раскрыта!');
+            return;
+        }
+        
+        // Раскрываем характеристику
+        if (!player.revealedCharacteristics) {
+            player.revealedCharacteristics = [];
+        }
+        
+        player.revealedCharacteristics.push(characteristic);
+        player.hasRevealed = true;
+        
+        console.log(`✅ ${player.name} revealed ${characteristic}: ${player.characteristics[characteristic]}`);
+        
+        // Отправляем обновление всем игрокам
+        io.to('game-room').emit('characteristic-revealed', {
+            playerId: player.id,
+            playerName: player.name,
+            characteristic: characteristic,
+            value: player.characteristics[characteristic],
+            players: gameRoom.players
+        });
+        
+        // Переходим к следующему игроку
+        setTimeout(() => {
+            nextPlayerTurn();
+        }, 1000);
+    });
 });
 
 // === НОВЫЕ ФУНКЦИИ УПРАВЛЕНИЯ ФАЗАМИ ===

@@ -608,6 +608,304 @@ body {
     transform: none !important;
 }
 
+/* СТИЛИ ДЛЯ МОДАЛЬНЫХ ОКОН */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+    padding: 30px;
+    border-radius: 15px;
+    max-width: 500px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    border: 2px solid rgba(52, 152, 219, 0.3);
+}
+
+.modal-content h3 {
+    color: #f39c12;
+    margin-bottom: 20px;
+    font-size: 1.5em;
+}
+
+.modal-content p {
+    color: #ecf0f1;
+    margin-bottom: 20px;
+    font-size: 1.1em;
+    line-height: 1.5;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.confirm-btn {
+    background: #e74c3c !important;
+}
+
+.confirm-btn:hover {
+    background: #c0392b !important;
+}
+
+.reveal-confirmation {
+    background: rgba(44, 62, 80, 0.6);
+    padding: 15px;
+    border-radius: 10px;
+    margin: 15px 0;
+    border-left: 4px solid #f39c12;
+}
+
+.reveal-confirmation strong {
+    color: #f39c12;
+}
+
+.reveal-confirmation span {
+    color: #ecf0f1;
+    font-weight: bold;
+}
+
+/* СТИЛИ ДЛЯ ХАРАКТЕРИСТИК */
+.characteristic {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    margin: 5px 0;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    border-left: 4px solid transparent;
+}
+
+.characteristic.revealed {
+    background: rgba(46, 204, 113, 0.2);
+    border-left-color: #2ecc71;
+}
+
+.characteristic.own-hidden {
+    background: rgba(243, 156, 18, 0.2);
+    border-left-color: #f39c12;
+}
+
+.characteristic.hidden {
+    background: rgba(127, 140, 141, 0.2);
+    border-left-color: #7f8c8d;
+}
+
+/* ОБНОВЛЕННЫЕ СТИЛИ ДЛЯ КЛИКАБЕЛЬНЫХ ХАРАКТЕРИСТИК */
+.characteristic.clickable {
+    cursor: pointer;
+    border: 2px solid rgba(231, 76, 60, 0.6);
+    background: rgba(231, 76, 60, 0.1);
+    animation: pulse-clickable 2s infinite;
+}
+
+.characteristic.clickable:hover {
+    background: rgba(231, 76, 60, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+}
+
+@keyframes pulse-clickable {
+    0% { 
+        border-color: rgba(231, 76, 60, 0.6);
+        background: rgba(231, 76, 60, 0.1);
+    }
+    50% { 
+        border-color: rgba(231, 76, 60, 0.9);
+        background: rgba(231, 76, 60, 0.2);
+    }
+    100% { 
+        border-color: rgba(231, 76, 60, 0.6);
+        background: rgba(231, 76, 60, 0.1);
+    }
+}
+
+.characteristic-name {
+    font-weight: bold;
+    color: #ecf0f1;
+    flex-shrink: 0;
+    margin-right: 10px;
+}
+
+.characteristic-value {
+    text-align: right;
+    color: #bdc3c7;
+    word-break: break-word;
+}
+
+.characteristic-value.own-characteristic {
+    color: #f39c12;
+    font-weight: bold;
+}
+
+/* СТИЛИ ДЛЯ СТАТУСОВ ИГРОКОВ */
+.player-status {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: bold;
+    margin-top: 5px;
+}
+
+.player-status.current {
+    background: #f39c12;
+    color: #2c3e50;
+}
+
+.player-status.turn {
+    background: #e74c3c;
+    color: white;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0.7; }
+}
+
+@keyframes pulse-turn {
+    0% { 
+        box-shadow: 0 0 25px rgba(231, 76, 60, 0.6);
+    }
+    50% { 
+        box-shadow: 0 0 35px rgba(231, 76, 60, 0.9);
+    }
+    100% { 
+        box-shadow: 0 0 25px rgba(231, 76, 60, 0.6);
+    }
+}
+
+.player-card.eliminated {
+    opacity: 0.5;
+    filter: grayscale(100%);
+    border-color: #7f8c8d;
+}
+
+.eliminated-name {
+    text-decoration: line-through;
+    color: #7f8c8d;
+}
+
+.eliminated-avatar {
+    background: #7f8c8d !important;
+}
+
+/* СТИЛИ ДЛЯ АВАТАРОВ */
+.player-avatar-container {
+    margin-right: 15px;
+}
+
+.player-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #3498db;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5em;
+    font-weight: bold;
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.player-header {
+    margin-bottom: 15px;
+}
+
+.player-info {
+    display: flex;
+    align-items: center;
+}
+
+.player-name {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #ecf0f1;
+}
+
+/* НОВЫЕ СТИЛИ ДЛЯ ГОЛОСОВАНИЯ ЗА ПРОПУСК ОБСУЖДЕНИЯ */
+.voted-skip {
+    background: linear-gradient(45deg, #2ecc71, #27ae60) !important;
+    cursor: not-allowed !important;
+}
+
+.voted-skip:hover {
+    background: linear-gradient(45deg, #2ecc71, #27ae60) !important;
+    transform: none !important;
+}
+
+.skip-votes-info {
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #f39c12;
+    font-weight: bold;
+    text-align: center;
+    padding: 5px 10px;
+    background: rgba(44, 62, 80, 0.6);
+    border-radius: 8px;
+    border: 1px solid rgba(243, 156, 18, 0.3);
+}
+
+/* СТИЛИ ДЛЯ ДЕЙСТВИЙ ИГРОКОВ */
+.player-actions {
+    margin-top: auto;
+}
+
+.vote-section {
+    text-align: center;
+}
+
+.vote-player-btn {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.9em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.vote-player-btn:hover {
+    background: #c0392b;
+    transform: translateY(-2px);
+}
+
+.vote-player-btn.voted {
+    background: #2ecc71;
+    cursor: not-allowed;
+}
+
+.vote-player-btn.voted:hover {
+    background: #2ecc71;
+    transform: none;
+}
+
+.voters-list {
+    font-size: 0.8em;
+    color: #bdc3c7;
+    text-align: center;
+}
+
 /* АДАПТИВНОСТЬ */
 @media (max-width: 1200px) {
     .players-grid.players-8,
