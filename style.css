@@ -310,7 +310,7 @@ body {
     margin-bottom: 10px;
 }
 
-/* ОБНОВЛЕННЫЕ СТИЛИ ДЛЯ КНОПКИ НАЧАЛА РАУНДА */
+/* ОБНОВЛЕННЫЕ СТИЛИ ДЛЯ КНОПОК В ВЕРХНЕЙ ЧАСТИ */
 .round-actions {
     margin-top: 20px;
     margin-bottom: 20px;
@@ -319,6 +319,7 @@ body {
     background: rgba(44, 62, 80, 0.3);
     border-radius: 10px;
     border: 2px solid rgba(231, 76, 60, 0.4);
+    animation: highlight-border 2s infinite;
 }
 
 .start-round-btn {
@@ -334,6 +335,17 @@ body {
     box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
     text-transform: uppercase;
     letter-spacing: 1px;
+}
+
+/* СТИЛИ ДЛЯ КНОПКИ ПРОПУСКА ОБСУЖДЕНИЯ */
+#skipDiscussionBtn {
+    background: linear-gradient(45deg, #f39c12, #e67e22) !important;
+    box-shadow: 0 4px 15px rgba(243, 156, 18, 0.4) !important;
+}
+
+#skipDiscussionBtn:hover {
+    background: linear-gradient(45deg, #e67e22, #d35400) !important;
+    box-shadow: 0 6px 25px rgba(243, 156, 18, 0.6) !important;
 }
 
 .start-round-btn:hover {
@@ -363,11 +375,6 @@ body {
     animation: none;
 }
 
-/* Делаем кнопку более заметной */
-.round-actions {
-    animation: highlight-border 2s infinite;
-}
-
 @keyframes highlight-border {
     0% { 
         border-color: rgba(231, 76, 60, 0.4);
@@ -381,6 +388,45 @@ body {
         border-color: rgba(231, 76, 60, 0.4);
         background: rgba(44, 62, 80, 0.3);
     }
+}
+
+/* УБИРАЕМ СТИЛИ ДЛЯ СТАРЫХ КНОПОК ДЕЙСТВИЙ */
+/* ЗАКОММЕНТИРОВАНО:
+.action-btn {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    margin: 0 10px;
+    border-radius: 8px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.action-btn:hover:not(:disabled) {
+    background: #2980b9;
+    transform: translateY(-2px);
+}
+
+.action-btn:disabled {
+    background: #7f8c8d;
+    cursor: not-allowed;
+    transform: none;
+}
+*/
+
+/* СТИЛИ ДЛЯ ПРОГРЕССА ГОЛОСОВАНИЯ */
+.vote-progress {
+    font-size: 1.2em;
+    color: #f39c12;
+    font-weight: bold;
+    text-align: center;
+    padding: 20px;
+    background: rgba(52, 73, 94, 0.6);
+    border-radius: 15px;
+    border: 2px solid rgba(243, 156, 18, 0.4);
 }
 
 /* СТИЛИ ДЛЯ ИГРОВОГО ПОЛЯ И СЕТКИ ИГРОКОВ */

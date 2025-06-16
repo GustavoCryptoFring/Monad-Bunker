@@ -390,6 +390,27 @@ io.on('connection', (socket) => {
             players: gameRoom.players
         });
     });
+    
+    // НОВЫЙ обработчик для пропуска обсуждения
+    socket.on('skip-discussion', () => {
+        console.log('⏭️ Skip discussion requested by:', socket.id);
+        
+        const player = gameRoom.players.find(p => p.id === socket.id);
+        
+        if (!player || !player.isHost) {
+            socket.emit('error', 'Только хост может пропустить обсуждение!');
+            return;
+        }
+        
+        if (gameRoom.gamePhase !== 'discussion') {
+            socket.emit('error', 'Сейчас не фаза обсуждения!');
+            return;
+        }
+        
+        console.log('⏭️ Skipping discussion phase...');
+        clearInterval(gameRoom.timer);
+        startVotingPhase();
+    });
 });
 
 // === НОВЫЕ ФУНКЦИИ УПРАВЛЕНИЯ ФАЗАМИ ===
