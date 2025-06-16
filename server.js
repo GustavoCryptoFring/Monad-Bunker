@@ -86,16 +86,17 @@ io.on('connection', (socket) => {
         const newPlayer = {
             id: socket.id,
             name: data.playerName,
-            // УБРАЛИ: playerNumber: gameRoom.players.length + 1,
             isHost: gameRoom.players.length === 0, // Первый игрок становится хостом
             joinedAt: new Date(),
             isAlive: true,
             votes: 0,
             hasRevealed: false,
-            revealedCharacteristics: [], // ДОБАВИЛИ массив раскрытых характеристик
-            characteristics: null, // Будут созданы при старте игры
+            revealedCharacteristics: [],
+            characteristics: null,
             actionCards: [],
-            hasVoted: false // Отслеживаем голосование
+            hasVoted: false,
+            votedFor: null,
+            cardsRevealedThisRound: 0
         };
         
         gameRoom.players.push(newPlayer);
@@ -146,13 +147,14 @@ io.on('connection', (socket) => {
             player.actionCards = [getRandomActionCard()];
             player.hasRevealed = false;
             player.hasVoted = false;
-            player.revealedCharacteristics = []; // ДОБАВИЛИ сброс раскрытых характеристик
+            player.revealedCharacteristics = [];
+            player.cardsRevealedThisRound = 0;
         });
         
         gameRoom.gameState = 'playing';
         gameRoom.gamePhase = 'preparation';
         gameRoom.currentRound = 1;
-        gameRoom.timeLeft = 0; // Таймер не идет в фазе подготовки
+        gameRoom.timeLeft = 0;
         gameRoom.playersWhoRevealed = [];
         gameRoom.currentTurnPlayer = null;
         
@@ -168,7 +170,6 @@ io.on('connection', (socket) => {
         });
     });
     
-    // НОВЫЙ обработчик для начала раунда
     socket.on('start-round', () => {
         console.log('🎯 Round start requested by:', socket.id);
         
@@ -215,7 +216,7 @@ io.on('connection', (socket) => {
         
         gameRoom.votingResults[data.targetId].push(voter.id);
         voter.hasVoted = true;
-        voter.votedFor = data.targetId; // ДОБАВЛЕНО: запоминаем за кого голосовал
+        voter.votedFor = data.targetId;
         
         // Обновляем счетчики голосов
         gameRoom.players.forEach(player => {
@@ -244,7 +245,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // НОВЫЙ обработчик для смены голоса
     socket.on('change-vote', (data) => {
         console.log('🔄 Change vote from:', socket.id, 'to:', data.targetId);
         
@@ -310,7 +310,6 @@ io.on('connection', (socket) => {
         });
     });
 
-    // НОВЫЙ обработчик для завершения оправдания
     socket.on('finish-justification', () => {
         console.log('✅ Finish justification from:', socket.id);
         
@@ -328,7 +327,6 @@ io.on('connection', (socket) => {
         nextJustification();
     });
 
-    // НОВЫЙ обработчик для сдачи
     socket.on('surrender', () => {
         console.log('🏳️ Surrender from:', socket.id);
         
@@ -372,8 +370,6 @@ io.on('connection', (socket) => {
             const wasHost = player.isHost;
             
             gameRoom.players.splice(playerIndex, 1);
-            
-            // УБРАЛИ: перенумерацию игроков
             
             // Если хост отключился, назначаем нового хоста
             if (wasHost && gameRoom.players.length > 0) {
@@ -432,7 +428,6 @@ io.on('connection', (socket) => {
         });
     });
     
-    // НОВЫЙ обработчик для голосования за пропуск обсуждения
     socket.on('vote-skip-discussion', () => {
         console.log('⏭️ Vote to skip discussion from:', socket.id);
         
@@ -487,27 +482,6 @@ io.on('connection', (socket) => {
             startVotingPhase();
         }
     });
-
-    // УБИРАЕМ старый обработчик пропуска только для хоста
-    // socket.on('skip-discussion', () => {
-    //     console.log('⏭️ Skip discussion requested by:', socket.id);
-        
-    //     const player = gameRoom.players.find(p => p.id === socket.id);
-        
-    //     if (!player || !player.isHost) {
-    //         socket.emit('error', 'Только хост может пропустить обсуждение!');
-    //         return;
-    //     }
-        
-    //     if (gameRoom.gamePhase !== 'discussion') {
-    //         socket.emit('error', 'Сейчас не фаза обсуждения!');
-    //         return;
-    //     }
-        
-    //     console.log('⏭️ Skipping discussion phase...');
-    //     clearInterval(gameRoom.timer);
-    //     startVotingPhase();
-    // });
     
     socket.on('reveal-characteristic', (data) => {
         console.log('🔍 Revealing characteristic:', data);
@@ -542,7 +516,7 @@ io.on('connection', (socket) => {
             return;
         }
         
-        // ДОБАВЛЕНО: проверка правил раскрытия для текущего раунда
+        // Проверка правил раскрытия для текущего раунда
         const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
         const currentlyRevealed = player.cardsRevealedThisRound || 0;
         
@@ -551,16 +525,9 @@ io.on('connection', (socket) => {
             return;
         }
         
-        // ДОБАВЛЕНО: в первом раунде первая карта должна быть профессией
+        // В первом раунде первая карта должна быть профессией
         if (gameRoom.currentRound === 1 && currentlyRevealed === 0 && characteristic !== 'profession') {
             socket.emit('error', 'В первом раунде нужно сначала раскрыть профессию!');
-            return;
-        }
-        
-        // ДОБАВЛЕНО: во втором и последующих раундах нельзя раскрывать профессию (если она уже раскрыта)
-        if (gameRoom.currentRound > 1 && characteristic === 'profession' && 
-            player.revealedCharacteristics && player.revealedCharacteristics.includes('profession')) {
-            socket.emit('error', 'Профессия уже раскрыта!');
             return;
         }
         
@@ -611,7 +578,15 @@ io.on('connection', (socket) => {
     });
 });
 
-// === НОВЫЕ ФУНКЦИИ УПРАВЛЕНИЯ ФАЗАМИ ===
+// === ФУНКЦИИ УПРАВЛЕНИЯ ФАЗАМИ ===
+
+function getRequiredCardsForRound(round) {
+    if (round === 1) {
+        return 2; // Профессия + 1 карта на выбор
+    } else {
+        return 1; // 1 карта на выбор
+    }
+}
 
 function startRevelationPhase() {
     console.log('🔍 Starting revelation phase for round:', gameRoom.currentRound);
@@ -622,7 +597,7 @@ function startRevelationPhase() {
     // Сбрасываем состояние раскрытия для всех игроков ТОЛЬКО для текущего раунда
     gameRoom.players.forEach(player => {
         player.hasRevealed = false;
-        player.cardsRevealedThisRound = 0; // ДОБАВЛЕНО: счетчик карт за раунд
+        player.cardsRevealedThisRound = 0;
     });
     
     // Начинаем с первого живого игрока
@@ -638,13 +613,13 @@ function startPlayerTurn() {
     
     startGameTimer();
     
-    // ИСПРАВЛЕНО: отправляем правильные данные о ходе
+    // Отправляем правильные данные о ходе
     io.to('game-room').emit('phase-changed', {
         gamePhase: gameRoom.gamePhase,
-        currentTurnPlayer: gameRoom.currentTurnPlayer, // ВАЖНО: передаем текущего игрока
+        currentTurnPlayer: gameRoom.currentTurnPlayer,
         timeLeft: gameRoom.timeLeft,
         players: gameRoom.players,
-        currentRound: gameRoom.currentRound // ДОБАВЛЕНО: передаем номер раунда
+        currentRound: gameRoom.currentRound
     });
     
     console.log(`🎯 Player turn: ${gameRoom.currentTurnPlayer}, time: ${gameRoom.timeLeft}s, round: ${gameRoom.currentRound}`);
@@ -662,7 +637,7 @@ function nextPlayerTurn() {
     const nextIndex = currentIndex + 1;
     
     if (nextIndex >= alivePlayers.length) {
-        // ИСПРАВЛЕНО: проверяем завершение раунда по новым правилам
+        // Проверяем завершение раунда по новым правилам
         const allPlayersFinished = alivePlayers.every(player => {
             const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
             return (player.cardsRevealedThisRound || 0) >= requiredCards;
@@ -692,210 +667,6 @@ function nextPlayerTurn() {
         gameRoom.currentTurnPlayer = alivePlayers[nextIndex].id;
         console.log(`➡️ Next player: ${alivePlayers[nextIndex].name}`);
         startPlayerTurn();
-    }
-}
-
-// НОВАЯ функция для определения количества карт для раскрытия в раунде
-function getRequiredCardsForRound(round) {
-    if (round === 1) {
-        return 2; // Профессия + 1 карта на выбор
-    } else {
-        return 1; // 1 карта на выбор
-    }
-}
-
-// ОБНОВЛЕННЫЙ обработчик раскрытия характеристик
-socket.on('reveal-characteristic', (data) => {
-    console.log('🔍 Revealing characteristic:', data);
-    
-    const player = gameRoom.players.find(p => p.id === socket.id);
-    
-    if (!player || !player.isAlive) {
-        socket.emit('error', 'Вы не можете раскрывать характеристики!');
-        return;
-    }
-    
-    if (gameRoom.gamePhase !== 'revelation') {
-        socket.emit('error', 'Сейчас не фаза раскрытия!');
-        return;
-    }
-    
-    if (gameRoom.currentTurnPlayer !== socket.id) {
-        socket.emit('error', 'Сейчас не ваш ход!');
-        return;
-    }
-    
-    const characteristic = data.characteristic;
-    
-    if (!player.characteristics || !player.characteristics[characteristic]) {
-        socket.emit('error', 'Некорректная характеристика!');
-        return;
-    }
-    
-    // Проверяем, не была ли уже раскрыта эта характеристика
-    if (player.revealedCharacteristics && player.revealedCharacteristics.includes(characteristic)) {
-        socket.emit('error', 'Эта характеристика уже раскрыта!');
-        return;
-    }
-    
-    // ДОБАВЛЕНО: проверка правил раскрытия для текущего раунда
-    const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
-    const currentlyRevealed = player.cardsRevealedThisRound || 0;
-    
-    if (currentlyRevealed >= requiredCards) {
-        socket.emit('error', 'Вы уже раскрыли максимальное количество карт в этом раунде!');
-        return;
-    }
-    
-    // ДОБАВЛЕНО: в первом раунде первая карта должна быть профессией
-    if (gameRoom.currentRound === 1 && currentlyRevealed === 0 && characteristic !== 'profession') {
-        socket.emit('error', 'В первом раунде нужно сначала раскрыть профессию!');
-        return;
-    }
-    
-    // ДОБАВЛЕНО: во втором и последующих раундах нельзя раскрывать профессию (если она уже раскрыта)
-    if (gameRoom.currentRound > 1 && characteristic === 'profession' && 
-        player.revealedCharacteristics && player.revealedCharacteristics.includes('profession')) {
-        socket.emit('error', 'Профессия уже раскрыта!');
-        return;
-    }
-    
-    // Раскрываем характеристику
-    if (!player.revealedCharacteristics) {
-        player.revealedCharacteristics = [];
-    }
-    
-    player.revealedCharacteristics.push(characteristic);
-    player.cardsRevealedThisRound = (player.cardsRevealedThisRound || 0) + 1;
-    
-    console.log(`✅ ${player.name} revealed ${characteristic}: ${player.characteristics[characteristic]} (${player.cardsRevealedThisRound}/${requiredCards})`);
-    
-    // Отправляем обновление всем игрокам
-    io.to('game-room').emit('characteristic-revealed', {
-        playerId: player.id,
-        playerName: player.name,
-        characteristic: characteristic,
-        value: player.characteristics[characteristic],
-        players: gameRoom.players,
-        cardsRevealedThisRound: player.cardsRevealedThisRound,
-        requiredCards: requiredCards
-    });
-    
-    // Проверяем, завершил ли игрок раскрытие в этом раунде
-    if (player.cardsRevealedThisRound >= requiredCards) {
-        player.hasRevealed = true;
-        console.log(`✅ ${player.name} finished revealing for round ${gameRoom.currentRound}`);
-        
-        // Переходим к следующему игроку через 2 секунды
-        setTimeout(() => {
-            nextPlayerTurn();
-        }, 2000);
-    } else {
-        // Игрок может раскрыть еще одну карту в этом ходу
-        console.log(`⏳ ${player.name} can reveal ${requiredCards - player.cardsRevealedThisRound} more cards`);
-        
-        // Обновляем таймер для продолжения хода
-        gameRoom.timeLeft = 60;
-        
-        // Отправляем обновление таймера
-        io.to('game-room').emit('timer-update', {
-            timeLeft: gameRoom.timeLeft,
-            gamePhase: gameRoom.gamePhase,
-            currentTurnPlayer: gameRoom.currentTurnPlayer
-        });
-    }
-});
-
-// === СУЩНОСТИ И МЕХАНИКА ИГРЫ ===
-
-function startRevelationPhase() {
-    console.log('🔍 Starting revelation phase for round:', gameRoom.currentRound);
-    
-    gameRoom.gamePhase = 'revelation';
-    gameRoom.playersWhoRevealed = [];
-    
-    // Сбрасываем состояние раскрытия для всех игроков ТОЛЬКО для текущего раунда
-    gameRoom.players.forEach(player => {
-        player.hasRevealed = false;
-        player.cardsRevealedThisRound = 0; // ДОБАВЛЕНО: счетчик карт за раунд
-    });
-    
-    // Начинаем с первого живого игрока
-    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
-    if (alivePlayers.length > 0) {
-        gameRoom.currentTurnPlayer = alivePlayers[0].id;
-        startPlayerTurn();
-    }
-}
-
-function startPlayerTurn() {
-    gameRoom.timeLeft = 60; // 1 минута на игрока
-    
-    startGameTimer();
-    
-    // ИСПРАВЛЕНО: отправляем правильные данные о ходе
-    io.to('game-room').emit('phase-changed', {
-        gamePhase: gameRoom.gamePhase,
-        currentTurnPlayer: gameRoom.currentTurnPlayer, // ВАЖНО: передаем текущего игрока
-        timeLeft: gameRoom.timeLeft,
-        players: gameRoom.players,
-        currentRound: gameRoom.currentRound // ДОБАВЛЕНО: передаем номер раунда
-    });
-    
-    console.log(`🎯 Player turn: ${gameRoom.currentTurnPlayer}, time: ${gameRoom.timeLeft}s, round: ${gameRoom.currentRound}`);
-}
-
-function nextPlayerTurn() {
-    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
-    const currentIndex = alivePlayers.findIndex(p => p.id === gameRoom.currentTurnPlayer);
-    
-    if (currentIndex === -1) {
-        startDiscussionPhase();
-        return;
-    }
-    
-    const nextIndex = currentIndex + 1;
-    
-    if (nextIndex >= alivePlayers.length) {
-        // ИСПРАВЛЕНО: проверяем завершение раунда по новым правилам
-        const allPlayersFinished = alivePlayers.every(player => {
-            const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
-            return (player.cardsRevealedThisRound || 0) >= requiredCards;
-        });
-        
-        if (allPlayersFinished) {
-            // Все игроки завершили раскрытие - переходим к обсуждению
-            console.log('✅ All players finished revealing for round', gameRoom.currentRound);
-            startDiscussionPhase();
-        } else {
-            // Возвращаемся к первому игроку, который еще не завершил
-            const nextPlayer = alivePlayers.find(player => {
-                const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
-                return (player.cardsRevealedThisRound || 0) < requiredCards;
-            });
-            
-            if (nextPlayer) {
-                gameRoom.currentTurnPlayer = nextPlayer.id;
-                console.log(`🔄 Continuing with player: ${nextPlayer.name}`);
-                startPlayerTurn();
-            } else {
-                startDiscussionPhase();
-            }
-        }
-    } else {
-        // Следующий игрок
-        gameRoom.currentTurnPlayer = alivePlayers[nextIndex].id;
-        console.log(`➡️ Next player: ${alivePlayers[nextIndex].name}`);
-        startPlayerTurn();
-    }
-}
-
-// НОВАЯ функция для определения количества карт для раскрытия в раунде
-function getRequiredCardsForRound(round) {
-    if (round === 1) {
-        return 2; // Профессия + 1 карта на выбор
-    } else {
-        return 1; // 1 карта на выбор
     }
 }
 
@@ -904,15 +675,15 @@ function startDiscussionPhase() {
     
     gameRoom.gamePhase = 'discussion';
     gameRoom.timeLeft = 300; // 5 минут на обсуждение
-    gameRoom.currentTurnPlayer = null; // ВАЖНО: убираем текущего игрока
-    gameRoom.skipDiscussionVotes = []; // ДОБАВЛЕНО: сбрасываем голоса за пропуск
+    gameRoom.currentTurnPlayer = null;
+    gameRoom.skipDiscussionVotes = [];
     
     startGameTimer();
     
     io.to('game-room').emit('phase-changed', {
         gamePhase: gameRoom.gamePhase,
         timeLeft: gameRoom.timeLeft,
-        currentTurnPlayer: null, // ВАЖНО: передаем null
+        currentTurnPlayer: null,
         players: gameRoom.players
     });
 }
@@ -1009,8 +780,7 @@ function startVotingPhase() {
     gameRoom.timeLeft = 120; // 2 минуты на голосование
     gameRoom.votingResults = {};
     gameRoom.totalVotes = 0;
-    gameRoom.skipDiscussionVotes = []; // ДОБАВЛЕНО: сбрасываем голоса за пропуск
-    // ДОБАВЛЕНО: сбрасываем состояние оправданий
+    gameRoom.skipDiscussionVotes = [];
     gameRoom.justificationQueue = [];
     gameRoom.currentJustifyingPlayer = null;
     gameRoom.canChangeVote = {};
@@ -1019,7 +789,7 @@ function startVotingPhase() {
     gameRoom.players.forEach(player => {
         player.votes = 0;
         player.hasVoted = false;
-        player.votedFor = null; // ДОБАВЛЕНО: сбрасываем за кого голосовал
+        player.votedFor = null;
     });
     
     console.log('🗳️ Starting voting phase');
@@ -1069,7 +839,7 @@ function handlePhaseTimeout() {
             startVotingPhase();
             break;
         case 'voting':
-            startJustificationPhase(); // ИЗМЕНЕНО: переходим к оправданиям вместо результатов
+            startJustificationPhase();
             break;
         case 'justification':
             // Время оправдания истекло - переходим к следующему
@@ -1110,13 +880,12 @@ function showResults() {
         player.votes = 0;
         player.hasVoted = false;
         player.votedFor = null;
-        player.cardsRevealedThisRound = 0; // ДОБАВЛЕНО: сброс счетчика карт за раунд
+        player.cardsRevealedThisRound = 0;
         // НЕ сбрасываем revealedCharacteristics - они остаются на всю игру
     });
     
     gameRoom.revealedThisRound = 0;
     gameRoom.currentTurnPlayer = null;
-    // ДОБАВЛЕНО: сбрасываем состояние оправданий
     gameRoom.justificationQueue = [];
     gameRoom.currentJustifyingPlayer = null;
     gameRoom.canChangeVote = {};
@@ -1139,7 +908,7 @@ function nextRound() {
     // Проверяем условия окончания игры
     const alivePlayers = gameRoom.players.filter(p => p.isAlive);
     
-    // ИСПРАВЛЕНО: игра заканчивается когда остается 2 или меньше игроков
+    // Игра заканчивается когда остается 2 или меньше игроков
     if (alivePlayers.length <= 2 || gameRoom.currentRound > gameRoom.maxRounds) {
         endGame();
         return;
@@ -1197,8 +966,8 @@ function resetGame() {
         player.hasRevealed = false;
         player.hasVoted = false;
         player.votedFor = null;
-        player.cardsRevealedThisRound = 0; // ДОБАВЛЕНО: сброс счетчика карт за раунд
-        player.revealedCharacteristics = []; // СБРАСЫВАЕМ при новой игре
+        player.cardsRevealedThisRound = 0;
+        player.revealedCharacteristics = [];
         player.characteristics = null;
         player.actionCards = [];
     });
@@ -1214,7 +983,6 @@ function resetGame() {
     gameRoom.playersWhoRevealed = [];
     gameRoom.totalVotes = 0;
     gameRoom.skipDiscussionVotes = [];
-    // ДОБАВЛЕНО: сбрасываем состояние оправданий
     gameRoom.justificationQueue = [];
     gameRoom.currentJustifyingPlayer = null;
     gameRoom.canChangeVote = {};
@@ -1225,7 +993,7 @@ function resetGame() {
     });
 }
 
-// Вспомогательные функции для генерации данных (остаются прежними)
+// Вспомогательные функции для генерации данных
 const professions = [
     "Врач", "Учитель", "Инженер", "Повар", "Программист", "Механик",
     "Писатель", "Художник", "Музыкант", "Строитель", "Фермер", "Пилот",
