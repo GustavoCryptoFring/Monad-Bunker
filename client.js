@@ -219,6 +219,30 @@ socket.on('characteristic-revealed', function(data) {
         gameState.requiredCardsThisRound = data.requiredCards;
     }
     
+    // НОВОЕ: Показываем уведомление об автоматическом раскрытии
+    if (data.autoRevealed) {
+        const isMe = data.playerId === gameState.playerId;
+        const message = isMe 
+            ? `Время истекло! Автоматически раскрыта характеристика: ${data.characteristic} - ${data.value}`
+            : `${data.playerName} не успел выбрать, автоматически раскрыто: ${data.characteristic}`;
+        
+        showNotification('Автоматическое раскрытие', message);
+    }
+    
+    updatePlayersGrid();
+});
+
+// НОВОЕ: Обработчик завершения автоматического раскрытия
+socket.on('auto-reveal-completed', function(data) {
+    console.log('🎲 Auto reveal completed:', data);
+    gameState.players = data.players;
+    
+    const isMe = data.playerName === gameState.playerName;
+    const message = isMe 
+        ? `Ваше время истекло. Автоматически раскрыто карт: ${data.cardsRevealed}`
+        : `${data.playerName} не успел выбрать карты. Раскрыто автоматически: ${data.cardsRevealed}`;
+    
+    showNotification('Ход завершен', message);
     updatePlayersGrid();
 });
 
@@ -335,6 +359,364 @@ socket.on('notification-settings-updated', function(data) {
     gameState.notificationSettings = data.settings;
     updateNotificationCheckboxes();
 });
+
+// === ФУНКЦИИ ОТОБРАЖЕНИЯ ЭКРАНОВ ===
+
+function showScreen(screenId) {
+    // Скрываем все экраны
+    const screens = document.querySelectorAll('.screen');
+    screens.forEach(screen => {
+        screen.style.display = 'none';
+    });
+    
+    // Показываем нужный экран
+    const targetScreen = document.getElementById(screenId);
+    if (targetScreen) {
+        targetScreen.style.display = 'block';
+    }
+}
+
+function showLoginScreen() {
+    console.log('📱 Showing login screen');
+    showScreen('loginScreen');
+    
+    // Устанавливаем фокус на поле ввода имени
+    const nameInput = document.getElementById('playerNameInput');
+    if (nameInput) {
+        nameInput.focus();
+    }
+}
+
+function showLobbyScreen() {
+    console.log('📱 Showing lobby screen');
+    showScreen('lobbyScreen');
+    updateLobbyDisplay();
+}
+
+function showGameScreen() {
+    console.log('📱 Showing game screen');
+    showScreen('gameScreen');
+    updateGameDisplay();
+}
+
+function showResultsScreen() {
+    console.log('📱 Showing results screen');
+    showScreen('resultsScreen');
+}
+
+// === ФУНКЦИИ ОБНОВЛЕНИЯ ЛОББИ ===
+
+function updateLobbyDisplay() {
+    // Обновляем счетчик игроков
+    const currentPlayersCount = document.getElementById('currentPlayersCount');
+    const maxPlayersCount = document.getElementById('maxPlayersCount');
+    const playersList = document.getElementById('playersList');
+    const startGameBtn = document.getElementById('startGameBtn');
+    const waitingInfo = document.getElementById('waitingInfo');
+    const maxPlayersSelector = document.getElementById('maxPlayersSelector');
+    const notificationSettingsBtn = document.getElementById('notificationSettingsBtn'); // НОВОЕ
+    
+    if (currentPlayersCount) {
+        currentPlayersCount.textContent = gameState.players.length;
+    }
+    
+    if (maxPlayersCount) {
+        maxPlayersCount.textContent = gameState.maxPlayers;
+    }
+    
+    // Обновляем список игроков
+    if (playersList) {
+        playersList.innerHTML = '';
+        gameState.players.forEach(player => {
+            const li = document.createElement('li');
+            li.className = player.isHost ? 'host' : '';
+            li.textContent = `${player.name}${player.isHost ? ' (Хост)' : ''}`;
+            playersList.appendChild(li);
+        });
+    }
+    
+    // Показываем/скрываем кнопки и селекторы
+    if (gameState.isHost) {
+        if (startGameBtn) {
+            startGameBtn.style.display = 'block';
+            startGameBtn.disabled = gameState.players.length < 2;
+            
+            // ОБНОВЛЯЕМ текст кнопки
+            if (gameState.players.length < 2) {
+                startGameBtn.textContent = 'Начать игру (минимум 2 игрока)';
+            } else {
+                startGameBtn.textContent = 'Начать игру';
+            }
+        }
+        if (waitingInfo) {
+            waitingInfo.style.display = 'none';
+        }
+        if (maxPlayersSelector) {
+            maxPlayersSelector.style.display = 'block';
+        }
+        // НОВОЕ: показываем кнопку настроек уведомлений для хоста
+        if (notificationSettingsBtn) {
+            notificationSettingsBtn.style.display = 'block';
+        }
+    } else {
+        if (startGameBtn) {
+            startGameBtn.style.display = 'none';
+        }
+        if (waitingInfo) {
+            waitingInfo.style.display = 'block';
+        }
+        if (maxPlayersSelector) {
+            maxPlayersSelector.style.display = 'none';
+        }
+        // НОВОЕ: скрываем кнопку настроек уведомлений для не-хостов
+        if (notificationSettingsBtn) {
+            notificationSettingsBtn.style.display = 'none';
+        }
+    }
+    
+    // Обновляем селектор максимального количества игроков
+    const maxPlayersSelect = document.getElementById('maxPlayersSelect');
+    if (maxPlayersSelect) {
+        maxPlayersSelect.value = gameState.maxPlayers;
+    }
+    
+    // НОВОЕ: обновляем чекбоксы настроек уведомлений
+    updateNotificationCheckboxes();
+}
+
+// НОВАЯ ФУНКЦИЯ: переключение панели настроек уведомлений
+function toggleNotificationSettings() {
+    const panel = document.getElementById('notificationSettingsPanel');
+    const btn = document.getElementById('notificationSettingsBtn');
+    
+    if (!panel || !btn) return;
+    
+    if (panel.style.display === 'none' || panel.style.display === '') {
+        panel.style.display = 'block';
+        btn.classList.add('active');
+        btn.textContent = '⚙️ Скрыть настройки';
+    } else {
+        panel.style.display = 'none';
+        btn.classList.remove('active');
+        btn.textContent = '⚙️ Уведомления';
+    }
+}
+
+// НОВАЯ ФУНКЦИЯ: обновление настроек уведомлений
+function updateNotificationSettings() {
+    if (!gameState.isHost) {
+        return; // Только хост может изменять настройки
+    }
+    
+    const gameStartCheckbox = document.getElementById('notifyGameStart');
+    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
+    const newRoundCheckbox = document.getElementById('notifyNewRound');
+    
+    const settings = {
+        gameStart: gameStartCheckbox ? gameStartCheckbox.checked : false,
+        discussionSkipped: discussionSkippedCheckbox ? discussionSkippedCheckbox.checked : false,
+        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false
+    };
+    
+    console.log('⚙️ Updating notification settings:', settings);
+    socket.emit('update-notification-settings', { settings: settings });
+}
+
+// НОВАЯ ФУНКЦИЯ: обновление чекбоксов настроек уведомлений
+function updateNotificationCheckboxes() {
+    const gameStartCheckbox = document.getElementById('notifyGameStart');
+    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
+    const newRoundCheckbox = document.getElementById('notifyNewRound');
+    
+    if (gameStartCheckbox) {
+        gameStartCheckbox.checked = gameState.notificationSettings.gameStart;
+    }
+    if (discussionSkippedCheckbox) {
+        discussionSkippedCheckbox.checked = gameState.notificationSettings.discussionSkipped;
+    }
+    if (newRoundCheckbox) {
+        newRoundCheckbox.checked = gameState.notificationSettings.newRound;
+    }
+}
+
+// === ФУНКЦИИ ОТОБРАЖЕНИЯ ЭКРАНОВ ===
+
+function showScreen(screenId) {
+    // Скрываем все экраны
+    const screens = document.querySelectorAll('.screen');
+    screens.forEach(screen => {
+        screen.style.display = 'none';
+    });
+    
+    // Показываем нужный экран
+    const targetScreen = document.getElementById(screenId);
+    if (targetScreen) {
+        targetScreen.style.display = 'block';
+    }
+}
+
+function showLoginScreen() {
+    console.log('📱 Showing login screen');
+    showScreen('loginScreen');
+    
+    // Устанавливаем фокус на поле ввода имени
+    const nameInput = document.getElementById('playerNameInput');
+    if (nameInput) {
+        nameInput.focus();
+    }
+}
+
+function showLobbyScreen() {
+    console.log('📱 Showing lobby screen');
+    showScreen('lobbyScreen');
+    updateLobbyDisplay();
+}
+
+function showGameScreen() {
+    console.log('📱 Showing game screen');
+    showScreen('gameScreen');
+    updateGameDisplay();
+}
+
+function showResultsScreen() {
+    console.log('📱 Showing results screen');
+    showScreen('resultsScreen');
+}
+
+// === ФУНКЦИИ ОБНОВЛЕНИЯ ЛОББИ ===
+
+function updateLobbyDisplay() {
+    // Обновляем счетчик игроков
+    const currentPlayersCount = document.getElementById('currentPlayersCount');
+    const maxPlayersCount = document.getElementById('maxPlayersCount');
+    const playersList = document.getElementById('playersList');
+    const startGameBtn = document.getElementById('startGameBtn');
+    const waitingInfo = document.getElementById('waitingInfo');
+    const maxPlayersSelector = document.getElementById('maxPlayersSelector');
+    const notificationSettingsBtn = document.getElementById('notificationSettingsBtn'); // НОВОЕ
+    
+    if (currentPlayersCount) {
+        currentPlayersCount.textContent = gameState.players.length;
+    }
+    
+    if (maxPlayersCount) {
+        maxPlayersCount.textContent = gameState.maxPlayers;
+    }
+    
+    // Обновляем список игроков
+    if (playersList) {
+        playersList.innerHTML = '';
+        gameState.players.forEach(player => {
+            const li = document.createElement('li');
+            li.className = player.isHost ? 'host' : '';
+            li.textContent = `${player.name}${player.isHost ? ' (Хост)' : ''}`;
+            playersList.appendChild(li);
+        });
+    }
+    
+    // Показываем/скрываем кнопки и селекторы
+    if (gameState.isHost) {
+        if (startGameBtn) {
+            startGameBtn.style.display = 'block';
+            startGameBtn.disabled = gameState.players.length < 2;
+            
+            // ОБНОВЛЯЕМ текст кнопки
+            if (gameState.players.length < 2) {
+                startGameBtn.textContent = 'Начать игру (минимум 2 игрока)';
+            } else {
+                startGameBtn.textContent = 'Начать игру';
+            }
+        }
+        if (waitingInfo) {
+            waitingInfo.style.display = 'none';
+        }
+        if (maxPlayersSelector) {
+            maxPlayersSelector.style.display = 'block';
+        }
+        // НОВОЕ: показываем кнопку настроек уведомлений для хоста
+        if (notificationSettingsBtn) {
+            notificationSettingsBtn.style.display = 'block';
+        }
+    } else {
+        if (startGameBtn) {
+            startGameBtn.style.display = 'none';
+        }
+        if (waitingInfo) {
+            waitingInfo.style.display = 'block';
+        }
+        if (maxPlayersSelector) {
+            maxPlayersSelector.style.display = 'none';
+        }
+        // НОВОЕ: скрываем кнопку настроек уведомлений для не-хостов
+        if (notificationSettingsBtn) {
+            notificationSettingsBtn.style.display = 'none';
+        }
+    }
+    
+    // Обновляем селектор максимального количества игроков
+    const maxPlayersSelect = document.getElementById('maxPlayersSelect');
+    if (maxPlayersSelect) {
+        maxPlayersSelect.value = gameState.maxPlayers;
+    }
+    
+    // НОВОЕ: обновляем чекбоксы настроек уведомлений
+    updateNotificationCheckboxes();
+}
+
+// НОВАЯ ФУНКЦИЯ: переключение панели настроек уведомлений
+function toggleNotificationSettings() {
+    const panel = document.getElementById('notificationSettingsPanel');
+    const btn = document.getElementById('notificationSettingsBtn');
+    
+    if (!panel || !btn) return;
+    
+    if (panel.style.display === 'none' || panel.style.display === '') {
+        panel.style.display = 'block';
+        btn.classList.add('active');
+        btn.textContent = '⚙️ Скрыть настройки';
+    } else {
+        panel.style.display = 'none';
+        btn.classList.remove('active');
+        btn.textContent = '⚙️ Уведомления';
+    }
+}
+
+// НОВАЯ ФУНКЦИЯ: обновление настроек уведомлений
+function updateNotificationSettings() {
+    if (!gameState.isHost) {
+        return; // Только хост может изменять настройки
+    }
+    
+    const gameStartCheckbox = document.getElementById('notifyGameStart');
+    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
+    const newRoundCheckbox = document.getElementById('notifyNewRound');
+    
+    const settings = {
+        gameStart: gameStartCheckbox ? gameStartCheckbox.checked : false,
+        discussionSkipped: discussionSkippedCheckbox ? discussionSkippedCheckbox.checked : false,
+        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false
+    };
+    
+    console.log('⚙️ Updating notification settings:', settings);
+    socket.emit('update-notification-settings', { settings: settings });
+}
+
+// НОВАЯ ФУНКЦИЯ: обновление чекбоксов настроек уведомлений
+function updateNotificationCheckboxes() {
+    const gameStartCheckbox = document.getElementById('notifyGameStart');
+    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
+    const newRoundCheckbox = document.getElementById('notifyNewRound');
+    
+    if (gameStartCheckbox) {
+        gameStartCheckbox.checked = gameState.notificationSettings.gameStart;
+    }
+    if (discussionSkippedCheckbox) {
+        discussionSkippedCheckbox.checked = gameState.notificationSettings.discussionSkipped;
+    }
+    if (newRoundCheckbox) {
+        newRoundCheckbox.checked = gameState.notificationSettings.newRound;
+    }
+}
 
 // === ФУНКЦИИ ОТОБРАЖЕНИЯ ЭКРАНОВ ===
 
@@ -891,7 +1273,8 @@ function getGameStatusText() {
                         }
                     }
                 } else {
-                    return `Ход игрока: ${currentPlayer.name} (${revealedCards}/${requiredCards})`;
+                    // ИСПРАВЛЕНО: Убираем детальную информацию для других игроков
+                    return `Ход игрока: ${currentPlayer.name}`;
                 }
             }
             return 'Раскрытие характеристик';
@@ -963,8 +1346,9 @@ function createPlayerCard(player) {
     
     const characteristicOrder = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
     
+    // ИСПРАВЛЕНО: Показываем подсказки только для текущего игрока
     let turnInfo = '';
-    if (isCurrentTurn && gameState.gamePhase === 'revelation') {
+    if (isCurrentTurn && gameState.gamePhase === 'revelation' && isCurrentPlayer) {
         const requiredCards = getRequiredCardsForRound(gameState.currentRound);
         const revealedCards = player.cardsRevealedThisRound || 0;
         
@@ -1008,6 +1392,7 @@ function createPlayerCard(player) {
                 const isRevealed = player.revealedCharacteristics && player.revealedCharacteristics.includes(key);
                 const isOwnCard = isCurrentPlayer;
                 
+                // ИСПРАВЛЕНО: Возможность раскрытия только для текущего игрока в его ход
                 let canReveal = false;
                 if (isCurrentPlayer && isCurrentTurn && !isRevealed && gameState.gamePhase === 'revelation') {
                     const requiredCards = getRequiredCardsForRound(gameState.currentRound);
@@ -1248,6 +1633,101 @@ function closeNotificationModal() {
     if (modal) {
         modal.style.display = 'none';
     }
+}
+
+function createPlayerCard(player) {
+    const card = document.createElement('div');
+    const isCurrentPlayer = player.id === gameState.playerId;
+    const isCurrentTurn = player.id === gameState.currentTurnPlayer;
+    const isJustifying = player.id === gameState.currentJustifyingPlayer;
+    
+    card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''} ${isJustifying ? 'justifying' : ''}`;
+    
+    const characteristicOrder = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
+    
+    // ИСПРАВЛЕНО: Показываем подсказки только для текущего игрока
+    let turnInfo = '';
+    if (isCurrentTurn && gameState.gamePhase === 'revelation' && isCurrentPlayer) {
+        const requiredCards = getRequiredCardsForRound(gameState.currentRound);
+        const revealedCards = player.cardsRevealedThisRound || 0;
+        
+        if (gameState.currentRound === 1) {
+            if (revealedCards === 0) {
+                turnInfo = '<div class="turn-info">📋 Раскройте профессию</div>';
+            } else if (revealedCards === 1) {
+                turnInfo = '<div class="turn-info">🎯 Выберите любую характеристику</div>';
+            }
+        } else {
+            if (revealedCards === 0) {
+                turnInfo = '<div class="turn-info">🎯 Выберите любую характеристику</div>';
+            }
+        }
+    }
+    
+    card.innerHTML = `
+        <div class="player-header">
+            <div class="player-info">
+                <div class="player-avatar-container">
+                    <div class="player-avatar ${player.isAlive ? '' : 'eliminated-avatar'}">
+                        ${player.name.charAt(0).toUpperCase()}
+                    </div>
+                </div>
+                <div>
+                    <div class="player-name ${player.isAlive ? '' : 'eliminated-name'}">
+                        ${player.name}${player.isHost ? ' 👑' : ''}
+                    </div>
+                    ${isCurrentPlayer ? '<div class="player-status current">ВЫ</div>' : ''}
+                    ${isCurrentTurn ? '<div class="player-status turn">Ваш ход!</div>' : ''}
+                    ${isJustifying ? '<div class="player-status justifying">🎤 Оправдывается</div>' : ''}
+                    ${turnInfo}
+                </div>
+            </div>
+        </div>
+        
+        <div class="characteristics">
+            ${characteristicOrder.map(key => {
+                if (!player.characteristics || !player.characteristics[key]) return '';
+                
+                const isRevealed = player.revealedCharacteristics && player.revealedCharacteristics.includes(key);
+                const isOwnCard = isCurrentPlayer;
+                
+                // ИСПРАВЛЕНО: Возможность раскрытия только для текущего игрока в его ход
+                let canReveal = false;
+                if (isCurrentPlayer && isCurrentTurn && !isRevealed && gameState.gamePhase === 'revelation') {
+                    const requiredCards = getRequiredCardsForRound(gameState.currentRound);
+                    const revealedCards = player.cardsRevealedThisRound || 0;
+                    
+                    if (revealedCards < requiredCards) {
+                        if (gameState.currentRound === 1) {
+                            if (revealedCards === 0 && key === 'profession') {
+                                canReveal = true;
+                            } else if (revealedCards === 1 && key !== 'profession') {
+                                canReveal = true;
+                            }
+                        } else {
+                            canReveal = true;
+                        }
+                    }
+                }
+                
+                return `<div class="characteristic ${isRevealed ? 'revealed' : (isOwnCard ? 'own-hidden' : 'hidden')} ${canReveal ? 'clickable' : ''}" 
+                    ${canReveal ? `onclick="confirmRevealCharacteristic('${key}')"` : ''}>
+                    <span class="characteristic-name">${translateCharacteristic(key)}:</span>
+                    <span class="characteristic-value ${isOwnCard && !isRevealed ? 'own-characteristic' : ''}">
+                        ${isRevealed ? player.characteristics[key] : (isOwnCard ? player.characteristics[key] : '???')}
+                    </span>
+                </div>`;
+            }).join('')}
+        </div>
+        
+        <div class="player-actions">
+            ${gameState.gamePhase === 'voting' && !isCurrentPlayer && player.isAlive ? 
+                getVotingButtons(player) : ''
+            }
+        </div>
+    `;
+    
+    return card;
 }
 
 // === ИНИЦИАЛИЗАЦИЯ ===
