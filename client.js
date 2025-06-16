@@ -221,6 +221,13 @@ function startRound() {
         return;
     }
     
+    // ДОБАВЛЕНО: немедленно скрываем кнопку для лучшего UX
+    const roundActionsElement = document.getElementById('roundActions');
+    if (roundActionsElement) {
+        roundActionsElement.style.display = 'none';
+    }
+    
+    console.log('🚀 Starting round...');
     socket.emit('start-round');
 }
 
@@ -425,19 +432,17 @@ function updateGameActions() {
     const gameActionsElement = document.getElementById('gameActions');
     const roundActionsElement = document.getElementById('roundActions');
     
-    // ИСПРАВЛЕНО: убираем кнопку из roundActions
+    // ИСПРАВЛЕНО: управляем кнопкой в верхней части
     if (roundActionsElement) {
-        roundActionsElement.style.display = 'none';
+        if (gameState.gamePhase === 'preparation' && gameState.isHost) {
+            roundActionsElement.style.display = 'block';
+        } else {
+            roundActionsElement.style.display = 'none';
+        }
     }
     
-    // Управляем кнопками действий внизу
-    if (gameState.gamePhase === 'preparation' && gameState.isHost) {
-        gameActionsElement.innerHTML = `
-            <button id="startRoundBtn" class="action-btn" onclick="startRound()">
-                🚀 Начать раунд
-            </button>
-        `;
-    } else if (gameState.gamePhase === 'voting') {
+    // Управляем кнопками действий внизу (БЕЗ кнопки начала раунда)
+    if (gameState.gamePhase === 'voting') {
         const alivePlayers = gameState.players.filter(p => p.isAlive);
         const votedPlayers = alivePlayers.filter(p => p.hasVoted);
         

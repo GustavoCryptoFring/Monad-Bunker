@@ -415,7 +415,8 @@ function startPlayerTurn() {
     
     startGameTimer();
     
-    io.to('game-room').emit('player-turn-started', {
+    // ОБНОВЛЕНО: отправляем правильную фазу
+    io.to('game-room').emit('phase-changed', {
         gamePhase: gameRoom.gamePhase,
         currentTurnPlayer: gameRoom.currentTurnPlayer,
         timeLeft: gameRoom.timeLeft,

@@ -65,7 +65,13 @@
                 <div class="round-info">
                     <h2>РАУНД <span id="currentRound">1</span></h2>
                     <p id="gameStatus">Ожидание начала игры...</p>
-                    <!-- УБРАЛИ кнопку отсюда -->
+                    
+                    <!-- ВОЗВРАЩАЕМ кнопку сюда -->
+                    <div class="round-actions" id="roundActions" style="display: none;">
+                        <button id="startRoundBtn" class="start-round-btn" onclick="startRound()">
+                            🚀 Начать раунд
+                        </button>
+                    </div>
                 </div>
                 <div class="timer-info">
                     <div class="phase-display" id="phaseDisplay">Подготовка</div>
@@ -77,9 +83,8 @@
                 <!-- Карточки игроков -->
             </div>
 
-            <!-- КНОПКА ТЕПЕРЬ ЗДЕСЬ -->
             <div class="game-actions" id="gameActions">
-                <!-- Кнопки действий будут добавлены динамически -->
+                <!-- Другие кнопки действий -->
             </div>
         </div>
 
