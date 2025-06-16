@@ -43,7 +43,8 @@ const gameRoom = {
     revealedThisRound: 0,
     currentTurnPlayer: null, // Для фазы раскрытия
     playersWhoRevealed: [], // Кто уже раскрыл в этом раунде
-    totalVotes: 0 // Для досрочного завершения голосования
+    totalVotes: 0, // Для досрочного завершения голосования
+    skipDiscussionVotes: [], // ДОБАВЛЕНО: голоса за пропуск обсуждения
 };
 
 // Socket.IO логика
@@ -391,14 +392,14 @@ io.on('connection', (socket) => {
         });
     });
     
-    // НОВЫЙ обработчик для пропуска обсуждения
-    socket.on('skip-discussion', () => {
-        console.log('⏭️ Skip discussion requested by:', socket.id);
+    // НОВЫЙ обработчик для голосования за пропуск обсуждения
+    socket.on('vote-skip-discussion', () => {
+        console.log('⏭️ Vote to skip discussion from:', socket.id);
         
         const player = gameRoom.players.find(p => p.id === socket.id);
         
-        if (!player || !player.isHost) {
-            socket.emit('error', 'Только хост может пропустить обсуждение!');
+        if (!player || !player.isAlive) {
+            socket.emit('error', 'Вы не можете голосовать!');
             return;
         }
         
@@ -407,10 +408,67 @@ io.on('connection', (socket) => {
             return;
         }
         
-        console.log('⏭️ Skipping discussion phase...');
-        clearInterval(gameRoom.timer);
-        startVotingPhase();
+        if (gameRoom.skipDiscussionVotes.includes(socket.id)) {
+            socket.emit('error', 'Вы уже проголосовали за пропуск!');
+            return;
+        }
+        
+        // Добавляем голос
+        gameRoom.skipDiscussionVotes.push(socket.id);
+        
+        const alivePlayers = gameRoom.players.filter(p => p.isAlive);
+        const requiredVotes = Math.max(2, Math.ceil(alivePlayers.length / 2));
+        const currentVotes = gameRoom.skipDiscussionVotes.length;
+        
+        console.log(`⏭️ Skip votes: ${currentVotes}/${requiredVotes}`);
+        
+        // Отправляем обновление всем игрокам
+        gameRoom.players.forEach(p => {
+            const hasVoted = gameRoom.skipDiscussionVotes.includes(p.id);
+            io.to(p.id).emit('skip-discussion-vote-update', {
+                votes: currentVotes,
+                required: requiredVotes,
+                hasVoted: hasVoted
+            });
+        });
+        
+        // Если достаточно голосов - пропускаем обсуждение
+        if (currentVotes >= requiredVotes) {
+            console.log('⏭️ Skipping discussion - enough votes');
+            clearInterval(gameRoom.timer);
+            gameRoom.skipDiscussionVotes = []; // Сбрасываем голоса
+            
+            // Отправляем уведомление о пропуске
+            io.to('game-room').emit('discussion-skipped', {
+                gamePhase: 'voting',
+                timeLeft: 120,
+                players: gameRoom.players
+            });
+            
+            startVotingPhase();
+        }
     });
+
+    // УБИРАЕМ старый обработчик пропуска только для хоста
+    // socket.on('skip-discussion', () => {
+    //     console.log('⏭️ Skip discussion requested by:', socket.id);
+        
+    //     const player = gameRoom.players.find(p => p.id === socket.id);
+        
+    //     if (!player || !player.isHost) {
+    //         socket.emit('error', 'Только хост может пропустить обсуждение!');
+    //         return;
+    //     }
+        
+    //     if (gameRoom.gamePhase !== 'discussion') {
+    //         socket.emit('error', 'Сейчас не фаза обсуждения!');
+    //         return;
+    //     }
+        
+    //     console.log('⏭️ Skipping discussion phase...');
+    //     clearInterval(gameRoom.timer);
+    //     startVotingPhase();
+    // });
 });
 
 // === НОВЫЕ ФУНКЦИИ УПРАВЛЕНИЯ ФАЗАМИ ===
@@ -493,6 +551,7 @@ function startDiscussionPhase() {
     gameRoom.gamePhase = 'discussion';
     gameRoom.timeLeft = 300; // 5 минут на обсуждение
     gameRoom.currentTurnPlayer = null; // ВАЖНО: убираем текущего игрока
+    gameRoom.skipDiscussionVotes = []; // ДОБАВЛЕНО: сбрасываем голоса за пропуск
     
     startGameTimer();
     
@@ -509,6 +568,7 @@ function startVotingPhase() {
     gameRoom.timeLeft = 120; // 2 минуты на голосование
     gameRoom.votingResults = {};
     gameRoom.totalVotes = 0;
+    gameRoom.skipDiscussionVotes = []; // ДОБАВЛЕНО: сбрасываем голоса за пропуск
     
     // Сбрасываем голоса
     gameRoom.players.forEach(player => {
@@ -675,7 +735,6 @@ function resetGame() {
         player.revealedCharacteristics = []; // СБРАСЫВАЕМ при новой игре
         player.characteristics = null;
         player.actionCards = [];
-        // УБРАЛИ: player.playerNumber = index + 1;
     });
     
     gameRoom.gameState = 'lobby';
@@ -688,6 +747,7 @@ function resetGame() {
     gameRoom.currentTurnPlayer = null;
     gameRoom.playersWhoRevealed = [];
     gameRoom.totalVotes = 0;
+    gameRoom.skipDiscussionVotes = []; // ДОБАВЛЕНО: сбрасываем голоса за пропуск
     
     io.to('game-room').emit('game-reset', {
         players: gameRoom.players,

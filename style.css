@@ -799,6 +799,41 @@ body {
     text-align: center;
 }
 
+/* НОВЫЕ СТИЛИ ДЛЯ ГОЛОСОВАНИЯ ЗА ПРОПУСК ОБСУЖДЕНИЯ */
+.voted-skip {
+    background: linear-gradient(45deg, #2ecc71, #27ae60) !important;
+    cursor: not-allowed !important;
+}
+
+.voted-skip:hover {
+    background: linear-gradient(45deg, #2ecc71, #27ae60) !important;
+    transform: none !important;
+}
+
+.skip-votes-info {
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #f39c12;
+    font-weight: bold;
+    text-align: center;
+    padding: 5px 10px;
+    background: rgba(44, 62, 80, 0.6);
+    border-radius: 8px;
+    border: 1px solid rgba(243, 156, 18, 0.3);
+}
+
+/* ИСПРАВЛЕНИЕ СТИЛЕЙ ДЛЯ КНОПОК ГОЛОСОВАНИЯ */
+.vote-player-btn:disabled {
+    background: #7f8c8d !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+}
+
+.vote-player-btn:disabled:hover {
+    background: #7f8c8d !important;
+    transform: none !important;
+}
+
 /* АДАПТИВНОСТЬ */
 @media (max-width: 1200px) {
     .players-grid.players-8,

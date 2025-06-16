@@ -451,19 +451,28 @@ function updateGameActions() {
     // Управляем кнопками в верхней части
     if (roundActionsElement) {
         if (gameState.gamePhase === 'preparation' && gameState.isHost) {
-            // Кнопка "Начать раунд" в фазе подготовки
+            // Кнопка "Начать раунд" в фазе подготовки только для хоста
             roundActionsElement.innerHTML = `
                 <button id="startRoundBtn" class="start-round-btn" onclick="startRound()">
                     🚀 Начать раунд
                 </button>
             `;
             roundActionsElement.style.display = 'block';
-        } else if (gameState.gamePhase === 'discussion' && gameState.isHost) {
-            // Кнопка "Пропустить обсуждение" в фазе обсуждения
+        } else if (gameState.gamePhase === 'discussion') {
+            // ИСПРАВЛЕНО: Кнопка "Пропустить обсуждение" для ВСЕХ игроков
+            const alivePlayers = gameState.players.filter(p => p.isAlive);
+            const skipVotes = gameState.skipDiscussionVotes || 0;
+            const requiredVotes = Math.max(2, Math.ceil(alivePlayers.length / 2));
+            const hasVotedToSkip = gameState.mySkipVote || false;
+            
             roundActionsElement.innerHTML = `
-                <button id="skipDiscussionBtn" class="start-round-btn" onclick="skipDiscussion()">
-                    ⏭️ Пропустить обсуждение
+                <button id="skipDiscussionBtn" class="start-round-btn ${hasVotedToSkip ? 'voted-skip' : ''}" 
+                        onclick="voteToSkipDiscussion()" ${hasVotedToSkip ? 'disabled' : ''}>
+                    ${hasVotedToSkip ? '✅ Голос подан' : '⏭️ Пропустить обсуждение'}
                 </button>
+                <div class="skip-votes-info">
+                    Голосов за пропуск: ${skipVotes}/${requiredVotes}
+                </div>
             `;
             roundActionsElement.style.display = 'block';
         } else {
@@ -471,7 +480,7 @@ function updateGameActions() {
         }
     }
     
-    // УБИРАЕМ все кнопки внизу экрана
+    // Кнопки внизу только для голосования
     if (gameState.gamePhase === 'voting') {
         const alivePlayers = gameState.players.filter(p => p.isAlive);
         const votedPlayers = alivePlayers.filter(p => p.hasVoted);
@@ -482,34 +491,40 @@ function updateGameActions() {
             </div>
         `;
     } else {
-        // УБРАНО: кнопки "Пропустить фазу" и "Карты действий"
         gameActionsElement.innerHTML = '';
     }
 }
 
-// НОВАЯ функция для пропуска обсуждения
-function skipDiscussion() {
-    if (!gameState.isHost) {
-        showNotification('Ошибка', 'Только хост может пропустить обсуждение');
-        return;
-    }
-    
+// НОВАЯ функция для голосования за пропуск обсуждения
+function voteToSkipDiscussion() {
     if (gameState.gamePhase !== 'discussion') {
         showNotification('Ошибка', 'Сейчас не фаза обсуждения');
         return;
     }
     
-    console.log('⏭️ Skipping discussion...');
-    socket.emit('skip-discussion');
+    if (gameState.mySkipVote) {
+        showNotification('Ошибка', 'Вы уже проголосовали за пропуск');
+        return;
+    }
+    
+    console.log('⏭️ Voting to skip discussion...');
+    socket.emit('vote-skip-discussion');
 }
 
-// УБИРАЕМ старые заглушки
-// function voteToSkip() {
-//     showNotification('Информация', 'Функция пропуска фазы пока не реализована');
-// }
-
-// function showActionCard() {
-//     showNotification('Информация', 'Карты действий пока не реализованы');
+// УБИРАЕМ старую функцию пропуска только для хоста
+// function skipDiscussion() {
+//     if (!gameState.isHost) {
+//         showNotification('Ошибка', 'Только хост может пропустить обсуждение');
+//         return;
+//     }
+    
+//     if (gameState.gamePhase !== 'discussion') {
+//         showNotification('Ошибка', 'Сейчас не фаза обсуждения');
+//         return;
+//     }
+    
+//     console.log('⏭️ Skipping discussion...');
+//     socket.emit('skip-discussion');
 // }
 
 // Функции для модальных окон
@@ -556,6 +571,7 @@ function updatePlayersGrid() {
     });
 }
 
+// ИСПРАВЛЕНО: функция создания карточки игрока - исправляем баг с голосованием хоста
 function createPlayerCard(player) {
     const card = document.createElement('div');
     const isCurrentPlayer = player.id === gameState.playerId;
@@ -605,9 +621,11 @@ function createPlayerCard(player) {
         </div>
         
         <div class="player-actions">
-            ${gameState.gamePhase === 'voting' && !isCurrentPlayer && player.isAlive && !player.hasVoted ? 
+            ${gameState.gamePhase === 'voting' && !isCurrentPlayer && player.isAlive ? 
                 `<div class="vote-section">
-                    <button class="vote-player-btn ${gameState.myVote === player.id ? 'voted' : ''}" onclick="voteForPlayer('${player.id}')">
+                    <button class="vote-player-btn ${gameState.myVote === player.id ? 'voted' : ''}" 
+                            onclick="voteForPlayer('${player.id}')" 
+                            ${gameState.myVote ? 'disabled' : ''}>
                         ${gameState.myVote === player.id ? '✅ Проголосовано' : '📋 Голосовать'}
                     </button>
                     <div class="voters-list">
@@ -715,3 +733,44 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 console.log('🎮 Bunker Game Client Loaded');
+
+// НОВЫЕ обработчики для пропуска обсуждения
+socket.on('skip-discussion-vote-update', function(data) {
+    console.log('⏭️ Skip discussion vote update:', data);
+    gameState.skipDiscussionVotes = data.votes;
+    gameState.mySkipVote = data.hasVoted;
+    updateGameActions();
+});
+
+socket.on('discussion-skipped', function(data) {
+    console.log('⏭️ Discussion skipped:', data);
+    gameState.gamePhase = data.gamePhase;
+    gameState.timeLeft = data.timeLeft;
+    gameState.players = data.players;
+    gameState.skipDiscussionVotes = 0;
+    gameState.mySkipVote = false;
+    updateGameDisplay();
+    showNotification('Обсуждение пропущено', 'Достаточно игроков проголосовало за пропуск обсуждения');
+});
+
+// ИСПРАВЛЕНО: сброс состояния голосования при смене фазы
+socket.on('phase-changed', function(data) {
+    console.log('🔄 Phase changed:', data);
+    gameState.gamePhase = data.gamePhase;
+    gameState.timeLeft = data.timeLeft;
+    gameState.players = data.players;
+    gameState.currentTurnPlayer = data.currentTurnPlayer || null;
+    
+    // ДОБАВЛЕНО: сброс голосования за пропуск при смене фазы
+    if (data.gamePhase !== 'discussion') {
+        gameState.skipDiscussionVotes = 0;
+        gameState.mySkipVote = false;
+    }
+    
+    // ДОБАВЛЕНО: сброс голосования за игроков при смене фазы
+    if (data.gamePhase !== 'voting') {
+        gameState.myVote = null;
+    }
+    
+    updateGameDisplay();
+});
