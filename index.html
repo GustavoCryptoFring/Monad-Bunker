@@ -44,6 +44,25 @@
                     </label>
                 </div>
                 
+                <!-- НОВЫЕ НАСТРОЙКИ УВЕДОМЛЕНИЙ -->
+                <div class="room-settings" id="notificationSettings" style="display: none;">
+                    <h4>⚙️ Настройки уведомлений</h4>
+                    <div class="notification-options">
+                        <label class="notification-checkbox">
+                            <input type="checkbox" id="notifyGameStart" onchange="updateNotificationSettings()">
+                            <span>🚀 Уведомление о начале игры</span>
+                        </label>
+                        <label class="notification-checkbox">
+                            <input type="checkbox" id="notifyDiscussionSkipped" onchange="updateNotificationSettings()">
+                            <span>⏭️ Уведомление о пропуске обсуждения</span>
+                        </label>
+                        <label class="notification-checkbox">
+                            <input type="checkbox" id="notifyNewRound" onchange="updateNotificationSettings()">
+                            <span>🔄 Уведомление о новых раундах</span>
+                        </label>
+                    </div>
+                </div>
+                
                 <div class="players-waiting">
                     <h3>Игроки в лобби (<span id="currentPlayersCount">0</span>/<span id="maxPlayersCount">12</span>):</h3>
                     <ul id="playersList"></ul>

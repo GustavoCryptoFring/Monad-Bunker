@@ -21,7 +21,13 @@ let gameState = {
     cardsRevealedThisRound: 0,
     requiredCardsThisRound: 1,
     skipDiscussionVotes: 0,
-    mySkipVote: false
+    mySkipVote: false,
+    // НОВЫЕ НАСТРОЙКИ УВЕДОМЛЕНИЙ
+    notificationSettings: {
+        gameStart: false,
+        discussionSkipped: false,
+        newRound: false
+    }
 };
 
 // Socket.IO подключение
@@ -54,6 +60,11 @@ socket.on('room-state', function(data) {
     gameState.timeLeft = data.timeLeft || 0;
     gameState.currentTurnPlayer = data.currentTurnPlayer || null;
     gameState.maxPlayers = data.maxPlayers || 8;
+    gameState.notificationSettings = data.notificationSettings || { // НОВОЕ
+        gameStart: false,
+        discussionSkipped: false,
+        newRound: false
+    };
     
     // Если мы уже в игре, показываем соответствующий экран
     if (gameState.playerId && gameState.serverGameState === 'lobby') {
@@ -69,6 +80,11 @@ socket.on('join-confirmed', function(data) {
     gameState.playerName = data.playerName;
     gameState.isHost = data.isHost;
     gameState.maxPlayers = data.maxPlayers;
+    gameState.notificationSettings = data.notificationSettings || { // НОВОЕ
+        gameStart: false,
+        discussionSkipped: false,
+        newRound: false
+    };
     gameState.gamePhase = 'lobby';
     showLobbyScreen();
 });
@@ -109,7 +125,10 @@ socket.on('game-started', function(data) {
     gameState.timeLeft = data.timeLeft;
     showGameScreen();
     
-    showNotification('Игра началась!', 'Характеристики розданы. Подготовьтесь к первому раунду.');
+    // УСЛОВНОЕ УВЕДОМЛЕНИЕ О НАЧАЛЕ ИГРЫ
+    if (gameState.notificationSettings.gameStart) {
+        showNotification('Игра началась!', 'Характеристики розданы. Подготовьтесь к первому раунду.');
+    }
 });
 
 socket.on('game-reset', function(data) {
@@ -217,7 +236,11 @@ socket.on('discussion-skipped', function(data) {
     gameState.skipDiscussionVotes = 0;
     gameState.mySkipVote = false;
     updateGameDisplay();
-    showNotification('Обсуждение пропущено', 'Достаточно игроков проголосовало за пропуск обсуждения');
+    
+    // УСЛОВНОЕ УВЕДОМЛЕНИЕ О ПРОПУСКЕ ОБСУЖДЕНИЯ
+    if (gameState.notificationSettings.discussionSkipped) {
+        showNotification('Обсуждение пропущено', 'Достаточно игроков проголосовало за пропуск обсуждения');
+    }
 });
 
 socket.on('round-results', function(data) {
@@ -241,7 +264,10 @@ socket.on('new-round', function(data) {
     gameState.players = data.players;
     updateGameDisplay();
     
-    showNotification(`Раунд ${data.currentRound}`, 'Новый раунд начинается!');
+    // УСЛОВНОЕ УВЕДОМЛЕНИЕ О НОВОМ РАУНДЕ
+    if (gameState.notificationSettings.newRound) {
+        showNotification(`Раунд ${data.currentRound}`, 'Новый раунд начинается!');
+    }
 });
 
 socket.on('game-ended', function(data) {
@@ -263,6 +289,12 @@ socket.on('player-surrendered', function(data) {
     const message = isMe ? 'Вы сдались и покинули игру.' : `${data.surrenderedPlayer} сдался и покинул игру.`;
     
     showNotification('Игрок сдался', message);
+});
+
+socket.on('notification-settings-updated', function(data) {
+    console.log('⚙️ Notification settings updated:', data);
+    gameState.notificationSettings = data.settings;
+    updateNotificationCheckboxes();
 });
 
 // === ФУНКЦИИ ОТОБРАЖЕНИЯ ЭКРАНОВ ===
@@ -319,6 +351,7 @@ function updateLobbyDisplay() {
     const startGameBtn = document.getElementById('startGameBtn');
     const waitingInfo = document.getElementById('waitingInfo');
     const maxPlayersSelector = document.getElementById('maxPlayersSelector');
+    const notificationSettings = document.getElementById('notificationSettings'); // НОВОЕ
     
     if (currentPlayersCount) {
         currentPlayersCount.textContent = gameState.players.length;
@@ -339,7 +372,7 @@ function updateLobbyDisplay() {
         });
     }
     
-    // Показываем/скрываем кнопку старта и селектор
+    // Показываем/скрываем кнопку старта и селекторы
     if (gameState.isHost) {
         if (startGameBtn) {
             startGameBtn.style.display = 'block';
@@ -351,6 +384,10 @@ function updateLobbyDisplay() {
         if (maxPlayersSelector) {
             maxPlayersSelector.style.display = 'block';
         }
+        // НОВОЕ: показываем настройки уведомлений для хоста
+        if (notificationSettings) {
+            notificationSettings.style.display = 'block';
+        }
     } else {
         if (startGameBtn) {
             startGameBtn.style.display = 'none';
@@ -361,6 +398,10 @@ function updateLobbyDisplay() {
         if (maxPlayersSelector) {
             maxPlayersSelector.style.display = 'none';
         }
+        // НОВОЕ: скрываем настройки уведомлений для не-хостов
+        if (notificationSettings) {
+            notificationSettings.style.display = 'none';
+        }
     }
     
     // Обновляем селектор максимального количества игроков
@@ -368,6 +409,46 @@ function updateLobbyDisplay() {
     if (maxPlayersSelect) {
         maxPlayersSelect.value = gameState.maxPlayers;
     }
+    
+    // НОВОЕ: обновляем чекбоксы настроек уведомлений
+    updateNotificationCheckboxes();
+}
+
+// НОВАЯ ФУНКЦИЯ: обновление чекбоксов настроек уведомлений
+function updateNotificationCheckboxes() {
+    const gameStartCheckbox = document.getElementById('notifyGameStart');
+    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
+    const newRoundCheckbox = document.getElementById('notifyNewRound');
+    
+    if (gameStartCheckbox) {
+        gameStartCheckbox.checked = gameState.notificationSettings.gameStart;
+    }
+    if (discussionSkippedCheckbox) {
+        discussionSkippedCheckbox.checked = gameState.notificationSettings.discussionSkipped;
+    }
+    if (newRoundCheckbox) {
+        newRoundCheckbox.checked = gameState.notificationSettings.newRound;
+    }
+}
+
+// НОВАЯ ФУНКЦИЯ: обновление настроек уведомлений
+function updateNotificationSettings() {
+    if (!gameState.isHost) {
+        return; // Только хост может изменять настройки
+    }
+    
+    const gameStartCheckbox = document.getElementById('notifyGameStart');
+    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
+    const newRoundCheckbox = document.getElementById('notifyNewRound');
+    
+    const settings = {
+        gameStart: gameStartCheckbox ? gameStartCheckbox.checked : false,
+        discussionSkipped: discussionSkippedCheckbox ? discussionSkippedCheckbox.checked : false,
+        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false
+    };
+    
+    console.log('⚙️ Updating notification settings:', settings);
+    socket.emit('update-notification-settings', { settings: settings });
 }
 
 // === ОСНОВНЫЕ ФУНКЦИИ ИГРЫ ===

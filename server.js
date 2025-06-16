@@ -50,6 +50,12 @@ const gameRoom = {
     currentJustifyingPlayer: null, // Текущий оправдывающийся игрок
     justificationPhase: 1, // Номер фазы оправдания (может быть несколько раундов)
     canChangeVote: {}, // Отслеживание возможности смены голоса для каждого игрока
+    // НОВЫЕ НАСТРОЙКИ УВЕДОМЛЕНИЙ
+    notificationSettings: {
+        gameStart: false,
+        discussionSkipped: false,
+        newRound: false
+    }
 };
 
 // Socket.IO логика
@@ -64,7 +70,8 @@ io.on('connection', (socket) => {
         currentRound: gameRoom.currentRound,
         timeLeft: gameRoom.timeLeft,
         currentTurnPlayer: gameRoom.currentTurnPlayer,
-        maxPlayers: gameRoom.maxPlayers // ДОБАВЛЕНО
+        maxPlayers: gameRoom.maxPlayers,
+        notificationSettings: gameRoom.notificationSettings // НОВОЕ
     });
     
     socket.on('join-game', (data) => {
@@ -110,7 +117,8 @@ io.on('connection', (socket) => {
             playerId: socket.id,
             playerName: data.playerName,
             isHost: newPlayer.isHost,
-            maxPlayers: gameRoom.maxPlayers // ДОБАВЛЕНО
+            maxPlayers: gameRoom.maxPlayers,
+            notificationSettings: gameRoom.notificationSettings // НОВОЕ
         });
         
         // Отправляем обновление всем игрокам
@@ -118,7 +126,8 @@ io.on('connection', (socket) => {
             players: gameRoom.players,
             newPlayer: data.playerName,
             gameState: gameRoom.gameState,
-            maxPlayers: gameRoom.maxPlayers
+            maxPlayers: gameRoom.maxPlayers,
+            notificationSettings: gameRoom.notificationSettings // НОВОЕ
         });
     });
     
@@ -477,7 +486,8 @@ io.on('connection', (socket) => {
             io.to('game-room').emit('discussion-skipped', {
                 gamePhase: 'voting',
                 timeLeft: 120,
-                players: gameRoom.players
+                players: gameRoom.players,
+                notificationSettings: gameRoom.notificationSettings // НОВОЕ
             });
             
             startVotingPhase();
@@ -926,7 +936,8 @@ function nextRound() {
         currentRound: gameRoom.currentRound,
         gamePhase: gameRoom.gamePhase,
         timeLeft: gameRoom.timeLeft,
-        players: gameRoom.players
+        players: gameRoom.players,
+        notificationSettings: gameRoom.notificationSettings // НОВОЕ
     });
 }
 
@@ -987,10 +998,17 @@ function resetGame() {
     gameRoom.justificationQueue = [];
     gameRoom.currentJustifyingPlayer = null;
     gameRoom.canChangeVote = {};
+    // СБРАСЫВАЕМ НАСТРОЙКИ УВЕДОМЛЕНИЙ К ЗНАЧЕНИЯМ ПО УМОЛЧАНИЮ
+    gameRoom.notificationSettings = {
+        gameStart: false,
+        discussionSkipped: false,
+        newRound: false
+    };
     
     io.to('game-room').emit('game-reset', {
         players: gameRoom.players,
-        gameState: gameRoom.gameState
+        gameState: gameRoom.gameState,
+        notificationSettings: gameRoom.notificationSettings // НОВОЕ
     });
 }
 

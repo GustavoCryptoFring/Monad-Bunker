@@ -153,26 +153,53 @@ body {
     border: 2px solid rgba(243, 156, 18, 0.3);
 }
 
-.room-settings label {
-    font-size: 1.1em;
+.room-settings h4 {
+    color: #f39c12;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+}
+
+.notification-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.notification-checkbox {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: background-color 0.3s ease;
+    width: 100%;
+    text-align: left;
+}
+
+.notification-checkbox:hover {
+    background: rgba(52, 152, 219, 0.1);
+}
+
+.notification-checkbox input[type="checkbox"] {
+    margin-right: 12px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #f39c12;
+}
+
+.notification-checkbox span {
+    color: #ecf0f1;
+    font-size: 1em;
+    user-select: none;
+}
+
+.notification-checkbox input[type="checkbox"]:checked + span {
     color: #f39c12;
     font-weight: bold;
-}
-
-.room-settings select {
-    margin-left: 10px;
-    padding: 8px 12px;
-    border: none;
-    border-radius: 5px;
-    font-size: 1em;
-    background: white;
-    color: #2c3e50;
-    font-weight: bold;
-    cursor: pointer;
-}
-
-.room-settings select:focus {
-    outline: 2px solid #f39c12;
 }
 
 .players-waiting {
