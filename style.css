@@ -557,6 +557,7 @@ body {
     border-radius: 8px;
     font-size: 0.95em;
     transition: all 0.3s ease;
+    position: relative;
 }
 
 .characteristic.revealed {
@@ -572,6 +573,46 @@ body {
 .characteristic.hidden {
     background: rgba(149, 165, 166, 0.2);
     border-left: 4px solid #95a5a6;
+}
+
+/* НОВЫЕ СТИЛИ ДЛЯ КЛИКАБЕЛЬНЫХ ХАРАКТЕРИСТИК */
+.characteristic.clickable {
+    cursor: pointer;
+    border: 2px solid rgba(231, 76, 60, 0.6);
+    background: rgba(231, 76, 60, 0.1);
+    animation: pulse-clickable 2s infinite;
+}
+
+.characteristic.clickable:hover {
+    background: rgba(231, 76, 60, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+}
+
+@keyframes pulse-clickable {
+    0% { 
+        border-color: rgba(231, 76, 60, 0.6);
+        background: rgba(231, 76, 60, 0.1);
+    }
+    50% { 
+        border-color: rgba(231, 76, 60, 0.9);
+        background: rgba(231, 76, 60, 0.2);
+    }
+    100% { 
+        border-color: rgba(231, 76, 60, 0.6);
+        background: rgba(231, 76, 60, 0.1);
+    }
+}
+
+.reveal-hint {
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.7em;
+    color: #e74c3c;
+    font-weight: bold;
+    opacity: 0.8;
 }
 
 .characteristic-name {
@@ -592,87 +633,34 @@ body {
     font-weight: bold;
 }
 
-/* СТИЛИ ДЛЯ ДЕЙСТВИЙ ИГРОКОВ */
-.player-actions {
-    margin-top: auto;
+/* СТИЛИ ДЛЯ НОВОГО МОДАЛЬНОГО ОКНА ПОДТВЕРЖДЕНИЯ */
+.reveal-confirmation {
+    background: rgba(44, 62, 80, 0.6);
+    padding: 15px 20px;
+    border-radius: 10px;
+    margin: 20px 0;
+    border-left: 4px solid #f39c12;
+    font-size: 1.1em;
 }
 
-.vote-section {
-    text-align: center;
+.reveal-confirmation strong {
+    color: #f39c12;
 }
 
-.vote-player-btn {
-    background: #e74c3c;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-size: 0.9em;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    width: 100%;
-    margin-bottom: 8px;
-}
-
-.vote-player-btn:hover {
-    background: #c0392b;
-    transform: translateY(-2px);
-}
-
-.vote-player-btn.voted {
-    background: #2ecc71;
-    cursor: not-allowed;
-}
-
-.vote-player-btn.voted:hover {
-    background: #2ecc71;
-    transform: none;
-}
-
-.voters-list {
-    font-size: 0.8em;
-    color: #bdc3c7;
-    text-align: center;
-}
-
-/* СТИЛИ ДЛЯ ДЕЙСТВИЙ ИГРЫ */
-.game-actions {
-    text-align: center;
-    padding: 20px;
-    background: rgba(52, 73, 94, 0.6);
-    border-radius: 15px;
+.modal-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
     margin-top: 20px;
 }
 
-.action-btn {
-    background: #3498db;
-    color: white;
-    border: none;
-    padding: 12px 25px;
-    margin: 0 10px;
-    border-radius: 8px;
-    font-size: 1em;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.3s ease;
+.confirm-btn {
+    background: #e74c3c !important;
+    color: white !important;
 }
 
-.action-btn:hover:not(:disabled) {
-    background: #2980b9;
-    transform: translateY(-2px);
-}
-
-.action-btn:disabled {
-    background: #7f8c8d;
-    cursor: not-allowed;
-    transform: none;
-}
-
-.vote-progress {
-    font-size: 1.2em;
-    color: #f39c12;
-    font-weight: bold;
+.confirm-btn:hover {
+    background: #c0392b !important;
 }
 
 /* МОДАЛЬНЫЕ ОКНА */

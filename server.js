@@ -415,13 +415,15 @@ function startPlayerTurn() {
     
     startGameTimer();
     
-    // ОБНОВЛЕНО: отправляем правильную фазу
+    // ИСПРАВЛЕНО: отправляем правильные данные о ходе
     io.to('game-room').emit('phase-changed', {
         gamePhase: gameRoom.gamePhase,
-        currentTurnPlayer: gameRoom.currentTurnPlayer,
+        currentTurnPlayer: gameRoom.currentTurnPlayer, // ВАЖНО: передаем текущего игрока
         timeLeft: gameRoom.timeLeft,
         players: gameRoom.players
     });
+    
+    console.log(`🎯 Player turn: ${gameRoom.currentTurnPlayer}, time: ${gameRoom.timeLeft}s`);
 }
 
 function nextPlayerTurn() {
@@ -447,6 +449,7 @@ function nextPlayerTurn() {
             const nextPlayer = alivePlayers.find(p => !p.hasRevealed);
             if (nextPlayer) {
                 gameRoom.currentTurnPlayer = nextPlayer.id;
+                console.log(`🔄 Continuing with player: ${nextPlayer.name}`);
                 startPlayerTurn();
             } else {
                 startDiscussionPhase();
@@ -455,6 +458,7 @@ function nextPlayerTurn() {
     } else {
         // Следующий игрок
         gameRoom.currentTurnPlayer = alivePlayers[nextIndex].id;
+        console.log(`➡️ Next player: ${alivePlayers[nextIndex].name}`);
         startPlayerTurn();
     }
 }
@@ -464,13 +468,14 @@ function startDiscussionPhase() {
     
     gameRoom.gamePhase = 'discussion';
     gameRoom.timeLeft = 300; // 5 минут на обсуждение
-    gameRoom.currentTurnPlayer = null;
+    gameRoom.currentTurnPlayer = null; // ВАЖНО: убираем текущего игрока
     
     startGameTimer();
     
     io.to('game-room').emit('phase-changed', {
         gamePhase: gameRoom.gamePhase,
         timeLeft: gameRoom.timeLeft,
+        currentTurnPlayer: null, // ВАЖНО: передаем null
         players: gameRoom.players
     });
 }

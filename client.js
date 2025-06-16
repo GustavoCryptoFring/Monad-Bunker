@@ -103,7 +103,7 @@ socket.on('phase-changed', function(data) {
     gameState.gamePhase = data.gamePhase;
     gameState.timeLeft = data.timeLeft;
     gameState.players = data.players;
-    gameState.currentTurnPlayer = null;
+    gameState.currentTurnPlayer = data.currentTurnPlayer || null; // ИСПРАВЛЕНО: сохраняем currentTurnPlayer
     updateGameDisplay();
 });
 
@@ -525,22 +525,20 @@ function createPlayerCard(player) {
                 // ИСПРАВЛЕНО: логика раскрытия характеристик
                 const isRevealed = player.revealedCharacteristics && player.revealedCharacteristics.includes(key);
                 const isOwnCard = isCurrentPlayer;
+                const canReveal = isCurrentTurn && !isRevealed && gameState.gamePhase === 'revelation';
                 
-                return `<div class="characteristic ${isRevealed ? 'revealed' : (isOwnCard ? 'own-hidden' : 'hidden')}">
+                return `<div class="characteristic ${isRevealed ? 'revealed' : (isOwnCard ? 'own-hidden' : 'hidden')} ${canReveal ? 'clickable' : ''}" 
+                    ${canReveal ? `onclick="confirmRevealCharacteristic('${key}')"` : ''}>
                     <span class="characteristic-name">${translateCharacteristic(key)}:</span>
                     <span class="characteristic-value ${isOwnCard && !isRevealed ? 'own-characteristic' : ''}">
                         ${isRevealed ? player.characteristics[key] : (isOwnCard ? player.characteristics[key] : '???')}
                     </span>
+                    ${canReveal ? '<div class="reveal-hint">Нажмите для раскрытия</div>' : ''}
                 </div>`;
             }).join('')}
         </div>
         
         <div class="player-actions">
-            ${gameState.gamePhase === 'revelation' && isCurrentTurn && !player.hasRevealed ? 
-                `<button class="room-btn" onclick="openCharacteristicModal()">
-                    🔍 Раскрыть характеристику
-                </button>` : ''
-            }
             ${gameState.gamePhase === 'voting' && !isCurrentPlayer && player.isAlive && !player.hasVoted ? 
                 `<div class="vote-section">
                     <button class="vote-player-btn ${gameState.myVote === player.id ? 'voted' : ''}" onclick="voteForPlayer('${player.id}')">
@@ -570,100 +568,34 @@ function translateCharacteristic(key) {
     return translations[key] || key;
 }
 
-// ИСПРАВЛЕНО: модальное окно с учетом правил раскрытия
-function openCharacteristicModal() {
+// НОВАЯ функция подтверждения раскрытия характеристики
+function confirmRevealCharacteristic(characteristic) {
     const player = gameState.players.find(p => p.id === gameState.playerId);
     if (!player || !player.characteristics) return;
     
-    const modal = document.getElementById('characteristicModal');
-    const options = document.getElementById('characteristicOptions');
+    const characteristicName = translateCharacteristic(characteristic);
+    const characteristicValue = player.characteristics[characteristic];
     
-    options.innerHTML = '';
+    // Показываем модальное окно подтверждения
+    document.getElementById('confirmCharacteristicName').textContent = characteristicName;
+    document.getElementById('confirmCharacteristicValue').textContent = characteristicValue;
+    document.getElementById('confirmRevealModal').style.display = 'flex';
     
-    // НОВАЯ ЛОГИКА: определяем что можно раскрыть
-    const revealedCount = player.revealedCharacteristics ? player.revealedCharacteristics.length : 0;
-    const isProfessionRevealed = player.revealedCharacteristics && player.revealedCharacteristics.includes('profession');
-    
-    // В первом раунде обязательно профессия + 1 любая
-    if (gameState.currentRound === 1) {
-        if (revealedCount === 0) {
-            // Первое раскрытие - только профессия
-            const button = document.createElement('button');
-            button.className = 'room-btn';
-            button.textContent = `${translateCharacteristic('profession')}: ${player.characteristics['profession']}`;
-            button.onclick = () => revealCharacteristic('profession');
-            options.appendChild(button);
-        } else if (revealedCount === 1 && isProfessionRevealed) {
-            // Второе раскрытие в первом раунде - любая кроме профессии
-            Object.keys(player.characteristics).forEach(key => {
-                if (key !== 'profession' && (!player.revealedCharacteristics.includes(key))) {
-                    const button = document.createElement('button');
-                    button.className = 'room-btn';
-                    button.textContent = `${translateCharacteristic(key)}: ${player.characteristics[key]}`;
-                    button.onclick = () => revealCharacteristic(key);
-                    options.appendChild(button);
-                }
-            });
-        }
-    } else {
-        // В последующих раундах - по 1 любой нераскрытой
-        Object.keys(player.characteristics).forEach(key => {
-            if (!player.revealedCharacteristics.includes(key)) {
-                const button = document.createElement('button');
-                button.className = 'room-btn';
-                button.textContent = `${translateCharacteristic(key)}: ${player.characteristics[key]}`;
-                button.onclick = () => revealCharacteristic(key);
-                options.appendChild(button);
-            }
-        });
+    // Сохраняем характеристику для раскрытия
+    window.characteristicToReveal = characteristic;
+}
+
+function confirmReveal() {
+    if (window.characteristicToReveal) {
+        socket.emit('reveal-characteristic', { characteristic: window.characteristicToReveal });
+        document.getElementById('confirmRevealModal').style.display = 'none';
+        window.characteristicToReveal = null;
     }
-    
-    if (options.children.length === 0) {
-        options.innerHTML = '<p>Нет доступных характеристик для раскрытия</p>';
-    }
-    
-    modal.style.display = 'flex';
 }
 
-function closeCharacteristicModal() {
-    document.getElementById('characteristicModal').style.display = 'none';
-}
-
-function revealCharacteristic(characteristic) {
-    socket.emit('reveal-characteristic', { characteristic });
-    closeCharacteristicModal();
-}
-
-function voteForPlayer(playerId) {
-    if (gameState.gamePhase !== 'voting') return;
-    
-    const myPlayer = gameState.players.find(p => p.id === gameState.playerId);
-    if (myPlayer && myPlayer.hasVoted) {
-        showNotification('Ошибка', 'Вы уже проголосовали!');
-        return;
-    }
-    
-    gameState.myVote = playerId;
-    socket.emit('vote-player', { targetId: playerId });
-}
-
-function showNotification(title, message) {
-    document.getElementById('notificationTitle').textContent = title;
-    document.getElementById('notificationMessage').textContent = message;
-    document.getElementById('notificationModal').style.display = 'flex';
-}
-
-function closeNotificationModal() {
-    document.getElementById('notificationModal').style.display = 'none';
-}
-
-// Заглушки для дополнительных функций
-function voteToSkip() {
-    console.log('Vote to skip phase');
-}
-
-function showActionCard() {
-    console.log('Show action cards');
+function cancelReveal() {
+    document.getElementById('confirmRevealModal').style.display = 'none';
+    window.characteristicToReveal = null;
 }
 
 // Обработчик нажатия Enter в поле ввода имени
