@@ -755,6 +755,50 @@ body {
     transform: translateY(-2px);
 }
 
+/* СТИЛИ ДЛЯ ДЕЙСТВИЙ ИГРОКОВ */
+.player-actions {
+    margin-top: auto;
+}
+
+.vote-section {
+    text-align: center;
+}
+
+.vote-player-btn {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.9em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.vote-player-btn:hover {
+    background: #c0392b;
+    transform: translateY(-2px);
+}
+
+.vote-player-btn.voted {
+    background: #2ecc71;
+    cursor: not-allowed;
+}
+
+.vote-player-btn.voted:hover {
+    background: #2ecc71;
+    transform: none;
+}
+
+.voters-list {
+    font-size: 0.8em;
+    color: #bdc3c7;
+    text-align: center;
+}
+
 /* АДАПТИВНОСТЬ */
 @media (max-width: 1200px) {
     .players-grid.players-8,
