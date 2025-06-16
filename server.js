@@ -34,13 +34,16 @@ const gameRoom = {
     players: [],
     gameState: 'lobby', // lobby, playing, finished
     maxPlayers: 12,
-    gamePhase: 'waiting', // waiting, discussion, voting, results
+    gamePhase: 'waiting', // waiting, preparation, revelation, discussion, voting, results
     currentRound: 1,
     maxRounds: 3,
     timer: null,
     timeLeft: 0,
     votingResults: {},
-    revealedThisRound: 0
+    revealedThisRound: 0,
+    currentTurnPlayer: null, // Для фазы раскрытия
+    playersWhoRevealed: [], // Кто уже раскрыл в этом раунде
+    totalVotes: 0 // Для досрочного завершения голосования
 };
 
 // Socket.IO логика
@@ -53,7 +56,8 @@ io.on('connection', (socket) => {
         gameState: gameRoom.gameState,
         gamePhase: gameRoom.gamePhase,
         currentRound: gameRoom.currentRound,
-        timeLeft: gameRoom.timeLeft
+        timeLeft: gameRoom.timeLeft,
+        currentTurnPlayer: gameRoom.currentTurnPlayer
     });
     
     socket.on('join-game', (data) => {
@@ -82,7 +86,8 @@ io.on('connection', (socket) => {
             votes: 0,
             hasRevealed: false,
             characteristics: null, // Будут созданы при старте игры
-            actionCards: []
+            actionCards: [],
+            hasVoted: false // Отслеживаем голосование
         };
         
         gameRoom.players.push(newPlayer);
@@ -95,7 +100,7 @@ io.on('connection', (socket) => {
             players: gameRoom.players,
             newPlayer: data.playerName,
             gameState: gameRoom.gameState,
-            maxPlayers: gameRoom.maxPlayers // ДОБАВИЛИ maxPlayers
+            maxPlayers: gameRoom.maxPlayers
         });
         
         // Подтверждение присоединения
@@ -103,7 +108,7 @@ io.on('connection', (socket) => {
             playerId: socket.id,
             playerName: data.playerName,
             isHost: newPlayer.isHost,
-            maxPlayers: gameRoom.maxPlayers // ДОБАВИЛИ maxPlayers
+            maxPlayers: gameRoom.maxPlayers
         });
     });
     
@@ -131,17 +136,18 @@ io.on('connection', (socket) => {
         gameRoom.players.forEach(player => {
             player.characteristics = generateCharacteristics();
             player.actionCards = [getRandomActionCard()];
+            player.hasRevealed = false;
+            player.hasVoted = false;
         });
         
         gameRoom.gameState = 'playing';
-        gameRoom.gamePhase = 'discussion';
+        gameRoom.gamePhase = 'preparation';
         gameRoom.currentRound = 1;
-        gameRoom.timeLeft = 180; // 3 минуты на обсуждение
+        gameRoom.timeLeft = 0; // Таймер не идет в фазе подготовки
+        gameRoom.playersWhoRevealed = [];
+        gameRoom.currentTurnPlayer = null;
         
         console.log('🚀 Game started! Players:', gameRoom.players.length);
-        
-        // Запускаем таймер
-        startGameTimer();
         
         // Уведомляем всех игроков о начале игры
         io.to('game-room').emit('game-started', {
@@ -151,6 +157,25 @@ io.on('connection', (socket) => {
             currentRound: gameRoom.currentRound,
             timeLeft: gameRoom.timeLeft
         });
+    });
+    
+    // НОВЫЙ обработчик для начала раунда
+    socket.on('start-round', () => {
+        console.log('🎯 Round start requested by:', socket.id);
+        
+        const player = gameRoom.players.find(p => p.id === socket.id);
+        
+        if (!player || !player.isHost) {
+            socket.emit('error', 'Только хост может начать раунд!');
+            return;
+        }
+        
+        if (gameRoom.gamePhase !== 'preparation') {
+            socket.emit('error', 'Раунд уже начался!');
+            return;
+        }
+        
+        startRevelationPhase();
     });
     
     socket.on('vote-player', (data) => {
@@ -169,38 +194,51 @@ io.on('connection', (socket) => {
             return;
         }
         
+        if (voter.hasVoted) {
+            socket.emit('error', 'Вы уже проголосовали!');
+            return;
+        }
+        
         // Записываем голос
         if (!gameRoom.votingResults[data.targetId]) {
             gameRoom.votingResults[data.targetId] = [];
         }
         
-        // Удаляем предыдущий голос этого игрока
-        Object.keys(gameRoom.votingResults).forEach(targetId => {
-            gameRoom.votingResults[targetId] = gameRoom.votingResults[targetId].filter(
-                voterId => voterId !== voter.id
-            );
-        });
-        
-        // Добавляем новый голос
         gameRoom.votingResults[data.targetId].push(voter.id);
+        voter.hasVoted = true;
         
         // Обновляем счетчики голосов
         gameRoom.players.forEach(player => {
             player.votes = gameRoom.votingResults[player.id] ? gameRoom.votingResults[player.id].length : 0;
         });
         
+        // Считаем общее количество голосов
+        const alivePlayers = gameRoom.players.filter(p => p.isAlive);
+        const votedPlayers = alivePlayers.filter(p => p.hasVoted);
+        
+        console.log(`📊 Votes: ${votedPlayers.length}/${alivePlayers.length}`);
+        
         // Отправляем обновление голосования
         io.to('game-room').emit('vote-update', {
             players: gameRoom.players,
-            votingResults: gameRoom.votingResults
+            votingResults: gameRoom.votingResults,
+            votedCount: votedPlayers.length,
+            totalPlayers: alivePlayers.length
         });
+        
+        // Если все проголосовали - завершаем голосование досрочно
+        if (votedPlayers.length >= alivePlayers.length) {
+            console.log('✅ All players voted - ending voting phase early');
+            clearInterval(gameRoom.timer);
+            showResults();
+        }
     });
     
     socket.on('reveal-characteristic', (data) => {
         console.log('🔍 Reveal characteristic:', data);
         
-        if (gameRoom.gamePhase !== 'discussion') {
-            socket.emit('error', 'Раскрывать характеристики можно только в фазе обсуждения!');
+        if (gameRoom.gamePhase !== 'revelation') {
+            socket.emit('error', 'Сейчас не время для раскрытия характеристик!');
             return;
         }
         
@@ -211,13 +249,18 @@ io.on('connection', (socket) => {
             return;
         }
         
+        if (gameRoom.currentTurnPlayer !== player.id) {
+            socket.emit('error', 'Сейчас не ваш ход!');
+            return;
+        }
+        
         if (player.hasRevealed) {
-            socket.emit('error', 'Вы уже раскрыли характеристику в этом раунде!');
+            socket.emit('error', 'Вы уже раскрыли характеристику!');
             return;
         }
         
         player.hasRevealed = true;
-        gameRoom.revealedThisRound++;
+        gameRoom.playersWhoRevealed.push(player.id);
         
         // Отправляем обновление всем игрокам
         io.to('game-room').emit('characteristic-revealed', {
@@ -227,6 +270,12 @@ io.on('connection', (socket) => {
             value: player.characteristics[data.characteristic],
             players: gameRoom.players
         });
+        
+        // Переходим к следующему игроку
+        clearInterval(gameRoom.timer);
+        setTimeout(() => {
+            nextPlayerTurn();
+        }, 2000); // 2 секунды на просмотр раскрытой характеристики
     });
     
     socket.on('disconnect', () => {
@@ -298,7 +347,100 @@ io.on('connection', (socket) => {
     });
 });
 
-// Функции управления игрой
+// === НОВЫЕ ФУНКЦИИ УПРАВЛЕНИЯ ФАЗАМИ ===
+
+function startRevelationPhase() {
+    console.log('🔍 Starting revelation phase');
+    
+    gameRoom.gamePhase = 'revelation';
+    gameRoom.playersWhoRevealed = [];
+    
+    // Сбрасываем состояние раскрытия для всех игроков
+    gameRoom.players.forEach(player => {
+        player.hasRevealed = false;
+    });
+    
+    // Начинаем с первого живого игрока
+    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
+    if (alivePlayers.length > 0) {
+        gameRoom.currentTurnPlayer = alivePlayers[0].id;
+        startPlayerTurn();
+    }
+}
+
+function startPlayerTurn() {
+    gameRoom.timeLeft = 60; // 1 минута на игрока
+    
+    startGameTimer();
+    
+    io.to('game-room').emit('player-turn-started', {
+        gamePhase: gameRoom.gamePhase,
+        currentTurnPlayer: gameRoom.currentTurnPlayer,
+        timeLeft: gameRoom.timeLeft,
+        players: gameRoom.players
+    });
+}
+
+function nextPlayerTurn() {
+    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
+    const currentIndex = alivePlayers.findIndex(p => p.id === gameRoom.currentTurnPlayer);
+    
+    if (currentIndex === -1) {
+        startDiscussionPhase();
+        return;
+    }
+    
+    const nextIndex = currentIndex + 1;
+    
+    if (nextIndex >= alivePlayers.length) {
+        // Все игроки раскрыли - переходим к обсуждению
+        startDiscussionPhase();
+    } else {
+        // Следующий игрок
+        gameRoom.currentTurnPlayer = alivePlayers[nextIndex].id;
+        startPlayerTurn();
+    }
+}
+
+function startDiscussionPhase() {
+    console.log('💬 Starting discussion phase');
+    
+    gameRoom.gamePhase = 'discussion';
+    gameRoom.timeLeft = 300; // 5 минут на обсуждение
+    gameRoom.currentTurnPlayer = null;
+    
+    startGameTimer();
+    
+    io.to('game-room').emit('phase-changed', {
+        gamePhase: gameRoom.gamePhase,
+        timeLeft: gameRoom.timeLeft,
+        players: gameRoom.players
+    });
+}
+
+function startVotingPhase() {
+    gameRoom.gamePhase = 'voting';
+    gameRoom.timeLeft = 120; // 2 минуты на голосование
+    gameRoom.votingResults = {};
+    gameRoom.totalVotes = 0;
+    
+    // Сбрасываем голоса
+    gameRoom.players.forEach(player => {
+        player.votes = 0;
+        player.hasVoted = false;
+    });
+    
+    console.log('🗳️ Starting voting phase');
+    
+    startGameTimer();
+    
+    io.to('game-room').emit('phase-changed', {
+        gamePhase: gameRoom.gamePhase,
+        timeLeft: gameRoom.timeLeft,
+        players: gameRoom.players
+    });
+}
+
 function startGameTimer() {
     if (gameRoom.timer) {
         clearInterval(gameRoom.timer);
@@ -311,52 +453,33 @@ function startGameTimer() {
         if (gameRoom.timeLeft % 10 === 0 || gameRoom.timeLeft <= 10) {
             io.to('game-room').emit('timer-update', {
                 timeLeft: gameRoom.timeLeft,
-                gamePhase: gameRoom.gamePhase
+                gamePhase: gameRoom.gamePhase,
+                currentTurnPlayer: gameRoom.currentTurnPlayer
             });
         }
         
         if (gameRoom.timeLeft <= 0) {
             clearInterval(gameRoom.timer);
-            nextPhase();
+            handlePhaseTimeout();
         }
     }, 1000);
 }
 
-function nextPhase() {
-    console.log('⏭️ Moving to next phase from:', gameRoom.gamePhase);
+function handlePhaseTimeout() {
+    console.log('⏰ Phase timeout:', gameRoom.gamePhase);
     
     switch (gameRoom.gamePhase) {
+        case 'revelation':
+            // Пропускаем ход игрока
+            nextPlayerTurn();
+            break;
         case 'discussion':
             startVotingPhase();
             break;
         case 'voting':
             showResults();
             break;
-        case 'results':
-            nextRound();
-            break;
     }
-}
-
-function startVotingPhase() {
-    gameRoom.gamePhase = 'voting';
-    gameRoom.timeLeft = 60; // 1 минута на голосование
-    gameRoom.votingResults = {};
-    
-    // Сбрасываем голоса
-    gameRoom.players.forEach(player => {
-        player.votes = 0;
-    });
-    
-    console.log('🗳️ Starting voting phase');
-    
-    startGameTimer();
-    
-    io.to('game-room').emit('phase-changed', {
-        gamePhase: gameRoom.gamePhase,
-        timeLeft: gameRoom.timeLeft,
-        players: gameRoom.players
-    });
 }
 
 function showResults() {
@@ -382,9 +505,11 @@ function showResults() {
     gameRoom.players.forEach(player => {
         player.hasRevealed = false;
         player.votes = 0;
+        player.hasVoted = false;
     });
     
     gameRoom.revealedThisRound = 0;
+    gameRoom.currentTurnPlayer = null;
     
     io.to('game-room').emit('round-results', {
         eliminatedPlayer: eliminatedPlayer ? eliminatedPlayer.name : null,
@@ -410,12 +535,11 @@ function nextRound() {
     }
     
     // Начинаем новый раунд
-    gameRoom.gamePhase = 'discussion';
-    gameRoom.timeLeft = 180;
+    gameRoom.gamePhase = 'preparation';
+    gameRoom.timeLeft = 0;
+    gameRoom.currentTurnPlayer = null;
     
     console.log('🔄 Starting round:', gameRoom.currentRound);
-    
-    startGameTimer();
     
     io.to('game-room').emit('new-round', {
         currentRound: gameRoom.currentRound,
@@ -460,6 +584,7 @@ function resetGame() {
         player.isAlive = true;
         player.votes = 0;
         player.hasRevealed = false;
+        player.hasVoted = false;
         player.characteristics = null;
         player.actionCards = [];
     });
@@ -471,6 +596,9 @@ function resetGame() {
     gameRoom.timeLeft = 0;
     gameRoom.votingResults = {};
     gameRoom.revealedThisRound = 0;
+    gameRoom.currentTurnPlayer = null;
+    gameRoom.playersWhoRevealed = [];
+    gameRoom.totalVotes = 0;
     
     io.to('game-room').emit('game-reset', {
         players: gameRoom.players,
@@ -478,7 +606,7 @@ function resetGame() {
     });
 }
 
-// Вспомогательные функции для генерации данных
+// Вспомогательные функции для генерации данных (остаются прежними)
 const professions = [
     "Врач", "Учитель", "Инженер", "Повар", "Программист", "Механик",
     "Писатель", "Художник", "Музыкант", "Строитель", "Фермер", "Пилот",
