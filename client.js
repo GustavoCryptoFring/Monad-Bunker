@@ -31,24 +31,48 @@ let gameState = {
 };
 
 // Socket.IO подключение
-const socket = io();
+const socket = io({
+    transports: ['websocket', 'polling'], // Добавляем fallback транспорты
+    timeout: 10000, // Таймаут подключения 10 секунд
+    reconnection: true, // Автоматическое переподключение
+    reconnectionAttempts: 10, // Максимум попыток
+    reconnectionDelay: 1000 // Задержка между попытками
+});
 
 // === ОБРАБОТЧИКИ СОБЫТИЙ SOCKET.IO ===
 
 socket.on('connect', function() {
     console.log('🌐 Connected to server');
+    console.log('🔗 Socket ID:', socket.id);
+    
     // При подключении показываем экран входа
     showLoginScreen();
+    
+    // Скрываем сообщение о потере соединения если оно есть
+    const connectionError = document.getElementById('connectionError');
+    if (connectionError) {
+        connectionError.style.display = 'none';
+    }
 });
 
-socket.on('disconnect', function() {
-    console.log('❌ Disconnected from server');
-    showNotification('Соединение потеряно', 'Переподключение...');
+socket.on('connect_error', function(error) {
+    console.error('❌ Connection error:', error);
+    showConnectionError('Ошибка подключения к серверу. Проверьте интернет-соединение.');
 });
 
-socket.on('error', function(errorMessage) {
-    console.error('❌ Server error:', errorMessage);
-    showNotification('Ошибка сервера', errorMessage);
+socket.on('disconnect', function(reason) {
+    console.log('❌ Disconnected from server:', reason);
+    showConnectionError('Соединение потеряно. Попытка переподключения...');
+});
+
+socket.on('reconnect', function(attemptNumber) {
+    console.log('🔄 Reconnected after', attemptNumber, 'attempts');
+    showNotification('Подключение восстановлено', 'Соединение с сервером восстановлено');
+});
+
+socket.on('reconnect_error', function(error) {
+    console.error('❌ Reconnection error:', error);
+    showConnectionError('Не удается восстановить соединение. Перезагрузите страницу.');
 });
 
 socket.on('room-state', function(data) {
@@ -76,11 +100,19 @@ socket.on('room-state', function(data) {
 
 socket.on('join-confirmed', function(data) {
     console.log('✅ Join confirmed:', data);
+    
+    // ДОБАВЛЕНО: Разблокируем кнопку
+    const joinBtn = document.getElementById('joinGameBtn');
+    if (joinBtn) {
+        joinBtn.disabled = false;
+        joinBtn.textContent = 'Присоединиться к игре';
+    }
+    
     gameState.playerId = data.playerId;
     gameState.playerName = data.playerName;
     gameState.isHost = data.isHost;
     gameState.maxPlayers = data.maxPlayers;
-    gameState.notificationSettings = data.notificationSettings || { // НОВОЕ
+    gameState.notificationSettings = data.notificationSettings || {
         gameStart: false,
         discussionSkipped: false,
         newRound: false
@@ -461,8 +493,16 @@ function updateNotificationSettings() {
 // === ОСНОВНЫЕ ФУНКЦИИ ИГРЫ ===
 
 function joinGame() {
+    console.log('🎯 joinGame function called');
+    
     const nameInput = document.getElementById('playerNameInput');
+    if (!nameInput) {
+        console.error('❌ Name input not found');
+        return;
+    }
+    
     const playerName = nameInput.value.trim();
+    console.log('🎯 Player name:', playerName);
     
     if (!playerName) {
         showNotification('Ошибка', 'Введите ваше имя!');
@@ -474,8 +514,30 @@ function joinGame() {
         return;
     }
     
+    // ДОБАВЛЕНО: Проверка подключения к сокету
+    if (!socket.connected) {
+        console.error('❌ Socket not connected');
+        showNotification('Ошибка', 'Нет соединения с сервером. Попробуйте перезагрузить страницу.');
+        return;
+    }
+    
     console.log('🎯 Joining game with name:', playerName);
     socket.emit('join-game', { playerName: playerName });
+    
+    // ДОБАВЛЕНО: Блокируем кнопку на время запроса
+    const joinBtn = document.getElementById('joinGameBtn');
+    if (joinBtn) {
+        joinBtn.disabled = true;
+        joinBtn.textContent = 'Подключение...';
+        
+        // Разблокируем через 5 секунд если нет ответа
+        setTimeout(() => {
+            if (joinBtn.disabled) {
+                joinBtn.disabled = false;
+                joinBtn.textContent = 'Присоединиться к игре';
+            }
+        }, 5000);
+    }
 }
 
 function startGame() {
@@ -997,8 +1059,19 @@ document.addEventListener('DOMContentLoaded', function() {
     if (playerNameInput) {
         playerNameInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
+                e.preventDefault(); // ДОБАВЛЕНО: предотвращаем стандартное поведение
                 joinGame();
             }
+        });
+    }
+    
+    // ДОБАВЛЕНО: Обработчик для кнопки присоединения
+    const joinGameBtn = document.getElementById('joinGameBtn');
+    if (joinGameBtn) {
+        joinGameBtn.addEventListener('click', function(e) {
+            e.preventDefault(); // Предотвращаем стандартное поведение
+            console.log('🎯 Join button clicked');
+            joinGame();
         });
     }
 });

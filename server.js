@@ -1136,3 +1136,27 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
     process.exit(1);
 });
+
+function startGameTimer() {
+    if (gameRoom.timer) {
+        clearInterval(gameRoom.timer);
+    }
+    
+    gameRoom.timer = setInterval(() => {
+        gameRoom.timeLeft--;
+        
+        if (gameRoom.timeLeft <= 0) {
+            clearInterval(gameRoom.timer);
+            handlePhaseTimeout();
+        } else {
+            // Отправляем обновление таймера каждые 5 секунд или в последние 10 секунд
+            if (gameRoom.timeLeft % 5 === 0 || gameRoom.timeLeft <= 10) {
+                io.to('game-room').emit('timer-update', {
+                    timeLeft: gameRoom.timeLeft,
+                    gamePhase: gameRoom.gamePhase,
+                    currentTurnPlayer: gameRoom.currentTurnPlayer
+                });
+            }
+        }
+    }, 1000);
+}
