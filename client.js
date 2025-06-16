@@ -18,7 +18,10 @@ let gameState = {
     // НОВЫЕ ПОЛЯ ДЛЯ ОПРАВДАНИЙ
     currentJustifyingPlayer: null,
     canChangeVote: {},
-    hasChangedVote: false
+    hasChangedVote: false,
+    // ДОБАВЛЕНО: поля для отслеживания раскрытия карт
+    cardsRevealedThisRound: 0,
+    requiredCardsThisRound: 1
 };
 
 // Инициализация Socket.IO
@@ -108,6 +111,28 @@ socket.on('phase-changed', function(data) {
     gameState.timeLeft = data.timeLeft;
     gameState.players = data.players;
     gameState.currentTurnPlayer = data.currentTurnPlayer || null; // ИСПРАВЛЕНО: сохраняем currentTurnPlayer
+    gameState.currentRound = data.currentRound || gameState.currentRound; // ДОБАВЛЕНО: обновляем номер раунда
+    
+    // ДОБАВЛЕНО: обновляем информацию о требуемых картах для раунда
+    gameState.requiredCardsThisRound = getRequiredCardsForRound(gameState.currentRound);
+    
+    // ДОБАВЛЕНО: сброс голосования за пропуск при смене фазы
+    if (data.gamePhase !== 'discussion') {
+        gameState.skipDiscussionVotes = 0;
+        gameState.mySkipVote = false;
+    }
+    
+    // ДОБАВЛЕНО: сброс голосования за игроков при смене фазы
+    if (data.gamePhase !== 'voting') {
+        gameState.myVote = null;
+        gameState.hasChangedVote = false;
+    }
+    
+    // ДОБАВЛЕНО: сброс счетчика карт при смене фазы на раскрытие
+    if (data.gamePhase === 'revelation') {
+        gameState.cardsRevealedThisRound = 0;
+    }
+    
     updateGameDisplay();
 });
 
@@ -135,6 +160,13 @@ socket.on('vote-update', function(data) {
 socket.on('characteristic-revealed', function(data) {
     console.log('🔍 Characteristic revealed:', data);
     gameState.players = data.players;
+    
+    // ДОБАВЛЕНО: обновляем информацию о раскрытых картах
+    if (data.playerId === gameState.playerId) {
+        gameState.cardsRevealedThisRound = data.cardsRevealedThisRound;
+        gameState.requiredCardsThisRound = data.requiredCards;
+    }
+    
     updatePlayersGrid();
     
     // УБРАНО: уведомление о раскрытии характеристики
@@ -421,7 +453,28 @@ function getGameStatusText() {
             const currentPlayer = gameState.players.find(p => p.id === gameState.currentTurnPlayer);
             if (currentPlayer) {
                 const isMyTurn = currentPlayer.id === gameState.playerId;
-                return `Ход игрока: ${isMyTurn ? 'Ваш ход' : currentPlayer.name}`;
+                const requiredCards = getRequiredCardsForRound(gameState.currentRound);
+                const revealedCards = currentPlayer.cardsRevealedThisRound || 0;
+                
+                if (isMyTurn) {
+                    if (gameState.currentRound === 1) {
+                        if (revealedCards === 0) {
+                            return 'Ваш ход: Раскройте профессию';
+                        } else if (revealedCards === 1) {
+                            return 'Ваш ход: Выберите любую характеристику';
+                        } else {
+                            return 'Ваш ход завершен';
+                        }
+                    } else {
+                        if (revealedCards === 0) {
+                            return 'Ваш ход: Выберите любую характеристику';
+                        } else {
+                            return 'Ваш ход завершен';
+                        }
+                    }
+                } else {
+                    return `Ход игрока: ${currentPlayer.name} (${revealedCards}/${requiredCards})`;
+                }
             }
             return 'Раскрытие характеристик';
         case 'discussion': 
@@ -623,6 +676,25 @@ function createPlayerCard(player) {
     // ИСПРАВЛЕНО: порядок характеристик с двумя фактами внизу
     const characteristicOrder = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
     
+    // ДОБАВЛЕНО: информация о прогрессе раскрытия
+    let turnInfo = '';
+    if (isCurrentTurn && gameState.gamePhase === 'revelation') {
+        const requiredCards = getRequiredCardsForRound(gameState.currentRound);
+        const revealedCards = player.cardsRevealedThisRound || 0;
+        
+        if (gameState.currentRound === 1) {
+            if (revealedCards === 0) {
+                turnInfo = '<div class="turn-info">📋 Раскройте профессию</div>';
+            } else if (revealedCards === 1) {
+                turnInfo = '<div class="turn-info">🎯 Выберите любую характеристику</div>';
+            }
+        } else {
+            if (revealedCards === 0) {
+                turnInfo = '<div class="turn-info">🎯 Выберите любую характеристику</div>';
+            }
+        }
+    }
+    
     card.innerHTML = `
         <div class="player-header">
             <div class="player-info">
@@ -638,6 +710,7 @@ function createPlayerCard(player) {
                     ${isCurrentPlayer ? '<div class="player-status current">ВЫ</div>' : ''}
                     ${isCurrentTurn ? '<div class="player-status turn">Ваш ход!</div>' : ''}
                     ${isJustifying ? '<div class="player-status justifying">🎤 Оправдывается</div>' : ''}
+                    ${turnInfo}
                 </div>
             </div>
         </div>
@@ -646,11 +719,30 @@ function createPlayerCard(player) {
             ${characteristicOrder.map(key => {
                 if (!player.characteristics || !player.characteristics[key]) return '';
                 
-                // ИСПРАВЛЕНО: логика раскрытия характеристик
+                // ИСПРАВЛЕНО: логика раскрытия характеристик с учетом правил раундов
                 const isRevealed = player.revealedCharacteristics && player.revealedCharacteristics.includes(key);
                 const isOwnCard = isCurrentPlayer;
-                // ИСПРАВЛЕНО: можно кликать только на свои карточки
-                const canReveal = isCurrentPlayer && isCurrentTurn && !isRevealed && gameState.gamePhase === 'revelation';
+                
+                // ОБНОВЛЕНО: проверка возможности раскрытия с учетом правил раундов
+                let canReveal = false;
+                if (isCurrentPlayer && isCurrentTurn && !isRevealed && gameState.gamePhase === 'revelation') {
+                    const requiredCards = getRequiredCardsForRound(gameState.currentRound);
+                    const revealedCards = player.cardsRevealedThisRound || 0;
+                    
+                    if (revealedCards < requiredCards) {
+                        if (gameState.currentRound === 1) {
+                            // В первом раунде: первая карта - профессия, вторая - любая
+                            if (revealedCards === 0 && key === 'profession') {
+                                canReveal = true;
+                            } else if (revealedCards === 1 && key !== 'profession') {
+                                canReveal = true;
+                            }
+                        } else {
+                            // В остальных раундах: любая нераскрытая карта
+                            canReveal = true;
+                        }
+                    }
+                }
                 
                 return `<div class="characteristic ${isRevealed ? 'revealed' : (isOwnCard ? 'own-hidden' : 'hidden')} ${canReveal ? 'clickable' : ''}" 
                     ${canReveal ? `onclick="confirmRevealCharacteristic('${key}')"` : ''}>
@@ -672,48 +764,335 @@ function createPlayerCard(player) {
     return card;
 }
 
-// НОВАЯ функция для создания кнопок голосования
-function getVotingButtons(player) {
-    const me = gameState.players.find(p => p.id === gameState.playerId);
-    if (!me) return '';
+// НОВАЯ функция для определения количества карт для раскрытия в раунде
+function getRequiredCardsForRound(round) {
+    if (round === 1) {
+        return 2; // Профессия + 1 карта на выбор
+    } else {
+        return 1; // 1 карта на выбор
+    }
+}
+
+function getGameStatusText() {
+    switch (gameState.gamePhase) {
+        case 'preparation': 
+            return 'Подготовка к раунду';
+        case 'revelation': 
+            const currentPlayer = gameState.players.find(p => p.id === gameState.currentTurnPlayer);
+            if (currentPlayer) {
+                const isMyTurn = currentPlayer.id === gameState.playerId;
+                const requiredCards = getRequiredCardsForRound(gameState.currentRound);
+                const revealedCards = currentPlayer.cardsRevealedThisRound || 0;
+                
+                if (isMyTurn) {
+                    if (gameState.currentRound === 1) {
+                        if (revealedCards === 0) {
+                            return 'Ваш ход: Раскройте профессию';
+                        } else if (revealedCards === 1) {
+                            return 'Ваш ход: Выберите любую характеристику';
+                        } else {
+                            return 'Ваш ход завершен';
+                        }
+                    } else {
+                        if (revealedCards === 0) {
+                            return 'Ваш ход: Выберите любую характеристику';
+                        } else {
+                            return 'Ваш ход завершен';
+                        }
+                    }
+                } else {
+                    return `Ход игрока: ${currentPlayer.name} (${revealedCards}/${requiredCards})`;
+                }
+            }
+            return 'Раскрытие характеристик';
+        case 'discussion': 
+            return 'Фаза обсуждения';
+        case 'voting': 
+            return 'Фаза голосования';
+        case 'justification':
+            const justifyingPlayer = gameState.players.find(p => p.id === gameState.currentJustifyingPlayer);
+            if (justifyingPlayer) {
+                const isMyJustification = justifyingPlayer.id === gameState.playerId;
+                return `Оправдание: ${isMyJustification ? 'Ваш черед' : justifyingPlayer.name}`;
+            }
+            return 'Фаза оправдания';
+        case 'results': 
+            return 'Подведение итогов раунда';
+        case 'finished': 
+            return 'Игра завершена';
+        default: 
+            return 'Ожидание начала игры...';
+    }
+}
+
+function getPhaseDisplayText() {
+    switch (gameState.gamePhase) {
+        case 'preparation': return 'ПОДГОТОВКА';
+        case 'revelation': return 'РАСКРЫТИЕ';
+        case 'discussion': return 'ОБСУЖДЕНИЕ';
+        case 'voting': return 'ГОЛОСОВАНИЕ';
+        case 'justification': return 'ОПРАВДАНИЕ';
+        case 'results': return 'РЕЗУЛЬТАТЫ';
+        default: return 'ОЖИДАНИЕ';
+    }
+}
+
+function updateGameActions() {
+    const gameActionsElement = document.getElementById('gameActions');
+    const roundActionsElement = document.getElementById('roundActions');
     
-    const hasVoted = me.hasVoted;
-    const votedForThis = me.votedFor === player.id;
-    const canChange = gameState.canChangeVote[gameState.playerId] && !gameState.hasChangedVote;
-    
-    let buttonText = '📋 Голосовать';
-    let buttonClass = 'vote-player-btn';
-    let disabled = false;
-    
-    if (hasVoted) {
-        if (votedForThis) {
-            buttonText = '✅ Проголосовано';
-            buttonClass += ' voted';
-            disabled = !canChange;
-        } else if (canChange) {
-            buttonText = '🔄 Сменить голос';
-            buttonClass += ' change-vote';
+    // Управляем кнопками в верхней части
+    if (roundActionsElement) {
+        if (gameState.gamePhase === 'preparation' && gameState.isHost) {
+            // Кнопка "Начать раунд" в фазе подготовки только для хоста
+            roundActionsElement.innerHTML = `
+                <button id="startRoundBtn" class="start-round-btn" onclick="startRound()">
+                    🚀 Начать раунд
+                </button>
+            `;
+            roundActionsElement.style.display = 'block';
+        } else if (gameState.gamePhase === 'discussion') {
+            // Кнопка "Пропустить обсуждение" для ВСЕХ игроков
+            const skipVotes = gameState.skipDiscussionVotes || 0;
+            const requiredVotes = 2;
+            const hasVotedToSkip = gameState.mySkipVote || false;
+            
+            roundActionsElement.innerHTML = `
+                <button id="skipDiscussionBtn" class="start-round-btn ${hasVotedToSkip ? 'voted-skip' : ''}" 
+                        onclick="voteToSkipDiscussion()" ${hasVotedToSkip ? 'disabled' : ''}>
+                    ${hasVotedToSkip ? '✅ Голос подан' : '⏭️ Пропустить обсуждение'}
+                </button>
+                <div class="skip-votes-info">
+                    Голосов за пропуск: ${skipVotes}/${requiredVotes}
+                </div>
+            `;
+            roundActionsElement.style.display = 'block';
+        } else if (gameState.gamePhase === 'justification') {
+            // НОВОЕ: кнопки для фазы оправдания
+            const isMyJustification = gameState.currentJustifyingPlayer === gameState.playerId;
+            
+            if (isMyJustification) {
+                roundActionsElement.innerHTML = `
+                    <div class="justification-actions">
+                        <button id="finishJustificationBtn" class="start-round-btn" onclick="finishJustification()">
+                            ✅ Закончить оправдание
+                        </button>
+                        <button id="surrenderBtn" class="surrender-btn" onclick="surrender()">
+                            🏳️ Сдаться
+                        </button>
+                    </div>
+                `;
+            } else {
+                roundActionsElement.innerHTML = `
+                    <div class="justification-info">
+                        <p>🎤 Игрок оправдывается...</p>
+                    </div>
+                `;
+            }
+            roundActionsElement.style.display = 'block';
         } else {
-            buttonText = '📋 Голосовать';
-            disabled = true;
+            roundActionsElement.style.display = 'none';
         }
     }
     
-    return `
-        <div class="vote-section">
-            <button class="${buttonClass}" 
-                    onclick="voteForPlayer('${player.id}')" 
-                    ${disabled ? 'disabled' : ''}>
-                ${buttonText}
-            </button>
-            <div class="voters-list">
-                Голосов: ${player.votes || 0}
+    // Кнопки внизу для голосования
+    if (gameState.gamePhase === 'voting') {
+        const alivePlayers = gameState.players.filter(p => p.isAlive);
+        const votedPlayers = alivePlayers.filter(p => p.hasVoted);
+        const canChange = gameState.canChangeVote[gameState.playerId] && !gameState.hasChangedVote;
+        
+        gameActionsElement.innerHTML = `
+            <div class="vote-progress">
+                <span id="voteProgress">Проголосовало: ${votedPlayers.length}/${alivePlayers.length}</span>
+                ${canChange ? '<div class="change-vote-info">💡 Вы можете сменить свой голос</div>' : ''}
             </div>
-        </div>
-    `;
+        `;
+    } else {
+        gameActionsElement.innerHTML = '';
+    }
 }
 
-// НОВАЯ функция подтверждения раскрытия характеристики с дополнительными проверками
+// НОВЫЕ функции для оправданий
+function finishJustification() {
+    if (gameState.gamePhase !== 'justification') {
+        showNotification('Ошибка', 'Сейчас не фаза оправдания');
+        return;
+    }
+    
+    if (gameState.currentJustifyingPlayer !== gameState.playerId) {
+        showNotification('Ошибка', 'Сейчас не ваше время для оправдания');
+        return;
+    }
+    
+    console.log('✅ Finishing justification...');
+    socket.emit('finish-justification');
+}
+
+function surrender() {
+    if (gameState.gamePhase !== 'justification') {
+        showNotification('Ошибка', 'Сейчас не фаза оправдания');
+        return;
+    }
+    
+    if (gameState.currentJustifyingPlayer !== gameState.playerId) {
+        showNotification('Ошибка', 'Только оправдывающийся игрок может сдаться');
+        return;
+    }
+    
+    // Подтверждение сдачи
+    if (confirm('Вы действительно хотите сдаться и покинуть игру?')) {
+        console.log('🏳️ Surrendering...');
+        socket.emit('surrender');
+    }
+}
+
+// ОБНОВЛЕННАЯ функция голосования с возможностью смены голоса
+function voteForPlayer(playerId) {
+    if (gameState.gamePhase !== 'voting') {
+        showNotification('Ошибка', 'Сейчас не время для голосования!');
+        return;
+    }
+    
+    const me = gameState.players.find(p => p.id === gameState.playerId);
+    if (!me || !me.isAlive) {
+        showNotification('Ошибка', 'Вы не можете голосовать!');
+        return;
+    }
+    
+    // Если уже голосовал, проверяем возможность смены голоса
+    if (me.hasVoted) {
+        const canChange = gameState.canChangeVote[gameState.playerId] && !gameState.hasChangedVote;
+        
+        if (!canChange) {
+            if (gameState.hasChangedVote) {
+                showNotification('Ошибка', 'Вы уже использовали возможность смены голоса!');
+            } else {
+                showNotification('Ошибка', 'Вы уже проголосовали!');
+            }
+            return;
+        }
+        
+        // Смена голоса
+        if (me.votedFor === playerId) {
+            showNotification('Ошибка', 'Вы уже голосовали за этого игрока!');
+            return;
+        }
+        
+        console.log('🔄 Changing vote to:', playerId);
+        socket.emit('change-vote', { targetId: playerId });
+        gameState.hasChangedVote = true;
+    } else {
+        // Первичное голосование
+        console.log('🗳️ Voting for:', playerId);
+        gameState.myVote = playerId;
+        socket.emit('vote-player', { targetId: playerId });
+    }
+    
+    // Обновляем отображение
+    updatePlayersGrid();
+}
+
+// ОБНОВЛЕННАЯ функция создания карточки игрока
+function createPlayerCard(player) {
+    const card = document.createElement('div');
+    const isCurrentPlayer = player.id === gameState.playerId;
+    const isCurrentTurn = player.id === gameState.currentTurnPlayer;
+    const isJustifying = player.id === gameState.currentJustifyingPlayer;
+    
+    card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''} ${isJustifying ? 'justifying' : ''}`;
+    
+    // ИСПРАВЛЕНО: порядок характеристик с двумя фактами внизу
+    const characteristicOrder = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
+    
+    // ДОБАВЛЕНО: информация о прогрессе раскрытия
+    let turnInfo = '';
+    if (isCurrentTurn && gameState.gamePhase === 'revelation') {
+        const requiredCards = getRequiredCardsForRound(gameState.currentRound);
+        const revealedCards = player.cardsRevealedThisRound || 0;
+        
+        if (gameState.currentRound === 1) {
+            if (revealedCards === 0) {
+                turnInfo = '<div class="turn-info">📋 Раскройте профессию</div>';
+            } else if (revealedCards === 1) {
+                turnInfo = '<div class="turn-info">🎯 Выберите любую характеристику</div>';
+            }
+        } else {
+            if (revealedCards === 0) {
+                turnInfo = '<div class="turn-info">🎯 Выберите любую характеристику</div>';
+            }
+        }
+    }
+    
+    card.innerHTML = `
+        <div class="player-header">
+            <div class="player-info">
+                <div class="player-avatar-container">
+                    <div class="player-avatar ${player.isAlive ? '' : 'eliminated-avatar'}">
+                        ${player.name.charAt(0).toUpperCase()}
+                    </div>
+                </div>
+                <div>
+                    <div class="player-name ${player.isAlive ? '' : 'eliminated-name'}">
+                        ${player.name}${player.isHost ? ' 👑' : ''}
+                    </div>
+                    ${isCurrentPlayer ? '<div class="player-status current">ВЫ</div>' : ''}
+                    ${isCurrentTurn ? '<div class="player-status turn">Ваш ход!</div>' : ''}
+                    ${isJustifying ? '<div class="player-status justifying">🎤 Оправдывается</div>' : ''}
+                    ${turnInfo}
+                </div>
+            </div>
+        </div>
+        
+        <div class="characteristics">
+            ${characteristicOrder.map(key => {
+                if (!player.characteristics || !player.characteristics[key]) return '';
+                
+                // ИСПРАВЛЕНО: логика раскрытия характеристик с учетом правил раундов
+                const isRevealed = player.revealedCharacteristics && player.revealedCharacteristics.includes(key);
+                const isOwnCard = isCurrentPlayer;
+                
+                // ОБНОВЛЕНО: проверка возможности раскрытия с учетом правил раундов
+                let canReveal = false;
+                if (isCurrentPlayer && isCurrentTurn && !isRevealed && gameState.gamePhase === 'revelation') {
+                    const requiredCards = getRequiredCardsForRound(gameState.currentRound);
+                    const revealedCards = player.cardsRevealedThisRound || 0;
+                    
+                    if (revealedCards < requiredCards) {
+                        if (gameState.currentRound === 1) {
+                            // В первом раунде: первая карта - профессия, вторая - любая
+                            if (revealedCards === 0 && key === 'profession') {
+                                canReveal = true;
+                            } else if (revealedCards === 1 && key !== 'profession') {
+                                canReveal = true;
+                            }
+                        } else {
+                            // В остальных раундах: любая нераскрытая карта
+                            canReveal = true;
+                        }
+                    }
+                }
+                
+                return `<div class="characteristic ${isRevealed ? 'revealed' : (isOwnCard ? 'own-hidden' : 'hidden')} ${canReveal ? 'clickable' : ''}" 
+                    ${canReveal ? `onclick="confirmRevealCharacteristic('${key}')"` : ''}>
+                    <span class="characteristic-name">${translateCharacteristic(key)}:</span>
+                    <span class="characteristic-value ${isOwnCard && !isRevealed ? 'own-characteristic' : ''}">
+                        ${isRevealed ? player.characteristics[key] : (isOwnCard ? player.characteristics[key] : '???')}
+                    </span>
+                </div>`;
+            }).join('')}
+        </div>
+        
+        <div class="player-actions">
+            ${gameState.gamePhase === 'voting' && !isCurrentPlayer && player.isAlive ? 
+                getVotingButtons(player) : ''
+            }
+        </div>
+    `;
+    
+    return card;
+}
+
+// НОВАЯ функция подтверждения раскрытия характеристики с проверкой правил раундов
 function confirmRevealCharacteristic(characteristic) {
     const player = gameState.players.find(p => p.id === gameState.playerId);
     if (!player || !player.characteristics) return;
@@ -734,12 +1113,46 @@ function confirmRevealCharacteristic(characteristic) {
         return;
     }
     
+    // ДОБАВЛЕНО: проверка правил раскрытия для текущего раунда
+    const requiredCards = getRequiredCardsForRound(gameState.currentRound);
+    const revealedCards = player.cardsRevealedThisRound || 0;
+    
+    if (revealedCards >= requiredCards) {
+        showNotification('Ошибка', 'Вы уже раскрыли максимальное количество карт в этом раунде!');
+        return;
+    }
+    
+    // ДОБАВЛЕНО: в первом раунде первая карта должна быть профессией
+    if (gameState.currentRound === 1 && revealedCards === 0 && characteristic !== 'profession') {
+        showNotification('Ошибка', 'В первом раунде нужно сначала раскрыть профессию!');
+        return;
+    }
+    
     const characteristicName = translateCharacteristic(characteristic);
     const characteristicValue = player.characteristics[characteristic];
+    
+    // ОБНОВЛЕНО: показываем информацию о прогрессе
+    let progressInfo = '';
+    if (gameState.currentRound === 1) {
+        if (revealedCards === 0) {
+            progressInfo = '(Обязательная карта: Профессия)';
+        } else if (revealedCards === 1) {
+            progressInfo = '(Карта на выбор)';
+        }
+    } else {
+        progressInfo = '(Карта на выбор)';
+    }
     
     // Показываем модальное окно подтверждения
     document.getElementById('confirmCharacteristicName').textContent = characteristicName;
     document.getElementById('confirmCharacteristicValue').textContent = characteristicValue;
+    
+    // ДОБАВЛЕНО: показываем прогресс
+    const progressElement = document.getElementById('revealProgress');
+    if (progressElement) {
+        progressElement.textContent = progressInfo;
+    }
+    
     document.getElementById('confirmRevealModal').style.display = 'flex';
     
     // Сохраняем характеристику для раскрытия

@@ -542,15 +542,37 @@ io.on('connection', (socket) => {
             return;
         }
         
+        // ДОБАВЛЕНО: проверка правил раскрытия для текущего раунда
+        const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
+        const currentlyRevealed = player.cardsRevealedThisRound || 0;
+        
+        if (currentlyRevealed >= requiredCards) {
+            socket.emit('error', 'Вы уже раскрыли максимальное количество карт в этом раунде!');
+            return;
+        }
+        
+        // ДОБАВЛЕНО: в первом раунде первая карта должна быть профессией
+        if (gameRoom.currentRound === 1 && currentlyRevealed === 0 && characteristic !== 'profession') {
+            socket.emit('error', 'В первом раунде нужно сначала раскрыть профессию!');
+            return;
+        }
+        
+        // ДОБАВЛЕНО: во втором и последующих раундах нельзя раскрывать профессию (если она уже раскрыта)
+        if (gameRoom.currentRound > 1 && characteristic === 'profession' && 
+            player.revealedCharacteristics && player.revealedCharacteristics.includes('profession')) {
+            socket.emit('error', 'Профессия уже раскрыта!');
+            return;
+        }
+        
         // Раскрываем характеристику
         if (!player.revealedCharacteristics) {
             player.revealedCharacteristics = [];
         }
         
         player.revealedCharacteristics.push(characteristic);
-        player.hasRevealed = true;
+        player.cardsRevealedThisRound = (player.cardsRevealedThisRound || 0) + 1;
         
-        console.log(`✅ ${player.name} revealed ${characteristic}: ${player.characteristics[characteristic]}`);
+        console.log(`✅ ${player.name} revealed ${characteristic}: ${player.characteristics[characteristic]} (${player.cardsRevealedThisRound}/${requiredCards})`);
         
         // Отправляем обновление всем игрокам
         io.to('game-room').emit('characteristic-revealed', {
@@ -558,27 +580,49 @@ io.on('connection', (socket) => {
             playerName: player.name,
             characteristic: characteristic,
             value: player.characteristics[characteristic],
-            players: gameRoom.players
+            players: gameRoom.players,
+            cardsRevealedThisRound: player.cardsRevealedThisRound,
+            requiredCards: requiredCards
         });
         
-        // Переходим к следующему игроку
-        setTimeout(() => {
-            nextPlayerTurn();
-        }, 1000);
+        // Проверяем, завершил ли игрок раскрытие в этом раунде
+        if (player.cardsRevealedThisRound >= requiredCards) {
+            player.hasRevealed = true;
+            console.log(`✅ ${player.name} finished revealing for round ${gameRoom.currentRound}`);
+            
+            // Переходим к следующему игроку через 2 секунды
+            setTimeout(() => {
+                nextPlayerTurn();
+            }, 2000);
+        } else {
+            // Игрок может раскрыть еще одну карту в этом ходу
+            console.log(`⏳ ${player.name} can reveal ${requiredCards - player.cardsRevealedThisRound} more cards`);
+            
+            // Обновляем таймер для продолжения хода
+            gameRoom.timeLeft = 60;
+            
+            // Отправляем обновление таймера
+            io.to('game-room').emit('timer-update', {
+                timeLeft: gameRoom.timeLeft,
+                gamePhase: gameRoom.gamePhase,
+                currentTurnPlayer: gameRoom.currentTurnPlayer
+            });
+        }
     });
 });
 
 // === НОВЫЕ ФУНКЦИИ УПРАВЛЕНИЯ ФАЗАМИ ===
 
 function startRevelationPhase() {
-    console.log('🔍 Starting revelation phase');
+    console.log('🔍 Starting revelation phase for round:', gameRoom.currentRound);
     
     gameRoom.gamePhase = 'revelation';
     gameRoom.playersWhoRevealed = [];
     
-    // Сбрасываем состояние раскрытия для всех игроков
+    // Сбрасываем состояние раскрытия для всех игроков ТОЛЬКО для текущего раунда
     gameRoom.players.forEach(player => {
         player.hasRevealed = false;
+        player.cardsRevealedThisRound = 0; // ДОБАВЛЕНО: счетчик карт за раунд
     });
     
     // Начинаем с первого живого игрока
@@ -599,10 +643,11 @@ function startPlayerTurn() {
         gamePhase: gameRoom.gamePhase,
         currentTurnPlayer: gameRoom.currentTurnPlayer, // ВАЖНО: передаем текущего игрока
         timeLeft: gameRoom.timeLeft,
-        players: gameRoom.players
+        players: gameRoom.players,
+        currentRound: gameRoom.currentRound // ДОБАВЛЕНО: передаем номер раунда
     });
     
-    console.log(`🎯 Player turn: ${gameRoom.currentTurnPlayer}, time: ${gameRoom.timeLeft}s`);
+    console.log(`🎯 Player turn: ${gameRoom.currentTurnPlayer}, time: ${gameRoom.timeLeft}s, round: ${gameRoom.currentRound}`);
 }
 
 function nextPlayerTurn() {
@@ -617,15 +662,23 @@ function nextPlayerTurn() {
     const nextIndex = currentIndex + 1;
     
     if (nextIndex >= alivePlayers.length) {
-        // Проверяем, все ли игроки завершили раскрытие
-        const allRevealed = alivePlayers.every(player => player.hasRevealed);
+        // ИСПРАВЛЕНО: проверяем завершение раунда по новым правилам
+        const allPlayersFinished = alivePlayers.every(player => {
+            const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
+            return (player.cardsRevealedThisRound || 0) >= requiredCards;
+        });
         
-        if (allRevealed) {
-            // Все игроки раскрыли - переходим к обсуждению
+        if (allPlayersFinished) {
+            // Все игроки завершили раскрытие - переходим к обсуждению
+            console.log('✅ All players finished revealing for round', gameRoom.currentRound);
             startDiscussionPhase();
         } else {
             // Возвращаемся к первому игроку, который еще не завершил
-            const nextPlayer = alivePlayers.find(p => !p.hasRevealed);
+            const nextPlayer = alivePlayers.find(player => {
+                const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
+                return (player.cardsRevealedThisRound || 0) < requiredCards;
+            });
+            
             if (nextPlayer) {
                 gameRoom.currentTurnPlayer = nextPlayer.id;
                 console.log(`🔄 Continuing with player: ${nextPlayer.name}`);
@@ -639,6 +692,210 @@ function nextPlayerTurn() {
         gameRoom.currentTurnPlayer = alivePlayers[nextIndex].id;
         console.log(`➡️ Next player: ${alivePlayers[nextIndex].name}`);
         startPlayerTurn();
+    }
+}
+
+// НОВАЯ функция для определения количества карт для раскрытия в раунде
+function getRequiredCardsForRound(round) {
+    if (round === 1) {
+        return 2; // Профессия + 1 карта на выбор
+    } else {
+        return 1; // 1 карта на выбор
+    }
+}
+
+// ОБНОВЛЕННЫЙ обработчик раскрытия характеристик
+socket.on('reveal-characteristic', (data) => {
+    console.log('🔍 Revealing characteristic:', data);
+    
+    const player = gameRoom.players.find(p => p.id === socket.id);
+    
+    if (!player || !player.isAlive) {
+        socket.emit('error', 'Вы не можете раскрывать характеристики!');
+        return;
+    }
+    
+    if (gameRoom.gamePhase !== 'revelation') {
+        socket.emit('error', 'Сейчас не фаза раскрытия!');
+        return;
+    }
+    
+    if (gameRoom.currentTurnPlayer !== socket.id) {
+        socket.emit('error', 'Сейчас не ваш ход!');
+        return;
+    }
+    
+    const characteristic = data.characteristic;
+    
+    if (!player.characteristics || !player.characteristics[characteristic]) {
+        socket.emit('error', 'Некорректная характеристика!');
+        return;
+    }
+    
+    // Проверяем, не была ли уже раскрыта эта характеристика
+    if (player.revealedCharacteristics && player.revealedCharacteristics.includes(characteristic)) {
+        socket.emit('error', 'Эта характеристика уже раскрыта!');
+        return;
+    }
+    
+    // ДОБАВЛЕНО: проверка правил раскрытия для текущего раунда
+    const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
+    const currentlyRevealed = player.cardsRevealedThisRound || 0;
+    
+    if (currentlyRevealed >= requiredCards) {
+        socket.emit('error', 'Вы уже раскрыли максимальное количество карт в этом раунде!');
+        return;
+    }
+    
+    // ДОБАВЛЕНО: в первом раунде первая карта должна быть профессией
+    if (gameRoom.currentRound === 1 && currentlyRevealed === 0 && characteristic !== 'profession') {
+        socket.emit('error', 'В первом раунде нужно сначала раскрыть профессию!');
+        return;
+    }
+    
+    // ДОБАВЛЕНО: во втором и последующих раундах нельзя раскрывать профессию (если она уже раскрыта)
+    if (gameRoom.currentRound > 1 && characteristic === 'profession' && 
+        player.revealedCharacteristics && player.revealedCharacteristics.includes('profession')) {
+        socket.emit('error', 'Профессия уже раскрыта!');
+        return;
+    }
+    
+    // Раскрываем характеристику
+    if (!player.revealedCharacteristics) {
+        player.revealedCharacteristics = [];
+    }
+    
+    player.revealedCharacteristics.push(characteristic);
+    player.cardsRevealedThisRound = (player.cardsRevealedThisRound || 0) + 1;
+    
+    console.log(`✅ ${player.name} revealed ${characteristic}: ${player.characteristics[characteristic]} (${player.cardsRevealedThisRound}/${requiredCards})`);
+    
+    // Отправляем обновление всем игрокам
+    io.to('game-room').emit('characteristic-revealed', {
+        playerId: player.id,
+        playerName: player.name,
+        characteristic: characteristic,
+        value: player.characteristics[characteristic],
+        players: gameRoom.players,
+        cardsRevealedThisRound: player.cardsRevealedThisRound,
+        requiredCards: requiredCards
+    });
+    
+    // Проверяем, завершил ли игрок раскрытие в этом раунде
+    if (player.cardsRevealedThisRound >= requiredCards) {
+        player.hasRevealed = true;
+        console.log(`✅ ${player.name} finished revealing for round ${gameRoom.currentRound}`);
+        
+        // Переходим к следующему игроку через 2 секунды
+        setTimeout(() => {
+            nextPlayerTurn();
+        }, 2000);
+    } else {
+        // Игрок может раскрыть еще одну карту в этом ходу
+        console.log(`⏳ ${player.name} can reveal ${requiredCards - player.cardsRevealedThisRound} more cards`);
+        
+        // Обновляем таймер для продолжения хода
+        gameRoom.timeLeft = 60;
+        
+        // Отправляем обновление таймера
+        io.to('game-room').emit('timer-update', {
+            timeLeft: gameRoom.timeLeft,
+            gamePhase: gameRoom.gamePhase,
+            currentTurnPlayer: gameRoom.currentTurnPlayer
+        });
+    }
+});
+
+// === СУЩНОСТИ И МЕХАНИКА ИГРЫ ===
+
+function startRevelationPhase() {
+    console.log('🔍 Starting revelation phase for round:', gameRoom.currentRound);
+    
+    gameRoom.gamePhase = 'revelation';
+    gameRoom.playersWhoRevealed = [];
+    
+    // Сбрасываем состояние раскрытия для всех игроков ТОЛЬКО для текущего раунда
+    gameRoom.players.forEach(player => {
+        player.hasRevealed = false;
+        player.cardsRevealedThisRound = 0; // ДОБАВЛЕНО: счетчик карт за раунд
+    });
+    
+    // Начинаем с первого живого игрока
+    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
+    if (alivePlayers.length > 0) {
+        gameRoom.currentTurnPlayer = alivePlayers[0].id;
+        startPlayerTurn();
+    }
+}
+
+function startPlayerTurn() {
+    gameRoom.timeLeft = 60; // 1 минута на игрока
+    
+    startGameTimer();
+    
+    // ИСПРАВЛЕНО: отправляем правильные данные о ходе
+    io.to('game-room').emit('phase-changed', {
+        gamePhase: gameRoom.gamePhase,
+        currentTurnPlayer: gameRoom.currentTurnPlayer, // ВАЖНО: передаем текущего игрока
+        timeLeft: gameRoom.timeLeft,
+        players: gameRoom.players,
+        currentRound: gameRoom.currentRound // ДОБАВЛЕНО: передаем номер раунда
+    });
+    
+    console.log(`🎯 Player turn: ${gameRoom.currentTurnPlayer}, time: ${gameRoom.timeLeft}s, round: ${gameRoom.currentRound}`);
+}
+
+function nextPlayerTurn() {
+    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
+    const currentIndex = alivePlayers.findIndex(p => p.id === gameRoom.currentTurnPlayer);
+    
+    if (currentIndex === -1) {
+        startDiscussionPhase();
+        return;
+    }
+    
+    const nextIndex = currentIndex + 1;
+    
+    if (nextIndex >= alivePlayers.length) {
+        // ИСПРАВЛЕНО: проверяем завершение раунда по новым правилам
+        const allPlayersFinished = alivePlayers.every(player => {
+            const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
+            return (player.cardsRevealedThisRound || 0) >= requiredCards;
+        });
+        
+        if (allPlayersFinished) {
+            // Все игроки завершили раскрытие - переходим к обсуждению
+            console.log('✅ All players finished revealing for round', gameRoom.currentRound);
+            startDiscussionPhase();
+        } else {
+            // Возвращаемся к первому игроку, который еще не завершил
+            const nextPlayer = alivePlayers.find(player => {
+                const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
+                return (player.cardsRevealedThisRound || 0) < requiredCards;
+            });
+            
+            if (nextPlayer) {
+                gameRoom.currentTurnPlayer = nextPlayer.id;
+                console.log(`🔄 Continuing with player: ${nextPlayer.name}`);
+                startPlayerTurn();
+            } else {
+                startDiscussionPhase();
+            }
+        }
+    } else {
+        // Следующий игрок
+        gameRoom.currentTurnPlayer = alivePlayers[nextIndex].id;
+        console.log(`➡️ Next player: ${alivePlayers[nextIndex].name}`);
+        startPlayerTurn();
+    }
+}
+
+// НОВАЯ функция для определения количества карт для раскрытия в раунде
+function getRequiredCardsForRound(round) {
+    if (round === 1) {
+        return 2; // Профессия + 1 карта на выбор
+    } else {
+        return 1; // 1 карта на выбор
     }
 }
 
@@ -852,7 +1109,8 @@ function showResults() {
         player.hasRevealed = false;
         player.votes = 0;
         player.hasVoted = false;
-        player.votedFor = null; // ДОБАВЛЕНО: сбрасываем за кого голосовал
+        player.votedFor = null;
+        player.cardsRevealedThisRound = 0; // ДОБАВЛЕНО: сброс счетчика карт за раунд
         // НЕ сбрасываем revealedCharacteristics - они остаются на всю игру
     });
     
@@ -881,7 +1139,8 @@ function nextRound() {
     // Проверяем условия окончания игры
     const alivePlayers = gameRoom.players.filter(p => p.isAlive);
     
-    if (alivePlayers.length <= 1 || gameRoom.currentRound > gameRoom.maxRounds) {
+    // ИСПРАВЛЕНО: игра заканчивается когда остается 2 или меньше игроков
+    if (alivePlayers.length <= 2 || gameRoom.currentRound > gameRoom.maxRounds) {
         endGame();
         return;
     }
@@ -891,7 +1150,7 @@ function nextRound() {
     gameRoom.timeLeft = 0;
     gameRoom.currentTurnPlayer = null;
     
-    console.log('🔄 Starting round:', gameRoom.currentRound);
+    console.log('🔄 Starting round:', gameRoom.currentRound, 'Alive players:', alivePlayers.length);
     
     io.to('game-room').emit('new-round', {
         currentRound: gameRoom.currentRound,
@@ -937,7 +1196,8 @@ function resetGame() {
         player.votes = 0;
         player.hasRevealed = false;
         player.hasVoted = false;
-        player.votedFor = null; // ДОБАВЛЕНО: сбрасываем за кого голосовал
+        player.votedFor = null;
+        player.cardsRevealedThisRound = 0; // ДОБАВЛЕНО: сброс счетчика карт за раунд
         player.revealedCharacteristics = []; // СБРАСЫВАЕМ при новой игре
         player.characteristics = null;
         player.actionCards = [];
@@ -953,7 +1213,7 @@ function resetGame() {
     gameRoom.currentTurnPlayer = null;
     gameRoom.playersWhoRevealed = [];
     gameRoom.totalVotes = 0;
-    gameRoom.skipDiscussionVotes = []; // ДОБАВЛЕНО: сбрасываем голоса за пропуск
+    gameRoom.skipDiscussionVotes = [];
     // ДОБАВЛЕНО: сбрасываем состояние оправданий
     gameRoom.justificationQueue = [];
     gameRoom.currentJustifyingPlayer = null;

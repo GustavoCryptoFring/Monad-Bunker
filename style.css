@@ -906,48 +906,66 @@ body {
     text-align: center;
 }
 
-/* АДАПТИВНОСТЬ */
-@media (max-width: 1200px) {
-    .players-grid.players-8,
-    .players-grid.players-7 {
-        grid-template-columns: repeat(3, 1fr);
+/* НОВЫЕ СТИЛИ ДЛЯ ИНФОРМАЦИИ О ХОДЕ */
+.turn-info {
+    background: rgba(231, 76, 60, 0.2);
+    color: #e74c3c;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.9em;
+    font-weight: bold;
+    text-align: center;
+    margin-top: 8px;
+    border: 1px solid rgba(231, 76, 60, 0.4);
+    animation: pulse-info 2s infinite;
+}
+
+@keyframes pulse-info {
+    0% { 
+        background: rgba(231, 76, 60, 0.2);
+        border-color: rgba(231, 76, 60, 0.4);
     }
-    
-    .players-grid.players-12,
-    .players-grid.players-11,
-    .players-grid.players-10,
-    .players-grid.players-9 {
-        grid-template-columns: repeat(3, 1fr);
+    50% { 
+        background: rgba(231, 76, 60, 0.3);
+        border-color: rgba(231, 76, 60, 0.6);
+    }
+    100% { 
+        background: rgba(231, 76, 60, 0.2);
+        border-color: rgba(231, 76, 60, 0.4);
     }
 }
 
-@media (max-width: 768px) {
-    .players-grid {
-        grid-template-columns: 1fr 1fr !important;
-    }
-    
-    .player-card {
-        min-height: 250px;
-    }
-    
-    .characteristic {
-        font-size: 0.85em;
-        padding: 6px 8px;
-    }
+/* СТИЛИ ДЛЯ ПРОГРЕССА РАСКРЫТИЯ В МОДАЛЬНОМ ОКНЕ */
+.reveal-progress {
+    background: rgba(52, 152, 219, 0.2);
+    color: #3498db;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 0.9em;
+    font-weight: bold;
+    text-align: center;
+    margin: 10px 0;
+    border: 1px solid rgba(52, 152, 219, 0.3);
 }
 
-@media (max-width: 480px) {
-    .players-grid {
-        grid-template-columns: 1fr !important;
+/* ОБНОВЛЕННЫЕ СТИЛИ ДЛЯ КЛИКАБЕЛЬНЫХ ХАРАКТЕРИСТИК В ПЕРВОМ РАУНДЕ */
+.characteristic.clickable[onclick*="profession"] {
+    border-color: #f39c12 !important;
+    background: rgba(243, 156, 18, 0.2) !important;
+    animation: pulse-profession 2s infinite !important;
+}
+
+@keyframes pulse-profession {
+    0% { 
+        border-color: #f39c12;
+        background: rgba(243, 156, 18, 0.2);
     }
-    
-    .game-info {
-        flex-direction: column;
-        gap: 15px;
-        text-align: center;
+    50% { 
+        border-color: #e67e22;
+        background: rgba(243, 156, 18, 0.3);
     }
-    
-    .timer-info {
-        text-align: center;
+    100% { 
+        border-color: #f39c12;
+        background: rgba(243, 156, 18, 0.2);
     }
 }
