@@ -204,7 +204,9 @@ socket.on('skip-discussion-vote-update', function(data) {
     console.log('⏭️ Skip discussion vote update:', data);
     gameState.skipDiscussionVotes = data.votes;
     gameState.mySkipVote = data.hasVoted;
-    updateGameActions();
+    
+    // ОБНОВЛЯЕМ кнопку в верхней части
+    updateRoundActions();
 });
 
 socket.on('discussion-skipped', function(data) {
@@ -422,7 +424,6 @@ function updateGameDisplay() {
     const gameStatusElement = document.getElementById('gameStatus');
     const phaseDisplayElement = document.getElementById('phaseDisplay');
     const roundActionsElement = document.getElementById('roundActions');
-    const gameActionsElement = document.getElementById('gameActions');
     
     if (currentRoundElement) {
         currentRoundElement.textContent = gameState.currentRound;
@@ -436,22 +437,76 @@ function updateGameDisplay() {
         phaseDisplayElement.textContent = getPhaseDisplayText();
     }
     
-    // Показываем кнопку начала раунда только хосту в фазе подготовки
-    if (roundActionsElement) {
-        if (gameState.isHost && gameState.gamePhase === 'preparation') {
-            roundActionsElement.style.display = 'block';
-        } else {
-            roundActionsElement.style.display = 'none';
-        }
-    }
-    
-    // Обновляем действия игры
-    if (gameActionsElement) {
-        gameActionsElement.innerHTML = updateGameActions();
-    }
+    // ОБНОВЛЯЕМ отображение кнопок в верхней части
+    updateRoundActions();
     
     updatePlayersGrid();
     updateTimerDisplay();
+}
+
+// НОВАЯ функция для управления кнопками в верхней части
+function updateRoundActions() {
+    const roundActionsElement = document.getElementById('roundActions');
+    const startRoundBtn = document.getElementById('startRoundBtn');
+    const skipDiscussionBtn = document.getElementById('skipDiscussionBtn');
+    const finishJustificationBtn = document.getElementById('finishJustificationBtn');
+    const surrenderBtn = document.getElementById('surrenderBtn');
+    const skipVotesCount = document.getElementById('skipVotesCount');
+    
+    // Скрываем все кнопки по умолчанию
+    if (startRoundBtn) startRoundBtn.style.display = 'none';
+    if (skipDiscussionBtn) skipDiscussionBtn.style.display = 'none';
+    if (finishJustificationBtn) finishJustificationBtn.style.display = 'none';
+    if (surrenderBtn) surrenderBtn.style.display = 'none';
+    
+    let showActions = false;
+    
+    // Кнопка начала раунда (только для хоста в фазе подготовки)
+    if (gameState.isHost && gameState.gamePhase === 'preparation' && startRoundBtn) {
+        startRoundBtn.style.display = 'inline-block';
+        showActions = true;
+    }
+    
+    // Кнопка пропуска обсуждения (фаза обсуждения)
+    if (gameState.gamePhase === 'discussion' && skipDiscussionBtn && skipVotesCount) {
+        skipDiscussionBtn.style.display = 'inline-block';
+        skipVotesCount.textContent = gameState.skipDiscussionVotes || 0;
+        
+        // Обновляем стиль кнопки в зависимости от того, голосовал ли игрок
+        if (gameState.mySkipVote) {
+            skipDiscussionBtn.className = 'start-round-btn voted-skip';
+            skipDiscussionBtn.disabled = true;
+            skipDiscussionBtn.innerHTML = '✅ Проголосовано за пропуск (' + (gameState.skipDiscussionVotes || 0) + '/2)';
+        } else {
+            skipDiscussionBtn.className = 'start-round-btn';
+            skipDiscussionBtn.disabled = false;
+            skipDiscussionBtn.innerHTML = '⏭️ Пропустить обсуждение (<span id="skipVotesCount">' + (gameState.skipDiscussionVotes || 0) + '</span>/2)';
+        }
+        
+        showActions = true;
+    }
+    
+    // Кнопки для фазы оправдания
+    if (gameState.gamePhase === 'justification') {
+        const justifyingPlayer = gameState.players.find(p => p.id === gameState.currentJustifyingPlayer);
+        
+        if (justifyingPlayer && justifyingPlayer.id === gameState.playerId) {
+            // Кнопки для оправдывающегося игрока
+            if (finishJustificationBtn) {
+                finishJustificationBtn.style.display = 'inline-block';
+                showActions = true;
+            }
+            if (surrenderBtn) {
+                surrenderBtn.style.display = 'inline-block';
+                showActions = true;
+            }
+        }
+    }
+    
+    // Показываем или скрываем контейнер кнопок
+    if (roundActionsElement) {
+        roundActionsElement.style.display = showActions ? 'block' : 'none';
+    }
 }
 
 function getGameStatusText() {
@@ -514,39 +569,6 @@ function getPhaseDisplayText() {
     }
     
     return statusText;
-}
-
-function updateGameActions() {
-    if (gameState.gamePhase === 'discussion') {
-        const canSkip = !gameState.mySkipVote;
-        const skipText = gameState.mySkipVote ? '✅ Проголосовано за пропуск' : '⏭️ Пропустить обсуждение';
-        const skipClass = gameState.mySkipVote ? 'room-btn voted-skip' : 'room-btn secondary';
-        
-        return `
-            <button onclick="voteToSkipDiscussion()" class="${skipClass}" ${!canSkip ? 'disabled' : ''}>
-                ${skipText}
-            </button>
-            ${gameState.skipDiscussionVotes > 0 ? `
-                <div class="skip-votes-info">
-                    Голосов за пропуск: ${gameState.skipDiscussionVotes}/2
-                </div>
-            ` : ''}
-        `;
-    }
-    
-    if (gameState.gamePhase === 'justification') {
-        const justifyingPlayer = gameState.players.find(p => p.id === gameState.currentJustifyingPlayer);
-        if (justifyingPlayer && justifyingPlayer.id === gameState.playerId) {
-            return `
-                <div class="justification-actions">
-                    <button onclick="finishJustification()" class="room-btn primary">✅ Завершить оправдание</button>
-                    <button onclick="surrender()" class="room-btn danger">🏳️ Сдаться</button>
-                </div>
-            `;
-        }
-    }
-    
-    return '';
 }
 
 function updateTimerDisplay() {

@@ -452,7 +452,7 @@ io.on('connection', (socket) => {
         // Добавляем голос
         gameRoom.skipDiscussionVotes.push(socket.id);
         
-        const requiredVotes = 2; // ИСПРАВЛЕНО: всегда требуется ровно 2 голоса
+        const requiredVotes = 2; // Всегда требуется ровно 2 голоса
         const currentVotes = gameRoom.skipDiscussionVotes.length;
         
         console.log(`⏭️ Skip votes: ${currentVotes}/${requiredVotes}`);

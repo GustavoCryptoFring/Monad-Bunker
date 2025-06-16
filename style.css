@@ -315,26 +315,32 @@ body {
     margin-top: 20px;
     margin-bottom: 20px;
     text-align: center;
-    padding: 10px;
+    padding: 15px;
     background: rgba(44, 62, 80, 0.3);
     border-radius: 10px;
     border: 2px solid rgba(231, 76, 60, 0.4);
     animation: highlight-border 2s infinite;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    justify-content: center;
+    align-items: center;
 }
 
 .start-round-btn {
     background: linear-gradient(45deg, #e74c3c, #c0392b);
     color: white;
     border: none;
-    padding: 15px 40px;
+    padding: 15px 30px;
     border-radius: 25px;
-    font-size: 1.3em;
+    font-size: 1.2em;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.3s ease;
     box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
     text-transform: uppercase;
     letter-spacing: 1px;
+    min-width: 200px;
 }
 
 /* СТИЛИ ДЛЯ КНОПКИ ПРОПУСКА ОБСУЖДЕНИЯ */
@@ -348,6 +354,38 @@ body {
     box-shadow: 0 6px 25px rgba(243, 156, 18, 0.6) !important;
 }
 
+#skipDiscussionBtn.voted-skip {
+    background: linear-gradient(45deg, #2ecc71, #27ae60) !important;
+    cursor: not-allowed !important;
+}
+
+#skipDiscussionBtn.voted-skip:hover {
+    background: linear-gradient(45deg, #2ecc71, #27ae60) !important;
+    transform: none !important;
+}
+
+/* СТИЛИ ДЛЯ КНОПКИ ЗАВЕРШЕНИЯ ОПРАВДАНИЯ */
+#finishJustificationBtn {
+    background: linear-gradient(45deg, #2ecc71, #27ae60) !important;
+    box-shadow: 0 4px 15px rgba(46, 204, 113, 0.4) !important;
+}
+
+#finishJustificationBtn:hover {
+    background: linear-gradient(45deg, #27ae60, #229954) !important;
+    box-shadow: 0 6px 25px rgba(46, 204, 113, 0.6) !important;
+}
+
+/* СТИЛИ ДЛЯ КНОПКИ СДАЧИ */
+.surrender-btn {
+    background: linear-gradient(45deg, #e74c3c, #c0392b) !important;
+    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4) !important;
+}
+
+.surrender-btn:hover {
+    background: linear-gradient(45deg, #c0392b, #a93226) !important;
+    box-shadow: 0 6px 25px rgba(231, 76, 60, 0.6) !important;
+}
+
 .start-round-btn:hover {
     background: linear-gradient(45deg, #c0392b, #a93226);
     transform: translateY(-3px);
@@ -355,78 +393,25 @@ body {
     animation: pulse-glow 1s infinite;
 }
 
-@keyframes pulse-glow {
-    0% { 
-        box-shadow: 0 6px 25px rgba(231, 76, 60, 0.6);
-    }
-    50% { 
-        box-shadow: 0 8px 35px rgba(231, 76, 60, 0.8);
-    }
-    100% { 
-        box-shadow: 0 6px 25px rgba(231, 76, 60, 0.6);
-    }
-}
-
 .start-round-btn:disabled {
-    background: #7f8c8d;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-    animation: none;
+    background: #7f8c8d !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    box-shadow: none !important;
+    animation: none !important;
 }
 
-@keyframes highlight-border {
-    0% { 
-        border-color: rgba(231, 76, 60, 0.4);
-        background: rgba(44, 62, 80, 0.3);
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+    .round-actions {
+        flex-direction: column;
     }
-    50% { 
-        border-color: rgba(231, 76, 60, 0.8);
-        background: rgba(231, 76, 60, 0.1);
+    
+    .start-round-btn {
+        min-width: 250px;
+        font-size: 1.1em;
+        padding: 12px 25px;
     }
-    100% { 
-        border-color: rgba(231, 76, 60, 0.4);
-        background: rgba(44, 62, 80, 0.3);
-    }
-}
-
-/* УБИРАЕМ СТИЛИ ДЛЯ СТАРЫХ КНОПОК ДЕЙСТВИЙ */
-/* ЗАКОММЕНТИРОВАНО:
-.action-btn {
-    background: #3498db;
-    color: white;
-    border: none;
-    padding: 12px 25px;
-    margin: 0 10px;
-    border-radius: 8px;
-    font-size: 1em;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.action-btn:hover:not(:disabled) {
-    background: #2980b9;
-    transform: translateY(-2px);
-}
-
-.action-btn:disabled {
-    background: #7f8c8d;
-    cursor: not-allowed;
-    transform: none;
-}
-*/
-
-/* СТИЛИ ДЛЯ ПРОГРЕССА ГОЛОСОВАНИЯ */
-.vote-progress {
-    font-size: 1.2em;
-    color: #f39c12;
-    font-weight: bold;
-    text-align: center;
-    padding: 20px;
-    background: rgba(52, 73, 94, 0.6);
-    border-radius: 15px;
-    border: 2px solid rgba(243, 156, 18, 0.4);
 }
 
 /* СТИЛИ ДЛЯ ИГРОВОГО ПОЛЯ И СЕТКИ ИГРОКОВ */
@@ -968,4 +953,9 @@ body {
         border-color: #f39c12;
         background: rgba(243, 156, 18, 0.2);
     }
+}
+
+/* УБИРАЕМ СТАРЫЕ СТИЛИ ДЛЯ game-actions */
+.game-actions {
+    display: none; /* Скрываем, так как все кнопки теперь наверху */
 }
