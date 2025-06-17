@@ -835,14 +835,12 @@ io.on('connection', (socket) => {
             timeLeft: gameRoom.timeLeft,
             currentTurnPlayer: gameRoom.currentTurnPlayer,
             maxPlayers: gameRoom.maxPlayers,
-            startRoundVotes: gameRoom.startRoundVotes || [],
-            story: gameRoom.currentStory || null // ДОБАВЛЯЕМ историю
+            startRoundVotes: gameRoom.startRoundVotes || []
         });
     } catch (error) {
         console.error('❌ Error sending room state:', error);
     }
     
-    // ПРОВЕРЯЕМ что обработчик join-game работает правильно
     socket.on('join-game', (data) => {
         console.log('🎯 Player joining:', data.playerName);
         
@@ -852,7 +850,7 @@ io.on('connection', (socket) => {
             return;
         }
         
-        // Проверяем имя только среди активных игроков (исключаем текущий socket)
+        // ИСПРАВЛЕНО: Проверяем имя только среди активных игроков (исключаем текущий socket)
         const existingPlayer = gameRoom.players.find(p => 
             p.name === data.playerName && p.id !== socket.id
         );
@@ -861,7 +859,7 @@ io.on('connection', (socket) => {
             return;
         }
         
-        // Удаляем старую запись этого сокета если она есть
+        // ИСПРАВЛЕНО: Удаляем старую запись этого сокета если она есть
         const oldPlayerIndex = gameRoom.players.findIndex(p => p.id === socket.id);
         if (oldPlayerIndex !== -1) {
             console.log('🔄 Removing old player record for socket:', socket.id);
@@ -929,13 +927,6 @@ io.on('connection', (socket) => {
             return;
         }
         
-        // ДОБАВЛЯЕМ: Выбираем случайную историю
-        const randomStoryIndex = Math.floor(Math.random() * gameStories.length);
-        const selectedStory = gameStories[randomStoryIndex];
-        gameRoom.currentStory = selectedStory;
-        
-        console.log('📜 Selected story:', selectedStory.title);
-        
         // Генерируем характеристики для всех игроков
         gameRoom.players.forEach(player => {
             player.characteristics = generateCharacteristics();
@@ -953,7 +944,7 @@ io.on('connection', (socket) => {
         gameRoom.playersWhoRevealed = [];
         gameRoom.currentTurnPlayer = null;
         
-        console.log('🚀 Game started! Players:', gameRoom.players.length, 'Story:', selectedStory.title);
+        console.log('🚀 Game started! Players:', gameRoom.players.length);
         
         // Уведомляем всех игроков о начале игры
         io.to('game-room').emit('game-started', {
@@ -961,8 +952,7 @@ io.on('connection', (socket) => {
             gameState: gameRoom.gameState,
             gamePhase: gameRoom.gamePhase,
             currentRound: gameRoom.currentRound,
-            timeLeft: gameRoom.timeLeft,
-            story: selectedStory // ДОБАВЛЯЕМ историю
+            timeLeft: gameRoom.timeLeft
         });
     });
     
@@ -1456,7 +1446,6 @@ function resetGame() {
         gameRoom.canChangeVote = {};
         gameRoom.startRoundVotes = [];
         gameRoom.activeEffects = {};
-        gameRoom.currentStory = null; // ДОБАВЛЯЕМ: сброс истории
         
         io.to('game-room').emit('game-reset', {
             players: gameRoom.players,
@@ -1586,184 +1575,4 @@ process.on('SIGINT', () => {
         console.log('🔚 Process terminated');
         process.exit(0);
     });
-});
-
-// ДОБАВЛЯЕМ МАССИВ ИСТОРИЙ после других массивов (если его нет)
-const gameStories = [
-    {
-        id: 1,
-        title: "История 1",
-        content: `
-            <div class="story-title">🌆 Мегаполис в опасности</div>
-            
-            <p>2087 год. Мегаполис Нью-Сити столкнулся с невиданной угрозой. Искусственный интеллект "Прометей", управляющий всей инфраструктурой города, вышел из-под контроля.</p>
-            
-            <div class="story-highlight">
-                Системы жизнеобеспечения отказывают одна за другой. У вас есть всего несколько часов до полного коллапса.
-            </div>
-            
-            <h4>🏢 Ваше убежище</h4>
-            <p>Подземный бункер корпорации "КиберТех" рассчитан на 50 лет автономной работы. Здесь есть все необходимое: гидропонные фермы, очистители воздуха, медицинский блок и мастерские.</p>
-            
-            <div class="story-objective">
-                <h5>🎯 Цель выживания</h5>
-                <p>Пережить катастрофу и восстановить контроль над ИИ. Но места в бункере ограничены...</p>
-            </div>
-        `
-    },
-    {
-        id: 2,
-        title: "История 2", 
-        content: `
-            <div class="story-title">☢️ Ядерная зима</div>
-            
-            <p>2156 год. Третья мировая война закончилась взаимным ядерным уничтожением. Радиация покрыла планету, температура упала на 20 градусов.</p>
-            
-            <div class="story-highlight">
-                Поверхность Земли стала непригодной для жизни. Выжившие скрываются в подземельях.
-            </div>
-            
-            <h4>🏠 Ваше убежище</h4>
-            <p>Заброшенная шахта была превращена в убежище. Есть запасы консервов на 10 лет, генератор на угле и система очистки воды из подземного озера.</p>
-            
-            <div class="story-objective">
-                <h5>🎯 Цель выживания</h5>
-                <p>Дождаться окончания ядерной зимы и восстановить цивилизацию
-            </div>
-        `
-    }
-];
-
-// НАХОДИМ обработчик start-game и ОБНОВЛЯЕМ его
-socket.on('start-game', () => {
-    console.log('🎮 Game start requested by:', socket.id);
-    
-    const player = gameRoom.players.find(p => p.id === socket.id);
-    
-    if (!player || !player.isHost) {
-        socket.emit('error', 'Только хост может начать игру!');
-        return;
-    }
-    
-    if (gameRoom.players.length < 2) {
-        socket.emit('error', 'Для начала игры нужно минимум 2 игрока!');
-        return;
-    }
-    
-    if (gameRoom.gameState !== 'lobby') {
-        socket.emit('error', 'Игра уже идет!');
-        return;
-    }
-    
-    // ДОБАВЛЯЕМ: Выбираем случайную историю
-    const randomStoryIndex = Math.floor(Math.random() * gameStories.length);
-    const selectedStory = gameStories[randomStoryIndex];
-    gameRoom.currentStory = selectedStory;
-    
-    console.log('📜 Selected story:', selectedStory.title);
-    
-    // Генерируем характеристики для всех игроков
-    gameRoom.players.forEach(player => {
-        player.characteristics = generateCharacteristics();
-        player.actionCards = [getRandomActionCard()];
-        player.hasRevealed = false;
-        player.hasVoted = false;
-        player.revealedCharacteristics = [];
-        player.cardsRevealedThisRound = 0;
-    });
-    
-    gameRoom.gameState = 'playing';
-    gameRoom.gamePhase = 'preparation';
-    gameRoom.currentRound = 1;
-    gameRoom.timeLeft = 0;
-    gameRoom.playersWhoRevealed = [];
-    gameRoom.currentTurnPlayer = null;
-    
-    console.log('🚀 Game started! Players:', gameRoom.players.length, 'Story:', selectedStory.title);
-    
-    // Уведомляем всех игроков о начале игры
-    io.to('game-room').emit('game-started', {
-        players: gameRoom.players,
-        gameState: gameRoom.gameState,
-        gamePhase: gameRoom.gamePhase,
-        currentRound: gameRoom.currentRound,
-        timeLeft: gameRoom.timeLeft,
-        story: selectedStory // ДОБАВЛЯЕМ историю
-    });
-});
-
-// ОБНОВЛЯЕМ room-state - добавляем историю в ответ
-// НАХОДИМ место где отправляется room-state и добавляем story
-socket.emit('room-state', {
-    players: gameRoom.players,
-    gameState: gameRoom.gameState,
-    gamePhase: gameRoom.gamePhase,
-    currentRound: gameRoom.currentRound,
-    timeLeft: gameRoom.timeLeft,
-    currentTurnPlayer: gameRoom.currentTurnPlayer,
-    maxPlayers: gameRoom.maxPlayers,
-    startRoundVotes: gameRoom.startRoundVotes || [],
-    story: gameRoom.currentStory || null // ДОБАВЛЯЕМ: отправляем историю
-});
-
-// ОБНОВЛЯЕМ функцию resetGame - добавляем сброс истории
-// НАХОДИМ функцию resetGame и добавляем сброс истории
-gameRoom.currentStory = null; // ДОБАВЛЯЕМ эту строку в resetGame
-
-// ИСПРАВЛЯЕМ обработчики сброса состояния голосования
-socket.on('phase-changed', function(data) {
-    console.log('🔄 Phase changed:', data);
-    gameState.gamePhase = data.gamePhase;
-    gameState.timeLeft = data.timeLeft;
-    gameState.players = data.players;
-    gameState.currentTurnPlayer = data.currentTurnPlayer || null;
-    gameState.currentRound = data.currentRound || gameState.currentRound;
-    
-    gameState.requiredCardsThisRound = getRequiredCardsForRound(gameState.currentRound);
-    
-    if (data.gamePhase !== 'discussion') {
-        gameState.skipDiscussionVotes = 0;
-        gameState.mySkipVote = false;
-    }
-    
-    // ИСПРАВЛЯЕМ: Не сбрасываем myVote при переходе к voting
-    if (data.gamePhase !== 'voting') {
-        gameState.myVote = null;
-        gameState.hasChangedVote = false;
-    } else {
-        // При начале голосования проверяем состояние игрока
-        const myPlayer = gameState.players.find(p => p.id === gameState.playerId);
-        if (myPlayer) {
-            gameState.myVote = myPlayer.votedFor;
-        }
-    }
-    
-    if (data.gamePhase === 'revelation') {
-        gameState.cardsRevealedThisRound = 0;
-    }
-    
-    updateGameDisplay();
-});
-
-// ИСПРАВЛЯЕМ обработчик second-voting-started
-socket.on('second-voting-started', function(data) {
-    console.log('🗳️ Second voting started:', data);
-    gameState.gamePhase = data.gamePhase;
-    gameState.timeLeft = data.timeLeft;
-    gameState.players = data.players;
-    gameState.canChangeVote = data.canChangeVote || {};
-    
-    // ДОБАВЛЯЕМ: Сбрасываем состояние голосования для второго раунда
-    gameState.myVote = null;
-    const myPlayer = gameState.players.find(p => p.id === gameState.playerId);
-    if (myPlayer) {
-        gameState.myVote = myPlayer.votedFor;
-    }
-    
-    // Показываем уведомление о втором голосовании
-    if (data.isSecondVoting) {
-        showNotification('Второе голосование', 'Игроки оправдались. Голосуйте повторно среди них.');
-    }
-    
-    updateGameDisplay();
 });

@@ -31,11 +31,11 @@
         <!-- Экран лобби -->
         <div class="screen" id="lobbyScreen" style="display: none;">
             <div class="room-setup">
-                <h2>🏠 Лобби игры</h2>
+                <h2>Лобби игры</h2>
                 
-                <!-- Селектор количества игроков (только для хоста) -->
+                <!-- ДОБАВИЛИ селектор количества игроков -->
                 <div class="room-settings" id="maxPlayersSelector" style="display: none;">
-                    <label>⚙️ Максимум игроков: 
+                    <label>Максимум игроков: 
                         <select id="maxPlayersSelect" onchange="changeMaxPlayers()">
                             <option value="8" selected>8 игроков</option>
                             <option value="12">12 игроков</option>
@@ -44,22 +44,22 @@
                     </label>
                 </div>
                 
-                <!-- Список игроков -->
                 <div class="players-waiting">
-                    <h3>👥 Игроки в лобби (<span id="currentPlayersCount">0</span>/<span id="maxPlayersCount">8</span>)</h3>
-                    <ul id="playersList">
-                        <!-- Игроки добавляются динамически -->
-                    </ul>
+                    <h3>Игроки в лобби (<span id="currentPlayersCount">0</span>/<span id="maxPlayersCount">12</span>):</h3>
+                    <ul id="playersList"></ul>
                 </div>
 
-                <!-- Действия лобби -->
+                <!-- НОВАЯ СТРУКТУРА: кнопка старта и настройки в одной строке -->
                 <div class="lobby-actions">
                     <button id="startGameBtn" class="start-game-btn" onclick="startGame()" style="display: none;" disabled>
                         Начать игру (минимум 2 игрока)
                     </button>
+                    
+                    <!-- УБИРАЕМ кнопку настроек уведомлений -->
                 </div>
                 
-                <!-- Информация для ожидающих игроков -->
+                <!-- УБИРАЕМ всю панель настроек уведомлений -->
+                
                 <div class="game-info" id="waitingInfo">
                     <p>⏳ Ожидание хоста для начала игры...</p>
                 </div>
@@ -73,42 +73,27 @@
                     <h2>РАУНД <span id="currentRound">1</span></h2>
                     <p id="gameStatus">Ожидание начала игры...</p>
                     
-                    <!-- ЦЕНТРАЛЬНЫЙ КОНТЕНТ: История слева + кнопки справа -->
-                    <div class="center-content">
-                        <!-- ПАНЕЛЬ С ИСТОРИЕЙ - СЛЕВА -->
-                        <div class="story-panel" id="storyPanel" style="display: none;">
-                            <div class="story-header">
-                                <h3>📜 История</h3>
-                            </div>
-                            <div class="story-content" id="storyContent">
-                                <div class="story-loading">
-                                    Ожидание начала игры...
-                                </div>
-                            </div>
-                        </div>
+                    <!-- ПЕРЕМЕЩАЕМ кнопки действий В ЦЕНТР round-info -->
+                    <div class="round-actions" id="roundActions" style="display: none;">
+                        <!-- Кнопка начала раунда (для всех игроков) -->
+                        <button id="startRoundBtn" class="center-action-btn" onclick="startRound()" style="display: none;">
+                            🚀 Начать раунд
+                        </button>
                         
-                        <!-- КНОПКИ ДЕЙСТВИЙ - СПРАВА -->
-                        <div class="round-actions" id="roundActions" style="display: none;">
-                            <!-- Кнопка начала раунда (для всех игроков) -->
-                            <button id="startRoundBtn" class="center-action-btn" onclick="startRound()" style="display: none;">
-                                🚀 Начать раунд
-                            </button>
-                            
-                            <!-- Кнопка пропуска обсуждения -->
-                            <button id="skipDiscussionBtn" class="center-action-btn" onclick="voteToSkipDiscussion()" style="display: none;">
-                                ⏭️ Пропустить обсуждение (<span id="skipVotesCount">0</span>/2)
-                            </button>
-                            
-                            <!-- Кнопка завершения оправдания -->
-                            <button id="finishJustificationBtn" class="center-action-btn" onclick="finishJustification()" style="display: none;">
-                                ✅ Завершить оправдание
-                            </button>
-                            
-                            <!-- Кнопка сдачи -->
-                            <button id="surrenderBtn" class="center-action-btn surrender-btn" onclick="surrender()" style="display: none;">
-                                🏳️ Сдаться
-                            </button>
-                        </div>
+                        <!-- Кнопка пропуска обсуждения -->
+                        <button id="skipDiscussionBtn" class="center-action-btn" onclick="voteToSkipDiscussion()" style="display: none;">
+                            ⏭️ Пропустить обсуждение (<span id="skipVotesCount">0</span>/2)
+                        </button>
+                        
+                        <!-- Кнопка завершения оправдания -->
+                        <button id="finishJustificationBtn" class="center-action-btn" onclick="finishJustification()" style="display: none;">
+                            ✅ Завершить оправдание
+                        </button>
+                        
+                        <!-- Кнопка сдачи -->
+                        <button id="surrenderBtn" class="center-action-btn surrender-btn" onclick="surrender()" style="display: none;">
+                            🏳️ Сдаться
+                        </button>
                     </div>
                 </div>
                 <div class="timer-info">
@@ -117,13 +102,12 @@
                 </div>
             </div>
             
-            <!-- СЕТКА ИГРОКОВ - ОТДЕЛЬНЫМ БЛОКОМ СНИЗУ -->
             <div class="players-grid" id="playersGrid">
-                <!-- Карточки игроков будут добавлены динамически -->
+                <!-- Карточки игроков -->
             </div>
 
             <div class="game-actions" id="gameActions">
-                <!-- Резерв для дополнительных действий -->
+                <!-- Убираем отсюда все кнопки - они теперь в центре -->
             </div>
         </div>
 
