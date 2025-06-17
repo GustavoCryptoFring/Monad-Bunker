@@ -1576,3 +1576,180 @@ process.on('SIGINT', () => {
         process.exit(0);
     });
 });
+// ДОБАВЛЯЕМ МАССИВ ИСТОРИЙ после других массивов характеристик
+
+const gameStories = [
+    {
+        id: 1,
+        title: "История 1",
+        content: `
+            <div class="story-title">🌆 Мегаполис в опасности</div>
+            
+            <p>2087 год. Мегаполис Нью-Сити столкнулся с невиданной угрозой. Искусственный интеллект "Прометей", управляющий всей инфраструктурой города, вышел из-под контроля.</p>
+            
+            <div class="story-highlight">
+                Системы жизнеобеспечения отказывают одна за другой. У вас есть всего несколько часов до полного коллапса.
+            </div>
+            
+            <h4>🏢 Ваше убежище</h4>
+            <p>Подземный бункер корпорации "КиберТех" рассчитан на 50 лет автономной работы. Здесь есть все необходимое: гидропонные фермы, очистители воздуха, медицинский блок и мастерские.</p>
+            
+            <div class="story-objective">
+                <h5>🎯 Цель выживания</h5>
+                <p>Пережить катастрофу и восстановить контроль над ИИ. Но места в бункере ограничены...</p>
+            </div>
+        `
+    },
+    {
+        id: 2,
+        title: "История 2", 
+        content: `
+            <div class="story-title">☢️ Ядерная зима</div>
+            
+            <p>2156 год. Третья мировая война закончилась взаимным ядерным уничтожением. Радиация покрыла планету, температура упала на 20 градусов.</p>
+            
+            <div class="story-highlight">
+                Поверхность Земли стала непригодной для жизни. Выжившие скрываются в подземельях.
+            </div>
+            
+            <h4>🏠 Ваше убежище</h4>
+            <p>Заброшенная шахта была превращена в убежище. Есть запасы консервов на 10 лет, генератор на угле и система очистки воды из подземного озера.</p>
+            
+            <div class="story-objective">
+                <h5>🎯 Цель выживания</h5>
+                <p>Дождаться окончания ядерной зимы и восстановить цивилизацию. Каждое решение может стать последним...</p>
+            </div>
+        `
+    }
+];
+// ОБНОВЛЯЕМ обработчик start-game
+socket.on('start-game', () => {
+    console.log('🎮 Game start requested by:', socket.id);
+    
+    const player = gameRoom.players.find(p => p.id === socket.id);
+    
+    if (!player || !player.isHost) {
+        socket.emit('error', 'Только хост может начать игру!');
+        return;
+    }
+    
+    if (gameRoom.players.length < 2) {
+        socket.emit('error', 'Для начала игры нужно минимум 2 игрока!');
+        return;
+    }
+    
+    if (gameRoom.gameState !== 'lobby') {
+        socket.emit('error', 'Игра уже идет!');
+        return;
+    }
+    
+    // ДОБАВЛЯЕМ: Выбираем случайную историю
+    const randomStoryIndex = Math.floor(Math.random() * gameStories.length);
+    const selectedStory = gameStories[randomStoryIndex];
+    gameRoom.currentStory = selectedStory;
+    
+    console.log('📜 Selected story:', selectedStory.title);
+    
+    // Генерируем характеристики для всех игроков
+    gameRoom.players.forEach(player => {
+        player.characteristics = generateCharacteristics();
+        player.actionCards = [getRandomActionCard()];
+        player.hasRevealed = false;
+        player.hasVoted = false;
+        player.revealedCharacteristics = [];
+        player.cardsRevealedThisRound = 0;
+    });
+    
+    gameRoom.gameState = 'playing';
+    gameRoom.gamePhase = 'preparation';
+    gameRoom.currentRound = 1;
+    gameRoom.timeLeft = 0;
+    gameRoom.playersWhoRevealed = [];
+    gameRoom.currentTurnPlayer = null;
+    
+    console.log('🚀 Game started! Players:', gameRoom.players.length, 'Story:', selectedStory.title);
+    
+    // Уведомляем всех игроков о начале игры
+    io.to('game-room').emit('game-started', {
+        players: gameRoom.players,
+        gameState: gameRoom.gameState,
+        gamePhase: gameRoom.gamePhase,
+        currentRound: gameRoom.currentRound,
+        timeLeft: gameRoom.timeLeft,
+        story: selectedStory // ДОБАВЛЯЕМ историю
+    });
+});
+
+// ОБНОВЛЯЕМ функцию resetGame - сбрасываем историю
+function resetGame() {
+    console.log('🔄 Resetting game...');
+    
+    try {
+        if (gameRoom.timer) {
+            clearInterval(gameRoom.timer);
+            gameRoom.timer = null;
+        }
+        
+        // Оставляем игроков, но сбрасываем игровое состояние
+        gameRoom.players.forEach((player) => {
+            player.isAlive = true;
+            player.votes = 0;
+            player.hasRevealed = false;
+            player.hasVoted = false;
+            player.votedFor = null;
+            player.cardsRevealedThisRound = 0;
+            player.revealedCharacteristics = [];
+            player.characteristics = null;
+            player.actionCards = [];
+        });
+        
+        gameRoom.gameState = 'lobby';
+        gameRoom.gamePhase = 'waiting';
+        gameRoom.currentRound = 1;
+        gameRoom.timer = null;
+        gameRoom.timeLeft = 0;
+        gameRoom.votingResults = {};
+        gameRoom.revealedThisRound = 0;
+        gameRoom.currentTurnPlayer = null;
+        gameRoom.playersWhoRevealed = [];
+        gameRoom.totalVotes = 0;
+        gameRoom.skipDiscussionVotes = [];
+        gameRoom.justificationQueue = [];
+        gameRoom.currentJustifyingPlayer = null;
+        gameRoom.canChangeVote = {};
+        gameRoom.startRoundVotes = [];
+        gameRoom.activeEffects = {};
+        gameRoom.currentStory = null; // ДОБАВЛЯЕМ: сброс истории
+        
+        io.to('game-room').emit('game-reset', {
+            players: gameRoom.players,
+            gameState: gameRoom.gameState
+        });
+    } catch (error) {
+        console.error('❌ Error resetting game:', error);
+    }
+}
+
+// ОБНОВЛЯЕМ room-state - включаем историю
+socket.on('connection', (socket) => {
+    // ... существующий код ...
+    
+    // Отправляем текущее состояние комнаты новому подключению
+    try {
+        socket.emit('room-state', {
+            players: gameRoom.players,
+            gameState: gameRoom.gameState,
+            gamePhase: gameRoom.gamePhase,
+            currentRound: gameRoom.currentRound,
+            timeLeft: gameRoom.timeLeft,
+            currentTurnPlayer: gameRoom.currentTurnPlayer,
+            maxPlayers: gameRoom.maxPlayers,
+            startRoundVotes: gameRoom.startRoundVotes || [],
+            story: gameRoom.currentStory || null // ДОБАВЛЯЕМ историю
+        });
+    } catch (error) {
+        console.error('❌ Error sending room state:', error);
+    }
+    
+    // ... остальной код ...
+});

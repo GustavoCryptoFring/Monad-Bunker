@@ -2390,3 +2390,251 @@ body {
     font-size: 1.1em;
     margin: 10px 0;
 }
+
+/* === КОНТЕЙНЕР ДЛЯ ИСТОРИИ И ИГРОКОВ === */
+.game-content {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+    align-items: flex-start;
+}
+
+/* === ПАНЕЛЬ С ИСТОРИЕЙ === */
+.story-panel {
+    width: 300px;
+    min-width: 280px;
+    max-width: 350px;
+    background: rgba(44, 62, 80, 0.9);
+    border-radius: 15px;
+    padding: 20px;
+    border: 2px solid rgba(155, 89, 182, 0.3);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.story-header {
+    text-align: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid rgba(155, 89, 182, 0.3);
+}
+
+.story-header h3 {
+    color: #9b59b6;
+    font-size: 1.3em;
+    margin: 0;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.story-content {
+    color: #ecf0f1;
+    line-height: 1.6;
+    font-size: 0.95em;
+}
+
+.story-content p {
+    margin-bottom: 15px;
+    text-align: justify;
+}
+
+.story-content h4 {
+    color: #e67e22;
+    font-size: 1.1em;
+    margin: 20px 0 10px 0;
+    text-align: center;
+    font-weight: bold;
+}
+
+.story-content .story-title {
+    color: #f39c12;
+    font-size: 1.2em;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 15px;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.story-content .story-highlight {
+    background: rgba(231, 76, 60, 0.2);
+    border-left: 4px solid #e74c3c;
+    padding: 10px 15px;
+    margin: 15px 0;
+    border-radius: 0 8px 8px 0;
+    font-style: italic;
+    color: #f8c471;
+}
+
+.story-content .story-objective {
+    background: rgba(52, 152, 219, 0.2);
+    border: 2px solid rgba(52, 152, 219, 0.4);
+    border-radius: 10px;
+    padding: 15px;
+    margin: 15px 0;
+    text-align: center;
+}
+
+.story-content .story-objective h5 {
+    color: #3498db;
+    margin: 0 0 10px 0;
+    font-size: 1em;
+    font-weight: bold;
+}
+
+/* === ОБНОВЛЯЕМ СЕТКУ ИГРОКОВ === */
+.players-grid {
+    flex: 1;
+    display: grid;
+    gap: 20px;
+    padding: 0 10px;
+    min-width: 0; /* Позволяет гриду сжиматься */
+}
+
+/* Адаптивная сетка с учетом боковой панели */
+.players-grid.players-1,
+.players-grid.players-2 {
+    grid-template-columns: repeat(1, 1fr);
+}
+
+.players-grid.players-3,
+.players-grid.players-4 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.players-grid.players-5,
+.players-grid.players-6 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.players-grid.players-7,
+.players-grid.players-8 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.players-grid.players-9,
+.players-grid.players-10,
+.players-grid.players-11,
+.players-grid.players-12 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.players-grid.players-13,
+.players-grid.players-14,
+.players-grid.players-15,
+.players-grid.players-16 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+/* === АДАПТИВНОСТЬ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ === */
+@media (max-width: 1200px) {
+    .game-content {
+        flex-direction: column;
+    }
+    
+    .story-panel {
+        width: 100%;
+        max-width: none;
+        position: static;
+        max-height: 300px;
+        order: 2; /* Перемещаем историю вниз на маленьких экранах */
+    }
+    
+    .players-grid {
+        order: 1;
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .game-content {
+        gap: 15px;
+    }
+    
+    .story-panel {
+        padding: 15px;
+        max-height: 250px;
+    }
+    
+    .story-header h3 {
+        font-size: 1.1em;
+    }
+    
+    .story-content {
+        font-size: 0.9em;
+    }
+    
+    .players-grid {
+        grid-template-columns: 1fr !important;
+        gap: 15px;
+        padding: 0 5px;
+    }
+}
+
+@media (max-width: 480px) {
+    .story-panel {
+        padding: 12px;
+        max-height: 200px;
+    }
+    
+    .story-content {
+        font-size: 0.85em;
+        line-height: 1.5;
+    }
+}
+
+/* === СКРОЛЛБАР ДЛЯ ПАНЕЛИ ИСТОРИИ === */
+.story-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.story-panel::-webkit-scrollbar-track {
+    background: rgba(44, 62, 80, 0.3);
+    border-radius: 4px;
+}
+
+.story-panel::-webkit-scrollbar-thumb {
+    background: rgba(155, 89, 182, 0.6);
+    border-radius: 4px;
+}
+
+.story-panel::-webkit-scrollbar-thumb:hover {
+    background: rgba(155, 89, 182, 0.8);
+}
+
+/* === АНИМАЦИЯ ПОЯВЛЕНИЯ ИСТОРИИ === */
+@keyframes storyFadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.story-panel {
+    animation: storyFadeIn 0.5s ease-out;
+}
+
+/* === ИНДИКАТОР ЗАГРУЗКИ ИСТОРИИ === */
+.story-loading {
+    text-align: center;
+    color: #9b59b6;
+    font-style: italic;
+    padding: 20px;
+}
+
+.story-loading::before {
+    content: "📜 ";
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}

@@ -1401,3 +1401,83 @@ function translateCharacteristic(key) {
 }
 
 console.log('🎮 Bunker Game Client Loaded');
+
+// ДОБАВЛЯЕМ обработчики событий для историй
+
+socket.on('game-started', function(data) {
+    console.log('🚀 Game started:', data);
+    gameState.players = data.players;
+    gameState.serverGameState = data.gameState;
+    gameState.gamePhase = data.gamePhase;
+    gameState.currentRound = data.currentRound;
+    gameState.timeLeft = data.timeLeft;
+    gameState.startRoundVotes = 0;
+    gameState.myStartRoundVote = false;
+    
+    // ДОБАВЛЯЕМ: Обработка истории
+    if (data.story) {
+        gameState.currentStory = data.story;
+        updateStoryDisplay(data.story);
+    }
+    
+    showGameScreen();
+});
+
+socket.on('room-state', function(data) {
+    console.log('🏠 Room state received:', data);
+    gameState.players = data.players || [];
+    gameState.serverGameState = data.gameState || 'lobby';
+    gameState.gamePhase = data.gamePhase || 'waiting';
+    gameState.currentRound = data.currentRound || 1;
+    gameState.timeLeft = data.timeLeft || 0;
+    gameState.currentTurnPlayer = data.currentTurnPlayer || null;
+    gameState.maxPlayers = data.maxPlayers || 8;
+    gameState.startRoundVotes = data.startRoundVotes || 0;
+    
+    // ДОБАВЛЯЕМ: Обработка истории
+    if (data.story) {
+        gameState.currentStory = data.story;
+        updateStoryDisplay(data.story);
+    }
+    
+    // Если мы уже в игре, показываем соответствующий экран
+    if (gameState.playerId && gameState.serverGameState === 'lobby') {
+        showLobbyScreen();
+    } else if (gameState.playerId && gameState.serverGameState === 'playing') {
+        showGameScreen();
+    }
+});
+
+// НОВАЯ ФУНКЦИЯ: Обновление отображения истории
+function updateStoryDisplay(story) {
+    const storyContent = document.getElementById('storyContent');
+    
+    if (!storyContent) {
+        console.error('❌ Story content element not found');
+        return;
+    }
+    
+    if (story) {
+        console.log('📜 Updating story display:', story.title);
+        storyContent.innerHTML = story.content;
+    } else {
+        storyContent.innerHTML = `
+            <div class="story-loading">
+                Ожидание начала игры...
+            </div>
+        `;
+    }
+}
+
+// ОБНОВЛЯЕМ функцию showGameScreen
+function showGameScreen() {
+    console.log('📱 Showing game screen');
+    showScreen('gameScreen');
+    
+    // Обновляем историю если она есть
+    if (gameState.currentStory) {
+        updateStoryDisplay(gameState.currentStory);
+    }
+    
+    updateGameDisplay();
+}
