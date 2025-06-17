@@ -371,6 +371,13 @@ function showLobbyScreen() {
 
 function showGameScreen() {
     console.log('📱 Showing game screen');
+    console.log('🎮 Game state:', {
+        phase: gameState.gamePhase,
+        players: gameState.players.length,
+        playerId: gameState.playerId,
+        scenario: gameState.scenario ? gameState.scenario.title : 'Not loaded'
+    });
+    
     showScreen('gameScreen');
     updateGameDisplay();
 }
@@ -483,6 +490,13 @@ function showLobbyScreen() {
 
 function showGameScreen() {
     console.log('📱 Showing game screen');
+    console.log('🎮 Game state:', {
+        phase: gameState.gamePhase,
+        players: gameState.players.length,
+        playerId: gameState.playerId,
+        scenario: gameState.scenario ? gameState.scenario.title : 'Not loaded'
+    });
+    
     showScreen('gameScreen');
     updateGameDisplay();
 }
@@ -643,12 +657,14 @@ function getRequiredCardsForRound(round) {
     }
 }
 
+// ОБНОВЛЯЕМ функцию updateGameDisplay
 function updateGameDisplay() {
+    console.log('🎮 Updating game display. Phase:', gameState.gamePhase, 'Players:', gameState.players.length);
+    
     // Обновляем информацию о раунде
     const currentRoundElement = document.getElementById('currentRound');
     const gameStatusElement = document.getElementById('gameStatus');
     const phaseDisplayElement = document.getElementById('phaseDisplay');
-    const roundActionsElement = document.getElementById('roundActions');
     
     if (currentRoundElement) {
         currentRoundElement.textContent = gameState.currentRound;
@@ -665,20 +681,28 @@ function updateGameDisplay() {
     // ДОБАВЛЯЕМ: Обновляем историю
     updateStoryDisplay();
     
+    // ИСПРАВЛЯЕМ: Убеждаемся что функции вызываются
     updateRoundActions();
     updatePlayersGrid();
     updateTimerDisplay();
+    
+    console.log('✅ Game display updated');
 }
 
-// НОВАЯ функция для управления кнопками в верхней части
+// ИСПРАВЛЯЕМ функцию для управления кнопками в верхней части
 function updateRoundActions() {
+    console.log('🎯 Updating round actions. Phase:', gameState.gamePhase, 'My ID:', gameState.playerId);
+    
     const roundActions = document.getElementById('roundActions');
     const startRoundBtn = document.getElementById('startRoundBtn');
     const skipDiscussionBtn = document.getElementById('skipDiscussionBtn');
     const finishJustificationBtn = document.getElementById('finishJustificationBtn');
     const surrenderBtn = document.getElementById('surrenderBtn');
     
-    if (!roundActions) return;
+    if (!roundActions) {
+        console.error('❌ roundActions element not found');
+        return;
+    }
     
     // Скрываем все кнопки по умолчанию
     if (startRoundBtn) startRoundBtn.style.display = 'none';
@@ -689,13 +713,21 @@ function updateRoundActions() {
     const isMyTurn = gameState.currentTurnPlayer === gameState.playerId;
     const isMyJustification = gameState.currentJustifyingPlayer === gameState.playerId;
     const alivePlayers = gameState.players.filter(p => p.isAlive);
+    const amAlive = alivePlayers.some(p => p.id === gameState.playerId);
     
     let hasVisibleButtons = false;
     
+    console.log('🎯 Phase check:', {
+        phase: gameState.gamePhase,
+        amAlive: amAlive,
+        playerId: gameState.playerId,
+        alivePlayers: alivePlayers.length
+    });
+    
     switch (gameState.gamePhase) {
         case 'preparation':
-            // ИЗМЕНЕНО: Показываем кнопку всем живым игрокам
-            if (startRoundBtn && alivePlayers.some(p => p.id === gameState.playerId)) {
+            // ИСПРАВЛЯЕМ: Показываем кнопку всем живым игрокам
+            if (startRoundBtn && amAlive) {
                 startRoundBtn.style.display = 'block';
                 hasVisibleButtons = true;
                 
@@ -706,17 +738,19 @@ function updateRoundActions() {
                 if (gameState.myStartRoundVote) {
                     startRoundBtn.textContent = `🎯 Проголосовали (${currentVotes}/${requiredVotes})`;
                     startRoundBtn.disabled = true;
-                    startRoundBtn.classList.add('voted-skip'); // Используем тот же стиль что и для пропуска
+                    startRoundBtn.classList.add('voted-skip');
                 } else {
                     startRoundBtn.textContent = `🚀 Начать раунд (${currentVotes}/${requiredVotes})`;
                     startRoundBtn.disabled = false;
                     startRoundBtn.classList.remove('voted-skip');
                 }
+                
+                console.log('✅ Start round button shown');
             }
             break;
             
         case 'discussion':
-            if (skipDiscussionBtn && alivePlayers.some(p => p.id === gameState.playerId)) {
+            if (skipDiscussionBtn && amAlive) {
                 skipDiscussionBtn.style.display = 'block';
                 hasVisibleButtons = true;
                 
@@ -751,6 +785,8 @@ function updateRoundActions() {
     
     // Показываем/скрываем контейнер с кнопками
     roundActions.style.display = hasVisibleButtons ? 'flex' : 'none';
+    
+    console.log('🎯 Round actions updated. Visible:', hasVisibleButtons);
 }
 
 function getGameStatusText() {
@@ -1407,6 +1443,75 @@ function translateCharacteristic(key) {
         'fact2': 'Факт 2'
     };
     return translations[key] || key;
+}
+
+// ДОБАВЛЯЕМ функцию обновления истории
+function updateStoryDisplay() {
+    if (!gameState.scenario) {
+        // Если сценарий еще не выбран, показываем заглушки
+        const storyTitle = document.getElementById('storyTitle');
+        const storyDescription = document.getElementById('storyDescription'); 
+        const roomName1 = document.getElementById('roomName1');
+        const roomName2 = document.getElementById('roomName2');
+        
+        if (storyTitle) {
+            storyTitle.textContent = 'Загрузка...';
+        }
+        
+        if (storyDescription) {
+            storyDescription.textContent = 'Определяется сценарий...';
+        }
+        
+        if (roomName1) {
+            roomName1.textContent = 'Загрузка...';
+        }
+        
+        if (roomName2) {
+            roomName2.textContent = 'Загрузка...';
+        }
+        
+        return;
+    }
+    
+    const storyTitle = document.getElementById('storyTitle');
+    const storyDescription = document.getElementById('storyDescription'); 
+    const roomName1 = document.getElementById('roomName1');
+    const roomName2 = document.getElementById('roomName2');
+    
+    if (storyTitle) {
+        storyTitle.textContent = gameState.scenario.title;
+    }
+    
+    if (storyDescription) {
+        storyDescription.textContent = gameState.scenario.description;
+    }
+    
+    if (gameState.scenario.rooms && gameState.scenario.rooms.length >= 2) {
+        if (roomName1) {
+            roomName1.textContent = gameState.scenario.rooms[0].name;
+        }
+        if (roomName2) {
+            roomName2.textContent = gameState.scenario.rooms[1].name;
+        }
+        
+        // Обновляем иконки комнат
+        const bunkerRoom1 = document.getElementById('bunkerRoom1');
+        const bunkerRoom2 = document.getElementById('bunkerRoom2');
+        
+        if (bunkerRoom1) {
+            const icon1 = bunkerRoom1.querySelector('.room-icon');
+            if (icon1) {
+                icon1.textContent = gameState.scenario.rooms[0].icon;
+            }
+        }
+        
+        if (bunkerRoom2) {
+            const icon2 = bunkerRoom2.querySelector('.room-icon');
+            if (icon2) {
+                icon2.textContent = gameState.scenario.rooms[1].icon;
+            }
+        }
+    }
 }
 
 console.log('🎮 Bunker Game Client Loaded');

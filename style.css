@@ -1254,6 +1254,30 @@ body {
 
 /* Адаптивность для мобильных */
 @media (max-width: 1200px) {
+    .game-layout {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .story-panel {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        order: -1; /* История сверху на мобильных */
+    }
+    
+    .bunker-details {
+        flex-direction: row;
+        justify-content: space-around;
+    }
+    
+    .bunker-room {
+        flex: 1;
+        justify-content: center;
+        text-align: center;
+    }
+    
+    /* ДОБАВЛЯЕМ: Исправляем сетку игроков на мобильных */
     .players-2,
     .players-3,
     .players-4,
@@ -1261,7 +1285,7 @@ body {
     .players-6,
     .players-7,
     .players-8 { 
-        grid-template-columns: repeat(2, 1fr); 
+        grid-template-columns: repeat(2, 1fr) !important; 
     }
     
     .players-9,
@@ -1272,11 +1296,30 @@ body {
     .players-14,
     .players-15,
     .players-16 { 
-        grid-template-columns: repeat(3, 1fr); 
+        grid-template-columns: repeat(3, 1fr) !important; 
     }
 }
 
 @media (max-width: 768px) {
+    .story-panel {
+        padding: 15px;
+    }
+    
+    .story-scenario,
+    .bunker-info {
+        padding: 12px;
+    }
+    
+    .bunker-details {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .bunker-room {
+        padding: 10px;
+    }
+    
+    /* ДОБАВЛЯЕМ: Мобильная сетка */
     .players-grid {
         grid-template-columns: 1fr !important;
         gap: 15px;
