@@ -884,6 +884,7 @@ function createPlayerCard(player) {
                 <div class="voting-info">
                     <div class="votes-count">Голосов: ${votesForPlayer}</div>
                     ${votersForThisPlayer.length > 0 ? `
+
                         <div class="voters-list">
                             Проголосовали: ${votersForThisPlayer.join(', ')}
                         </div>
@@ -943,6 +944,7 @@ function createPlayerCard(player) {
                 <div>
                     <div class="player-name ${player.isAlive ? '' : 'eliminated-name'}">
                         ${player.name}${player.isHost ? ' 👑' : ''}
+
                     </div>
                     ${isCurrentPlayer ? '<div class="player-status current">ВЫ</div>' : ''}
                     ${isCurrentTurn ? '<div class="player-status turn">Ваш ход!</div>' : ''}
@@ -984,8 +986,8 @@ function createPlayerCard(player) {
                     <span class="characteristic-value ${isOwnCard && !isRevealed ? 'own-characteristic' : ''}">
                         ${isRevealed ? player.characteristics[key] : (isOwnCard ? player.characteristics[key] : '???')}
                     </span>
-                </div>`;
-            }).join('')}
+                </div>`;}
+            ).join('')}
         </div>
         
         <div class="player-actions">
@@ -1065,14 +1067,196 @@ function useActionCard() {
     closeActionCardModal();
 }
 
-// Обновляем socket.on('error') для обработки ошибок карт действий
-socket.on('error', function(errorMessage) {
-    console.error('❌ Server error:', errorMessage);
-    showNotification('Ошибка', errorMessage);
-});
+// НОВАЯ ФУНКЦИЯ: Получаем список игроков, проголосовавших за конкретного игрока
+function getVotersForPlayer(playerId) {
+    if (!gameState.votingResults || !gameState.votingResults[playerId]) {
+        return [];
+    }
+    
+    return gameState.votingResults[playerId].map(voterId => {
+        const voter = gameState.players.find(p => p.id === voterId);
+        return voter ? voter.name : 'Неизвестный';
+    });
+}
 
+// Добавляем функции для модальных окон (если их нет)
+function confirmRevealCharacteristic(characteristic) {
+    const me = gameState.players.find(p => p.id === gameState.playerId);
+    if (!me || !me.characteristics || !me.characteristics[characteristic]) {
+        return;
+    }
+    
+    document.getElementById('confirmCharacteristicName').textContent = translateCharacteristic(characteristic);
+    document.getElementById('confirmCharacteristicValue').textContent = me.characteristics[characteristic];
+    
+    // Обновляем информацию о прогрессе
+    const requiredCards = getRequiredCardsForRound(gameState.currentRound);
+    const revealedCards = me.cardsRevealedThisRound || 0;
+    const progressElement = document.getElementById('revealProgress');
+    
+    if (progressElement) {
+        progressElement.textContent = `Карт раскрыто в этом раунде: ${revealedCards}/${requiredCards}`;
+    }
+    
+    window.currentCharacteristic = characteristic;
+    document.getElementById('confirmRevealModal').style.display = 'flex';
+}
 
-// УБИРАЕМ дублирование других функций - оставляем только первые версии
+function confirmReveal() {
+    if (window.currentCharacteristic) {
+        socket.emit('reveal-characteristic', { characteristic: window.currentCharacteristic });
+        document.getElementById('confirmRevealModal').style.display = 'none';
+        window.currentCharacteristic = null;
+    }
+}
+
+function cancelReveal() {
+    document.getElementById('confirmRevealModal').style.display = 'none';
+    window.currentCharacteristic = null;
+}
+
+function voteForPlayer(playerId) {
+    console.log('🗳️ Voting for player:', playerId);
+    
+    if (gameState.gamePhase !== 'voting') {
+        showNotification('Ошибка', 'Сейчас не время для голосования!');
+        return;
+    }
+    
+    const me = gameState.players.find(p => p.id === gameState.playerId);
+    if (!me || !me.isAlive) {
+        showNotification('Ошибка', 'Вы не можете голосовать!');
+        return;
+    }
+    
+    if (me.hasVoted && !gameState.canChangeVote[gameState.playerId]) {
+        showNotification('Ошибка', 'Вы уже проголосовали!');
+        return;
+    }
+    
+    if (me.hasVoted && gameState.canChangeVote[gameState.playerId]) {
+        // Смена голоса
+        socket.emit('change-vote', { targetId: playerId });
+        gameState.hasChangedVote = true;
+    } else {
+        // Первичное голосование
+        socket.emit('vote-player', { targetId: playerId });
+    }
+}
+
+function voteToSkipDiscussion() {
+    console.log('⏭️ Voting to skip discussion');
+    socket.emit('vote-skip-discussion');
+}
+
+function finishJustification() {
+    console.log('✅ Finishing justification');
+    socket.emit('finish-justification');
+}
+
+function surrender() {
+    if (confirm('Вы уверены, что хотите сдаться? Это действие нельзя отменить.')) {
+        console.log('🏳️ Surrendering');
+        socket.emit('surrender');
+    }
+}
+
+function translateCharacteristic(key) {
+    const translations = {
+        'profession': 'Профессия',
+        'health': 'Здоровье',
+        'hobby': 'Хобби',
+        'phobia': 'Фобия',
+        'baggage': 'Багаж',
+        'fact1': 'Факт 1',
+        'fact2': 'Факт 2'
+    };
+    return translations[key] || key;
+}
+
+function getVotingButtons(player) {
+    const me = gameState.players.find(p => p.id === gameState.playerId);
+    if (!me || !me.isAlive) return '';
+    
+    const hasVoted = me.hasVoted;
+    const votedFor = me.votedFor;
+    const canChange = gameState.canChangeVote[gameState.playerId] && !gameState.hasChangedVote;
+    
+    let buttonText = 'Голосовать';
+    let buttonClass = 'vote-player-btn';
+    let isDisabled = false;
+    
+    if (hasVoted) {
+        if (votedFor === player.id) {
+            if (canChange) {
+                buttonText = 'Изменить голос';
+                buttonClass = 'vote-player-btn change-vote';
+                isDisabled = false;
+            } else {
+                buttonText = '✅ Проголосовано';
+                buttonClass = 'vote-player-btn voted';
+                isDisabled = true;
+            }
+        } else {
+            if (canChange) {
+                buttonText = 'Изменить на этого';
+                buttonClass = 'vote-player-btn change-vote';
+                isDisabled = false;
+            } else {
+                buttonText = 'Голосовать';
+                buttonClass = 'vote-player-btn';
+                isDisabled = true;
+            }
+        }
+    }
+
+    // Добавляем информацию о текущих голосах в кнопку
+    const currentVotes = player.votes || 0;
+    if (currentVotes > 0) {
+        buttonText += ` (${currentVotes})`;
+    }
+    
+    return `
+        <div class="vote-section">
+            <button class="${buttonClass}" 
+                    onclick="voteForPlayer('${player.id}')" 
+                    ${isDisabled ? 'disabled' : ''}>
+                ${buttonText}
+            </button>
+        </div>
+    `;
+}
+
+function showNotification(title, message) {
+    document.getElementById('notificationTitle').textContent = title;
+    document.getElementById('notificationMessage').textContent = message;
+    document.getElementById('notificationModal').style.display = 'flex';
+}
+
+function closeNotificationModal() {
+    document.getElementById('notificationModal').style.display = 'none';
+}
+
+function showConnectionError(message) {
+    // Создаем элемент ошибки если его нет
+    let errorElement = document.getElementById('connectionError');
+    if (!errorElement) {
+        errorElement = document.createElement('div');
+        errorElement.id = 'connectionError';
+        errorElement.className = 'connection-error';
+        errorElement.innerHTML = `
+            <div class="error-content">
+                <h3>Ошибка подключения</h3>
+                <p id="errorMessage">${message}</p>
+                <button class="room-btn" onclick="location.reload()">Перезагрузить страницу</button>
+            </div>
+        `;
+        document.body.appendChild(errorElement);
+    } else {
+        document.getElementById('errorMessage').textContent = message;
+        errorElement.style.display = 'flex';
+    }
+}
 
 // === ИНИЦИАЛИЗАЦИЯ ===
 
