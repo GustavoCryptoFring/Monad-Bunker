@@ -22,10 +22,24 @@ let gameState = {
     requiredCardsThisRound: 1,
     skipDiscussionVotes: 0,
     mySkipVote: false,
-    startRoundVotes: 0,
-    myStartRoundVote: false,
-    scenario: null // ДОБАВЛЯЕМ сценарий
+    startRoundVotes: 0,      // ДОБАВЛЯЕМ: количество голосов за начало раунда
+    myStartRoundVote: false  // ДОБАВЛЯЕМ: проголосовал ли я за начало раунда
 };
+const stories = [
+  {
+    title: 'Потерянный радиопередатчик',
+    description: 'Вы находите обломки старого радиопередатчика, по легенде передавшего последний сигнал выживших…'
+  },
+  {
+    title: 'Тайная лаборатория',
+    description: 'Где-то под бункером скрыта заброшенная лаборатория. Говорят, там остались образцы неизвестного вируса…'
+  },
+  {
+    title: 'Привет из прошлого',
+    description: 'В вентиляции вы находите старую кассету с записью. На ней — голоса давно умерших…'
+  }
+  // …другие варианты
+];
 
 // Socket.IO подключение
 const socket = io({
@@ -139,9 +153,8 @@ socket.on('game-started', function(data) {
     gameState.gamePhase = data.gamePhase;
     gameState.currentRound = data.currentRound;
     gameState.timeLeft = data.timeLeft;
-    gameState.startRoundVotes = 0;
-    gameState.myStartRoundVote = false;
-    // gameState.scenario = data.scenario; // УБИРАЕМ - сценарий придет позже
+    gameState.startRoundVotes = 0;      // ДОБАВЛЯЕМ: сброс голосов
+    gameState.myStartRoundVote = false; // ДОБАВЛЯЕМ: сброс моего голоса
     showGameScreen();
 });
 
@@ -163,12 +176,6 @@ socket.on('phase-changed', function(data) {
     gameState.players = data.players;
     gameState.currentTurnPlayer = data.currentTurnPlayer || null;
     gameState.currentRound = data.currentRound || gameState.currentRound;
-    
-    // ДОБАВЛЯЕМ: Получаем сценарий при изменении фазы
-    if (data.scenario) {
-        gameState.scenario = data.scenario;
-        console.log('🎲 Scenario received:', data.scenario.title);
-    }
     
     gameState.requiredCardsThisRound = getRequiredCardsForRound(gameState.currentRound);
     
@@ -371,13 +378,6 @@ function showLobbyScreen() {
 
 function showGameScreen() {
     console.log('📱 Showing game screen');
-    console.log('🎮 Game state:', {
-        phase: gameState.gamePhase,
-        players: gameState.players.length,
-        playerId: gameState.playerId,
-        scenario: gameState.scenario ? gameState.scenario.title : 'Not loaded'
-    });
-    
     showScreen('gameScreen');
     updateGameDisplay();
 }
@@ -490,13 +490,6 @@ function showLobbyScreen() {
 
 function showGameScreen() {
     console.log('📱 Showing game screen');
-    console.log('🎮 Game state:', {
-        phase: gameState.gamePhase,
-        players: gameState.players.length,
-        playerId: gameState.playerId,
-        scenario: gameState.scenario ? gameState.scenario.title : 'Not loaded'
-    });
-    
     showScreen('gameScreen');
     updateGameDisplay();
 }
@@ -625,44 +618,30 @@ function joinGame() {
 }
 
 function startGame() {
-    console.log('🚀 Starting game...');
-    socket.emit('start-game');
-    // В начале client.js (или вверху файла) добавьте массив историй
-const stories = [
-  {
-    title: 'Потерянный радиопередатчик',
-    description: 'Вы находите обломки старого радиопередатчика, по легенде передавшего последний сигнал выживших перед большим событием…'
-  },
-  {
-    title: 'Тайная лаборатория',
-    description: 'Где-то под бункером скрыта заброшенная лаборатория. Говорят, там остались образцы неизвестного вируса…'
-  },
-  {
-    title: 'Привет из прошлого',
-    description: 'В вентиляции вы находите старую кассету с записью. На ней — голоса давно умерших…'
-  },
-  // …добавьте сколько угодно своих историй
-];
-
-// В функции startGame() (которая вызывается при нажатии “Начать игру”)
-function startGame() {
   // 1) Выбираем случайную историю
   const idx = Math.floor(Math.random() * stories.length);
   const story = stories[idx];
 
-  // 2) Показываем экран игры
+  // 2) Обновляем DOM-блок с историей
+  const titleEl = document.getElementById('storyTitle');
+  const descEl  = document.getElementById('storyDescription');
+  if (titleEl && descEl) {
+    titleEl.textContent       = story.title;
+    descEl.textContent        = story.description;
+  } else {
+    console.warn('Элементы истории не найдены в DOM');
+  }
+
+  // 3) Скрываем логин/лобби и показываем экран игры
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('lobbyScreen').style.display = 'none';
-  document.getElementById('gameScreen').style.display = 'flex';
+  document.getElementById('gameScreen').style.display  = 'flex';
 
-  // 3) Обновляем DOM-блок с историей
-  document.getElementById('storyTitle').textContent = story.title;
-  document.getElementById('storyDescription').textContent = story.description;
+  // 4) Дальше ваш остальной код запуска раунда, инициализации игроков и т.п.
+  // initPlayers();
+  // socket.emit('startGame');
+}
 
-  // 4) Остальной существующий код запуска игры…
-  // initPlayers(), setupTimer(), socket.emit('startGame') и т.д.
-}
-}
 
 function startRound() {
     if (gameState.myStartRoundVote) {
@@ -692,14 +671,12 @@ function getRequiredCardsForRound(round) {
     }
 }
 
-// ОБНОВЛЯЕМ функцию updateGameDisplay
 function updateGameDisplay() {
-    console.log('🎮 Updating game display. Phase:', gameState.gamePhase, 'Players:', gameState.players.length);
-    
     // Обновляем информацию о раунде
     const currentRoundElement = document.getElementById('currentRound');
     const gameStatusElement = document.getElementById('gameStatus');
     const phaseDisplayElement = document.getElementById('phaseDisplay');
+    const roundActionsElement = document.getElementById('roundActions');
     
     if (currentRoundElement) {
         currentRoundElement.textContent = gameState.currentRound;
@@ -713,31 +690,22 @@ function updateGameDisplay() {
         phaseDisplayElement.textContent = getPhaseDisplayText();
     }
     
-    // ДОБАВЛЯЕМ: Обновляем историю
-    updateStoryDisplay();
-    
-    // ИСПРАВЛЯЕМ: Убеждаемся что функции вызываются
+    // ОБНОВЛЯЕМ отображение кнопок в верхней части
     updateRoundActions();
+    
     updatePlayersGrid();
     updateTimerDisplay();
-    
-    console.log('✅ Game display updated');
 }
 
-// ИСПРАВЛЯЕМ функцию для управления кнопками в верхней части
+// НОВАЯ функция для управления кнопками в верхней части
 function updateRoundActions() {
-    console.log('🎯 Updating round actions. Phase:', gameState.gamePhase, 'My ID:', gameState.playerId);
-    
     const roundActions = document.getElementById('roundActions');
     const startRoundBtn = document.getElementById('startRoundBtn');
     const skipDiscussionBtn = document.getElementById('skipDiscussionBtn');
     const finishJustificationBtn = document.getElementById('finishJustificationBtn');
     const surrenderBtn = document.getElementById('surrenderBtn');
     
-    if (!roundActions) {
-        console.error('❌ roundActions element not found');
-        return;
-    }
+    if (!roundActions) return;
     
     // Скрываем все кнопки по умолчанию
     if (startRoundBtn) startRoundBtn.style.display = 'none';
@@ -748,21 +716,13 @@ function updateRoundActions() {
     const isMyTurn = gameState.currentTurnPlayer === gameState.playerId;
     const isMyJustification = gameState.currentJustifyingPlayer === gameState.playerId;
     const alivePlayers = gameState.players.filter(p => p.isAlive);
-    const amAlive = alivePlayers.some(p => p.id === gameState.playerId);
     
     let hasVisibleButtons = false;
     
-    console.log('🎯 Phase check:', {
-        phase: gameState.gamePhase,
-        amAlive: amAlive,
-        playerId: gameState.playerId,
-        alivePlayers: alivePlayers.length
-    });
-    
     switch (gameState.gamePhase) {
         case 'preparation':
-            // ИСПРАВЛЯЕМ: Показываем кнопку всем живым игрокам
-            if (startRoundBtn && amAlive) {
+            // ИЗМЕНЕНО: Показываем кнопку всем живым игрокам
+            if (startRoundBtn && alivePlayers.some(p => p.id === gameState.playerId)) {
                 startRoundBtn.style.display = 'block';
                 hasVisibleButtons = true;
                 
@@ -773,19 +733,17 @@ function updateRoundActions() {
                 if (gameState.myStartRoundVote) {
                     startRoundBtn.textContent = `🎯 Проголосовали (${currentVotes}/${requiredVotes})`;
                     startRoundBtn.disabled = true;
-                    startRoundBtn.classList.add('voted-skip');
+                    startRoundBtn.classList.add('voted-skip'); // Используем тот же стиль что и для пропуска
                 } else {
                     startRoundBtn.textContent = `🚀 Начать раунд (${currentVotes}/${requiredVotes})`;
                     startRoundBtn.disabled = false;
                     startRoundBtn.classList.remove('voted-skip');
                 }
-                
-                console.log('✅ Start round button shown');
             }
             break;
             
         case 'discussion':
-            if (skipDiscussionBtn && amAlive) {
+            if (skipDiscussionBtn && alivePlayers.some(p => p.id === gameState.playerId)) {
                 skipDiscussionBtn.style.display = 'block';
                 hasVisibleButtons = true;
                 
@@ -820,8 +778,6 @@ function updateRoundActions() {
     
     // Показываем/скрываем контейнер с кнопками
     roundActions.style.display = hasVisibleButtons ? 'flex' : 'none';
-    
-    console.log('🎯 Round actions updated. Visible:', hasVisibleButtons);
 }
 
 function getGameStatusText() {
@@ -901,20 +857,10 @@ function updateTimerDisplay() {
 }
 
 function updatePlayersGrid() {
-    console.log('🎮 Updating players grid. Players:', gameState.players.length);
-    
     const playersGrid = document.getElementById('playersGrid');
     
     if (!playersGrid) {
         console.error('❌ playersGrid element not found');
-        return;
-    }
-
-    // ИСПРАВЛЯЕМ: Проверяем есть ли игроки
-    if (!gameState.players || gameState.players.length === 0) {
-        console.log('⚠️ No players to display');
-        playersGrid.innerHTML = '<div style="color: #ecf0f1; text-align: center; padding: 20px;">Нет игроков для отображения</div>';
-        playersGrid.style.display = 'block'; // ДОБАВЛЯЕМ: убеждаемся что элемент видим
         return;
     }
 
@@ -927,7 +873,6 @@ function updatePlayersGrid() {
     
     playersGrid.innerHTML = '';
     playersGrid.className = `players-grid players-${gameState.players.length}`;
-    playersGrid.style.display = 'grid'; // ДОБАВЛЯЕМ: принудительно устанавливаем display
     
     gameState.players.forEach(player => {
         const playerCard = createPlayerCard(player);
@@ -940,7 +885,7 @@ function updatePlayersGrid() {
         playersGrid.appendChild(playerCard);
     });
     
-    console.log('✅ Players grid updated:', gameState.players.length, 'players');
+    console.log('🎮 Players grid updated:', gameState.players.length, 'players');
 }
 
 function createPlayerCard(player) {
@@ -1489,46 +1434,6 @@ function translateCharacteristic(key) {
         'fact2': 'Факт 2'
     };
     return translations[key] || key;
-}
-
-// ДОБАВЛЯЕМ функцию обновления истории
-function updateStoryDisplay() {
-    if (!gameState.scenario) {
-        // Если сценарий еще не выбран, показываем заглушки
-        const storyTitle = document.getElementById('storyTitle');
-        const storyDescription = document.getElementById('storyDescription'); 
-        const bunkerDescription = document.getElementById('bunkerDescription');
-        
-        if (storyTitle) {
-            storyTitle.textContent = 'Загрузка...';
-        }
-        
-        if (storyDescription) {
-            storyDescription.textContent = 'Определяется сценарий...';
-        }
-        
-        if (bunkerDescription) {
-            bunkerDescription.textContent = 'Загрузка информации о бункере...';
-        }
-        
-        return;
-    }
-    
-    const storyTitle = document.getElementById('storyTitle');
-    const storyDescription = document.getElementById('storyDescription'); 
-    const bunkerDescription = document.getElementById('bunkerDescription');
-    
-    if (storyTitle) {
-        storyTitle.textContent = gameState.scenario.title;
-    }
-    
-    if (storyDescription) {
-        storyDescription.textContent = gameState.scenario.description;
-    }
-    
-    if (bunkerDescription && gameState.scenario.bunkerDescription) {
-        bunkerDescription.textContent = gameState.scenario.bunkerDescription;
-    }
 }
 
 console.log('🎮 Bunker Game Client Loaded');
