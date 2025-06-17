@@ -1709,3 +1709,61 @@ socket.emit('room-state', {
 // ОБНОВЛЯЕМ функцию resetGame - добавляем сброс истории
 // НАХОДИМ функцию resetGame и добавляем сброс истории
 gameRoom.currentStory = null; // ДОБАВЛЯЕМ эту строку в resetGame
+
+// ИСПРАВЛЯЕМ обработчики сброса состояния голосования
+socket.on('phase-changed', function(data) {
+    console.log('🔄 Phase changed:', data);
+    gameState.gamePhase = data.gamePhase;
+    gameState.timeLeft = data.timeLeft;
+    gameState.players = data.players;
+    gameState.currentTurnPlayer = data.currentTurnPlayer || null;
+    gameState.currentRound = data.currentRound || gameState.currentRound;
+    
+    gameState.requiredCardsThisRound = getRequiredCardsForRound(gameState.currentRound);
+    
+    if (data.gamePhase !== 'discussion') {
+        gameState.skipDiscussionVotes = 0;
+        gameState.mySkipVote = false;
+    }
+    
+    // ИСПРАВЛЯЕМ: Не сбрасываем myVote при переходе к voting
+    if (data.gamePhase !== 'voting') {
+        gameState.myVote = null;
+        gameState.hasChangedVote = false;
+    } else {
+        // При начале голосования проверяем состояние игрока
+        const myPlayer = gameState.players.find(p => p.id === gameState.playerId);
+        if (myPlayer) {
+            gameState.myVote = myPlayer.votedFor;
+        }
+    }
+    
+    if (data.gamePhase === 'revelation') {
+        gameState.cardsRevealedThisRound = 0;
+    }
+    
+    updateGameDisplay();
+});
+
+// ИСПРАВЛЯЕМ обработчик second-voting-started
+socket.on('second-voting-started', function(data) {
+    console.log('🗳️ Second voting started:', data);
+    gameState.gamePhase = data.gamePhase;
+    gameState.timeLeft = data.timeLeft;
+    gameState.players = data.players;
+    gameState.canChangeVote = data.canChangeVote || {};
+    
+    // ДОБАВЛЯЕМ: Сбрасываем состояние голосования для второго раунда
+    gameState.myVote = null;
+    const myPlayer = gameState.players.find(p => p.id === gameState.playerId);
+    if (myPlayer) {
+        gameState.myVote = myPlayer.votedFor;
+    }
+    
+    // Показываем уведомление о втором голосовании
+    if (data.isSecondVoting) {
+        showNotification('Второе голосование', 'Игроки оправдались. Голосуйте повторно среди них.');
+    }
+    
+    updateGameDisplay();
+});

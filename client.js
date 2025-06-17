@@ -253,6 +253,13 @@ socket.on('vote-update', function(data) {
     gameState.players = data.players;
     gameState.votingResults = data.votingResults;
     gameState.canChangeVote = data.canChangeVote || {};
+    
+    // ДОБАВЛЯЕМ: Обновляем состояние собственного голоса
+    const myPlayer = gameState.players.find(p => p.id === gameState.playerId);
+    if (myPlayer && myPlayer.hasVoted) {
+        gameState.myVote = myPlayer.votedFor; // ИСПРАВЛЕНИЕ: сохраняем за кого проголосовали
+    }
+    
     updatePlayersGrid();
 });
 
@@ -1133,7 +1140,9 @@ function voteForPlayer(targetId) {
         return;
     }
     
-    if (gameState.myVote) {
+    // ИСПРАВЛЯЕМ: Проверяем состояние из players
+    const myPlayer = gameState.players.find(p => p.id === gameState.playerId);
+    if (myPlayer && myPlayer.hasVoted) {
         showNotification('Ошибка', 'Вы уже проголосовали!');
         return;
     }
@@ -1149,6 +1158,12 @@ function changeVote(targetId) {
         return;
     }
     
+    const myPlayer = gameState.players.find(p => p.id === gameState.playerId);
+    if (!myPlayer || !myPlayer.hasVoted) {
+        showNotification('Ошибка', 'Вы еще не голосовали!');
+        return;
+    }
+    
     if (!gameState.canChangeVote[gameState.playerId]) {
         showNotification('Ошибка', 'Вы уже использовали возможность смены голоса!');
         return;
@@ -1159,7 +1174,11 @@ function changeVote(targetId) {
 
 function getVotingButtons(player) {
     const isCurrentPlayer = player.id === gameState.playerId;
-    const hasVoted = gameState.myVote !== null;
+    
+    // ИСПРАВЛЯЕМ: Используем данные из gameState.players вместо gameState.myVote
+    const myPlayer = gameState.players.find(p => p.id === gameState.playerId);
+    const hasVoted = myPlayer ? myPlayer.hasVoted : false;
+    const myVotedFor = myPlayer ? myPlayer.votedFor : null;
     const canChange = gameState.canChangeVote[gameState.playerId] && hasVoted;
     
     if (isCurrentPlayer) {
@@ -1174,7 +1193,7 @@ function getVotingButtons(player) {
                 </button>
             </div>
         `;
-    } else if (canChange && gameState.myVote !== player.id) {
+    } else if (canChange && myVotedFor !== player.id) {
         return `
             <div class="vote-section">
                 <button class="vote-player-btn change-vote" onclick="changeVote('${player.id}')">
@@ -1182,7 +1201,7 @@ function getVotingButtons(player) {
                 </button>
             </div>
         `;
-    } else if (gameState.myVote === player.id) {
+    } else if (myVotedFor === player.id) {
         return `
             <div class="vote-section">
                 <button class="vote-player-btn voted" disabled>
@@ -1193,17 +1212,6 @@ function getVotingButtons(player) {
     }
     
     return '';
-}
-
-function getVotersForPlayer(playerId) {
-    if (!gameState.votingResults[playerId]) return [];
-    
-    return gameState.votingResults[playerId]
-        .map(voterId => {
-            const voter = gameState.players.find(p => p.id === voterId);
-            return voter ? voter.name : 'Неизвестный';
-        })
-        .filter((name, index, arr) => arr.indexOf(name) === index); // Убираем дубликаты
 }
 
 // ДОБАВЛЯЕМ функции для карт действий
