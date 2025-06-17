@@ -38,9 +38,8 @@ const stories = [
     title: 'Привет из прошлого',
     description: 'В вентиляции вы находите старую кассету с записью. На ней — голоса давно умерших…'
   }
-  // …другие варианты
+  // …добавляй ещё сколько нужно
 ];
-
 // Socket.IO подключение
 const socket = io({
     transports: ['websocket', 'polling'], // Добавляем fallback транспорты
@@ -148,16 +147,34 @@ socket.on('max-players-changed', function(data) {
 
 socket.on('game-started', function(data) {
     console.log('🚀 Game started:', data);
+
+    // Обновляем состояние
     gameState.players = data.players;
     gameState.serverGameState = data.gameState;
     gameState.gamePhase = data.gamePhase;
     gameState.currentRound = data.currentRound;
     gameState.timeLeft = data.timeLeft;
-    gameState.startRoundVotes = 0;      // ДОБАВЛЯЕМ: сброс голосов
-    gameState.myStartRoundVote = false; // ДОБАВЛЯЕМ: сброс моего голоса
+    gameState.startRoundVotes = 0;      
+    gameState.myStartRoundVote = false; 
+
+    // 1) Выбираем случайную историю из массива stories
+    const idx   = Math.floor(Math.random() * stories.length);
+    const story = stories[idx];
+    console.log('📖 Selected story:', idx, story);
+
+    // 2) Подставляем её в DOM
+    const titleEl = document.getElementById('storyTitle');
+    const descEl  = document.getElementById('storyDescription');
+    if (titleEl && descEl) {
+      titleEl.textContent       = story.title;
+      descEl.textContent        = story.description;
+    } else {
+      console.warn('Элементы #storyTitle / #storyDescription не найдены в DOM');
+    }
+
+    // 3) Показываем экран игры
     showGameScreen();
 });
-
 socket.on('game-reset', function(data) {
     console.log('🔄 Game reset:', data);
     gameState.players = data.players;
@@ -618,30 +635,9 @@ function joinGame() {
 }
 
 function startGame() {
-  // 1) Выбираем случайную историю
-  const idx = Math.floor(Math.random() * stories.length);
-  const story = stories[idx];
-
-  // 2) Обновляем DOM-блок с историей
-  const titleEl = document.getElementById('storyTitle');
-  const descEl  = document.getElementById('storyDescription');
-  if (titleEl && descEl) {
-    titleEl.textContent       = story.title;
-    descEl.textContent        = story.description;
-  } else {
-    console.warn('Элементы истории не найдены в DOM');
-  }
-
-  // 3) Скрываем логин/лобби и показываем экран игры
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('lobbyScreen').style.display = 'none';
-  document.getElementById('gameScreen').style.display  = 'flex';
-
-  // 4) Дальше ваш остальной код запуска раунда, инициализации игроков и т.п.
-  // initPlayers();
-  // socket.emit('startGame');
+    console.log('🚀 Starting game...');
+    socket.emit('start-game');
 }
-
 
 function startRound() {
     if (gameState.myStartRoundVote) {
