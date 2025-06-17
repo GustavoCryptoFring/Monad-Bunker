@@ -1451,8 +1451,7 @@ function updateStoryDisplay() {
         // Если сценарий еще не выбран, показываем заглушки
         const storyTitle = document.getElementById('storyTitle');
         const storyDescription = document.getElementById('storyDescription'); 
-        const roomName1 = document.getElementById('roomName1');
-        const roomName2 = document.getElementById('roomName2');
+        const bunkerDescription = document.getElementById('bunkerDescription');
         
         if (storyTitle) {
             storyTitle.textContent = 'Загрузка...';
@@ -1462,12 +1461,8 @@ function updateStoryDisplay() {
             storyDescription.textContent = 'Определяется сценарий...';
         }
         
-        if (roomName1) {
-            roomName1.textContent = 'Загрузка...';
-        }
-        
-        if (roomName2) {
-            roomName2.textContent = 'Загрузка...';
+        if (bunkerDescription) {
+            bunkerDescription.textContent = 'Загрузка информации о бункере...';
         }
         
         return;
@@ -1475,8 +1470,7 @@ function updateStoryDisplay() {
     
     const storyTitle = document.getElementById('storyTitle');
     const storyDescription = document.getElementById('storyDescription'); 
-    const roomName1 = document.getElementById('roomName1');
-    const roomName2 = document.getElementById('roomName2');
+    const bunkerDescription = document.getElementById('bunkerDescription');
     
     if (storyTitle) {
         storyTitle.textContent = gameState.scenario.title;
@@ -1486,31 +1480,8 @@ function updateStoryDisplay() {
         storyDescription.textContent = gameState.scenario.description;
     }
     
-    if (gameState.scenario.rooms && gameState.scenario.rooms.length >= 2) {
-        if (roomName1) {
-            roomName1.textContent = gameState.scenario.rooms[0].name;
-        }
-        if (roomName2) {
-            roomName2.textContent = gameState.scenario.rooms[1].name;
-        }
-        
-        // Обновляем иконки комнат
-        const bunkerRoom1 = document.getElementById('bunkerRoom1');
-        const bunkerRoom2 = document.getElementById('bunkerRoom2');
-        
-        if (bunkerRoom1) {
-            const icon1 = bunkerRoom1.querySelector('.room-icon');
-            if (icon1) {
-                icon1.textContent = gameState.scenario.rooms[0].icon;
-            }
-        }
-        
-        if (bunkerRoom2) {
-            const icon2 = bunkerRoom2.querySelector('.room-icon');
-            if (icon2) {
-                icon2.textContent = gameState.scenario.rooms[1].icon;
-            }
-        }
+    if (bunkerDescription && gameState.scenario.bunkerDescription) {
+        bunkerDescription.textContent = gameState.scenario.bunkerDescription;
     }
 }
 
