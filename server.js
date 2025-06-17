@@ -337,6 +337,35 @@ const gameRoom = {
     activeEffects: {} // Для отслеживания активных эффектов карт
 };
 
+// === ДОБАВЛЯЕМ МАССИВЫ СЦЕНАРИЕВ И КОМНАТ ===
+const gameScenarios = [
+    {
+        id: 1,
+        title: "☢️ Ядерная война",
+        description: "Мир охвачен ядерной войной. Радиация покрыла большую часть земли. Выжившие укрываются в бункерах, ожидая когда радиационный фон снизится до безопасного уровня. Вам предстоит провести в бункере несколько лет.",
+        icon: "☢️",
+        rooms: [
+            { name: "Ферма", icon: "🌱" },
+            { name: "Игровая комната", icon: "🎮" }
+        ]
+    },
+    {
+        id: 2,  
+        title: "🧊 Ледниковый период",
+        description: "Температура на Земле упала до минус 40 градусов. Ледники покрыли континенты. Человечество вынуждено жить в утепленных бункерах и ждать потепления. Холод - ваш главный враг.",
+        icon: "🧊",
+        rooms: [
+            { name: "Бильярд", icon: "🎱" },
+            { name: "Лаборатория", icon: "🔬" }
+        ]
+    }
+];
+
+// Функция выбора случайного сценария
+function getRandomScenario() {
+    return gameScenarios[Math.floor(Math.random() * gameScenarios.length)];
+}
+
 // Функция получения необходимого количества карт для раунда
 function getRequiredCardsForRound(round) {
     if (round === 1) {
@@ -927,6 +956,10 @@ io.on('connection', (socket) => {
             return;
         }
         
+        // ДОБАВЛЯЕМ: Выбираем случайный сценарий
+        const selectedScenario = getRandomScenario();
+        gameRoom.scenario = selectedScenario;
+        
         // Генерируем характеристики для всех игроков
         gameRoom.players.forEach(player => {
             player.characteristics = generateCharacteristics();
@@ -944,15 +977,16 @@ io.on('connection', (socket) => {
         gameRoom.playersWhoRevealed = [];
         gameRoom.currentTurnPlayer = null;
         
-        console.log('🚀 Game started! Players:', gameRoom.players.length);
+        console.log('🚀 Game started! Players:', gameRoom.players.length, 'Scenario:', selectedScenario.title);
         
-        // Уведомляем всех игроков о начале игры
+        // ОБНОВЛЯЕМ: Отправляем сценарий вместе с данными игры
         io.to('game-room').emit('game-started', {
             players: gameRoom.players,
             gameState: gameRoom.gameState,
             gamePhase: gameRoom.gamePhase,
             currentRound: gameRoom.currentRound,
-            timeLeft: gameRoom.timeLeft
+            timeLeft: gameRoom.timeLeft,
+            scenario: selectedScenario // ДОБАВЛЯЕМ сценарий
         });
     });
     

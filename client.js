@@ -22,8 +22,9 @@ let gameState = {
     requiredCardsThisRound: 1,
     skipDiscussionVotes: 0,
     mySkipVote: false,
-    startRoundVotes: 0,      // ДОБАВЛЯЕМ: количество голосов за начало раунда
-    myStartRoundVote: false  // ДОБАВЛЯЕМ: проголосовал ли я за начало раунда
+    startRoundVotes: 0,
+    myStartRoundVote: false,
+    scenario: null // ДОБАВЛЯЕМ сценарий
 };
 
 // Socket.IO подключение
@@ -138,8 +139,9 @@ socket.on('game-started', function(data) {
     gameState.gamePhase = data.gamePhase;
     gameState.currentRound = data.currentRound;
     gameState.timeLeft = data.timeLeft;
-    gameState.startRoundVotes = 0;      // ДОБАВЛЯЕМ: сброс голосов
-    gameState.myStartRoundVote = false; // ДОБАВЛЯЕМ: сброс моего голоса
+    gameState.startRoundVotes = 0;
+    gameState.myStartRoundVote = false;
+    gameState.scenario = data.scenario; // ДОБАВЛЯЕМ сценарий
     showGameScreen();
 });
 
@@ -654,9 +656,10 @@ function updateGameDisplay() {
         phaseDisplayElement.textContent = getPhaseDisplayText();
     }
     
-    // ОБНОВЛЯЕМ отображение кнопок в верхней части
-    updateRoundActions();
+    // ДОБАВЛЯЕМ: Обновляем историю
+    updateStoryDisplay();
     
+    updateRoundActions();
     updatePlayersGrid();
     updateTimerDisplay();
 }
