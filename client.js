@@ -93,7 +93,7 @@ socket.on('room-state', function(data) {
 socket.on('join-confirmed', function(data) {
     console.log('✅ Join confirmed:', data);
     
-    // ДОБАВЛЕНО: Разблокируем кнопку
+    // ИСПРАВЛЕНО: Правильно разблокируем кнопку
     const joinBtn = document.getElementById('joinGameBtn');
     if (joinBtn) {
         joinBtn.disabled = false;
@@ -104,7 +104,7 @@ socket.on('join-confirmed', function(data) {
     gameState.playerName = data.playerName;
     gameState.isHost = data.isHost;
     gameState.maxPlayers = data.maxPlayers;
-    gameState.startRoundVotes = data.startRoundVotes || 0; // ДОБАВЛЯЕМ
+    gameState.startRoundVotes = data.startRoundVotes || 0;
     gameState.gamePhase = 'lobby';
     showLobbyScreen();
 });
@@ -1102,9 +1102,17 @@ function showConnectionError(message) {
     }
 }
 
-// Обновляем socket.on('error') для обработки ошибок карт действий
+// ОБНОВЛЯЕМ обработчик ошибок (разблокируем кнопку при ошибке)
 socket.on('error', function(errorMessage) {
     console.error('❌ Server error:', errorMessage);
+    
+    // ДОБАВЛЕНО: Разблокируем кнопку при ошибке
+    const joinBtn = document.getElementById('joinGameBtn');
+    if (joinBtn && joinBtn.textContent === 'Подключение...') {
+        joinBtn.disabled = false;
+        joinBtn.textContent = 'Присоединиться к игре';
+    }
+    
     showNotification('Ошибка', errorMessage);
 });
 
@@ -1121,55 +1129,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (playerNameInput) {
         playerNameInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
-                e.preventDefault(); // ДОБАВЛЕНО: предотвращаем стандартное поведение
-                joinGame();
-            }
-        });
-    }
-    
-    // ДОБАВЛЕНО: Обработчик для кнопки присоединения
-    const joinGameBtn = document.getElementById('joinGameBtn');
-    if (joinGameBtn) {
-        joinGameBtn.addEventListener('click', function(e) {
-            e.preventDefault(); // Предотвращаем стандартное поведение
-            console.log('🎯 Join button clicked');
-            joinGame();
-        });
-    }
-});
-
-// ДОБАВЛЯЕМ В КОНЕЦ client.js если их нет
-
-// Обработчик для смены максимального количества игроков
-socket.on('change-max-players', function(data) {
-    console.log('🔧 Max players changed:', data);
-    gameState.maxPlayers = data.maxPlayers;
-    gameState.players = data.players;
-    updateLobbyDisplay();
-});
-
-// Функция закрытия модального окна характеристик
-function closeCharacteristicModal() {
-    const modal = document.getElementById('characteristicModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
-// Функция обработки Enter для поля ввода имени
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('📱 DOM loaded, initializing...');
-    
-    // Показываем экран входа при загрузке
-    showLoginScreen();
-    
-    // Добавляем обработчик Enter для поля ввода имени
-    const playerNameInput = document.getElementById('playerNameInput');
-    if (playerNameInput) {
-        playerNameInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
                 e.preventDefault();
-                joinGame();
+                joinGame(); // Вызываем нашу функцию
             }
         });
     }
@@ -1180,7 +1141,7 @@ document.addEventListener('DOMContentLoaded', function() {
         joinGameBtn.addEventListener('click', function(e) {
             e.preventDefault();
             console.log('🎯 Join button clicked');
-            joinGame();
+            joinGame(); // Вызываем нашу функцию
         });
     }
     
@@ -1446,3 +1407,85 @@ socket.on('game-reset', function(data) {
     hideStoryPanel(); // ДОБАВЛЯЕМ: скрываем историю при сбросе
     showLobbyScreen();
 });
+
+// ДОБАВЛЯЕМ ФУНКЦИЮ joinGame В НАЧАЛО client.js (после объявления gameState)
+
+function joinGame() {
+    console.log('🎯 Attempting to join game...');
+    
+    const playerNameInput = document.getElementById('playerNameInput');
+    const joinBtn = document.getElementById('joinGameBtn');
+    
+    if (!playerNameInput) {
+        console.error('❌ Player name input not found');
+        return;
+    }
+    
+    const playerName = playerNameInput.value.trim();
+    
+    if (!playerName) {
+        showNotification('Ошибка', 'Введите ваше имя!');
+        playerNameInput.focus();
+        return;
+    }
+    
+    if (playerName.length < 2) {
+        showNotification('Ошибка', 'Имя должно содержать минимум 2 символа!');
+        playerNameInput.focus();
+        return;
+    }
+    
+    if (playerName.length > 20) {
+        showNotification('Ошибка', 'Имя не должно превышать 20 символов!');
+        playerNameInput.focus();
+        return;
+    }
+    
+    // Блокируем кнопку на время подключения
+    if (joinBtn) {
+        joinBtn.disabled = true;
+        joinBtn.textContent = 'Подключение...';
+    }
+    
+    console.log('🚀 Joining game with name:', playerName);
+    
+    // Отправляем запрос на присоединение
+    socket.emit('join-game', { 
+        playerName: playerName 
+    });
+}
+
+// ДОБАВЛЯЕМ ФУНКЦИИ ДЛЯ ЛОББИ (если их нет)
+
+function startGame() {
+    console.log('🎮 Starting game...');
+    
+    if (!gameState.isHost) {
+        showNotification('Ошибка', 'Только хост может начать игру!');
+        return;
+    }
+    
+    if (gameState.players.length < 2) {
+        showNotification('Ошибка', 'Для начала игры нужно минимум 2 игрока!');
+        return;
+    }
+    
+    socket.emit('start-game');
+}
+
+function changeMaxPlayers() {
+    const select = document.getElementById('maxPlayersSelect');
+    if (!select) return;
+    
+    const newMaxPlayers = parseInt(select.value);
+    console.log('🔧 Changing max players to:', newMaxPlayers);
+    
+    socket.emit('change-max-players', { maxPlayers: newMaxPlayers });
+}
+
+// ДОБАВЛЯЕМ ФУНКЦИИ ДЛЯ ИГРОВОГО ПРОЦЕССА (если их нет)
+
+function startRound() {
+    console.log('🎯 Voting to start round');
+    socket.emit('start-round');
+}

@@ -842,6 +842,7 @@ io.on('connection', (socket) => {
         console.error('❌ Error sending room state:', error);
     }
     
+    // ПРОВЕРЯЕМ что обработчик join-game работает правильно
     socket.on('join-game', (data) => {
         console.log('🎯 Player joining:', data.playerName);
         
@@ -851,7 +852,7 @@ io.on('connection', (socket) => {
             return;
         }
         
-        // ИСПРАВЛЕНО: Проверяем имя только среди активных игроков (исключаем текущий socket)
+        // Проверяем имя только среди активных игроков (исключаем текущий socket)
         const existingPlayer = gameRoom.players.find(p => 
             p.name === data.playerName && p.id !== socket.id
         );
@@ -860,7 +861,7 @@ io.on('connection', (socket) => {
             return;
         }
         
-        // ИСПРАВЛЕНО: Удаляем старую запись этого сокета если она есть
+        // Удаляем старую запись этого сокета если она есть
         const oldPlayerIndex = gameRoom.players.findIndex(p => p.id === socket.id);
         if (oldPlayerIndex !== -1) {
             console.log('🔄 Removing old player record for socket:', socket.id);
