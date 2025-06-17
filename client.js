@@ -796,12 +796,25 @@ function updatePlayersGrid() {
         console.error('❌ playersGrid element not found');
         return;
     }
+
+    // Определяем максимальное количество голосов для подсветки лидеров
+    let maxVotes = 0;
+    if (gameState.gamePhase === 'voting' || gameState.gamePhase === 'justification' || gameState.gamePhase === 'results') {
+        const alivePlayers = gameState.players.filter(p => p.isAlive);
+        maxVotes = Math.max(...alivePlayers.map(p => p.votes || 0));
+    }
     
     playersGrid.innerHTML = '';
     playersGrid.className = `players-grid players-${gameState.players.length}`;
     
     gameState.players.forEach(player => {
         const playerCard = createPlayerCard(player);
+        
+        // НОВОЕ: Добавляем класс для игроков с максимальным количеством голосов
+        if (player.isAlive && (player.votes || 0) === maxVotes && maxVotes > 0) {
+            playerCard.classList.add('most-voted');
+        }
+        
         playersGrid.appendChild(playerCard);
     });
     
@@ -836,6 +849,49 @@ function createPlayerCard(player) {
             }
         }
     }
+
+    // НОВОЕ: Отображение информации о голосовании
+    let votingInfo = '';
+    if (gameState.gamePhase === 'voting' || gameState.gamePhase === 'justification' || gameState.gamePhase === 'results') {
+        // Показываем количество голосов за этого игрока
+        const votesForPlayer = player.votes || 0;
+        if (votesForPlayer > 0) {
+            // Получаем список тех, кто проголосовал за этого игрока
+            const votersForThisPlayer = getVotersForPlayer(player.id);
+            votingInfo = `
+                <div class="voting-info">
+                    <div class="votes-count">Голосов: ${votesForPlayer}</div>
+                    ${votersForThisPlayer.length > 0 ? `
+
+                        <div class="voters-list">
+                            Проголосовали: ${votersForThisPlayer.join(', ')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        } else if (player.isAlive) {
+            votingInfo = '<div class="voting-info"><div class="votes-count">Голосов: 0</div></div>';
+        }
+        
+        // Показываем за кого проголосовал этот игрок
+        if (player.isAlive && player.hasVoted && player.votedFor) {
+            const votedForPlayer = gameState.players.find(p => p.id === player.votedFor);
+            if (votedForPlayer) {
+                votingInfo += `
+                    <div class="voted-for-info">
+                        ${isCurrentPlayer ? 'Вы проголосовали' : player.name + ' проголосовал'} за: 
+                        <strong class="voted-target">${votedForPlayer.name}</strong>
+                    </div>
+                `;
+            }
+        } else if (player.isAlive && gameState.gamePhase === 'voting') {
+            votingInfo += `
+                <div class="voted-for-info not-voted">
+                    ${isCurrentPlayer ? 'Вы еще не проголосовали' : player.name + ' еще не проголосовал'}
+                </div>
+            `;
+        }
+    }
     
     card.innerHTML = `
         <div class="player-header">
@@ -853,6 +909,7 @@ function createPlayerCard(player) {
                     ${isCurrentTurn ? '<div class="player-status turn">Ваш ход!</div>' : ''}
                     ${isJustifying ? '<div class="player-status justifying">🎤 Оправдывается</div>' : ''}
                     ${turnInfo}
+                    ${votingInfo}
                 </div>
             </div>
         </div>
@@ -901,6 +958,18 @@ function createPlayerCard(player) {
     `;
     
     return card;
+}
+
+// НОВАЯ ФУНКЦИЯ: Получаем список игроков, проголосовавших за конкретного игрока
+function getVotersForPlayer(playerId) {
+    if (!gameState.votingResults || !gameState.votingResults[playerId]) {
+        return [];
+    }
+    
+    return gameState.votingResults[playerId].map(voterId => {
+        const voter = gameState.players.find(p => p.id === voterId);
+        return voter ? voter.name : 'Неизвестный';
+    });
 }
 
 function confirmRevealCharacteristic(characteristic) {
@@ -1006,7 +1075,7 @@ function getVotingButtons(player) {
             if (canChange) {
                 buttonText = 'Изменить голос';
                 buttonClass = 'vote-player-btn change-vote';
-                isDisabled = true;
+                isDisabled = false; // ИСПРАВЛЕНО: разрешаем смену голоса
             } else {
                 buttonText = '✅ Проголосовано';
                 buttonClass = 'vote-player-btn voted';
@@ -1016,12 +1085,19 @@ function getVotingButtons(player) {
             if (canChange) {
                 buttonText = 'Изменить на этого';
                 buttonClass = 'vote-player-btn change-vote';
+                isDisabled = false;
             } else {
                 buttonText = 'Голосовать';
                 buttonClass = 'vote-player-btn';
                 isDisabled = true;
             }
         }
+    }
+
+    // НОВОЕ: Добавляем информацию о текущих голосах в кнопку
+    const currentVotes = player.votes || 0;
+    if (currentVotes > 0) {
+        buttonText += ` (${currentVotes})`;
     }
     
     return `
