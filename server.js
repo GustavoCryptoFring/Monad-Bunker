@@ -775,564 +775,70 @@ io.on('connection', (socket) => {
             });
         }
     });
-});
-
-// === ФУНКЦИИ УПРАВЛЕНИЯ ФАЗАМИ ===
-
-function getRequiredCardsForRound(round) {
-    if (round === 1) {
-        return 2; // Профессия + 1 карта на выбор
-    } else {
-        return 1; // 1 карта на выбор
-    }
-}
-
-function startRevelationPhase() {
-    console.log('🔍 Starting revelation phase for round:', gameRoom.currentRound);
     
-    gameRoom.gamePhase = 'revelation';
-    gameRoom.playersWhoRevealed = [];
-    
-    // Сбрасываем состояние раскрытия для всех игроков ТОЛЬКО для текущего раунда
-    gameRoom.players.forEach(player => {
-        player.hasRevealed = false;
-        player.cardsRevealedThisRound = 0;
-    });
-    
-    // Начинаем с первого живого игрока
-    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
-    if (alivePlayers.length > 0) {
-        gameRoom.currentTurnPlayer = alivePlayers[0].id;
-        startPlayerTurn();
-    }
-}
-
-function startPlayerTurn() {
-    gameRoom.timeLeft = 60; // 1 минута на игрока
-    
-    startGameTimer();
-    
-    // Отправляем правильные данные о ходе
-    io.to('game-room').emit('phase-changed', {
-        gamePhase: gameRoom.gamePhase,
-        currentTurnPlayer: gameRoom.currentTurnPlayer,
-        timeLeft: gameRoom.timeLeft,
-        players: gameRoom.players,
-        currentRound: gameRoom.currentRound
-    });
-    
-    console.log(`🎯 Player turn: ${gameRoom.currentTurnPlayer}, time: ${gameRoom.timeLeft}s, round: ${gameRoom.currentRound}`);
-}
-
-function nextPlayerTurn() {
-    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
-    const currentIndex = alivePlayers.findIndex(p => p.id === gameRoom.currentTurnPlayer);
-    
-    if (currentIndex === -1) {
-        startDiscussionPhase();
-        return;
-    }
-    
-    const nextIndex = currentIndex + 1;
-    
-    if (nextIndex >= alivePlayers.length) {
-        // Проверяем завершение раунда по новым правилам
-        const allPlayersFinished = alivePlayers.every(player => {
-            const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
-            return (player.cardsRevealedThisRound || 0) >= requiredCards;
-        });
+    // ПЕРЕМЕЩАЕМ СЮДА - внутрь connection блока
+    socket.on('use-action-card', (data) => {
+        console.log('🎯 Action card use request:', data);
         
-        if (allPlayersFinished) {
-            // Все игроки завершили раскрытие - переходим к обсуждению
-            console.log('✅ All players finished revealing for round', gameRoom.currentRound);
-            startDiscussionPhase();
-        } else {
-            // Возвращаемся к первому игроку, который еще не завершил
-            const nextPlayer = alivePlayers.find(player => {
-                const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
-                return (player.cardsRevealedThisRound || 0) < requiredCards;
+        const player = gameRoom.players.find(p => p.id === socket.id);
+        
+        if (!player || !player.isAlive) {
+            socket.emit('error', 'Вы не можете использовать карты действий!');
+            return;
+        }
+        
+        if (!player.actionCards || player.actionCards.length === 0) {
+            socket.emit('error', 'У вас нет карт действий!');
+            return;
+        }
+        
+        const actionCard = player.actionCards.find(card => card.id === data.cardId);
+        
+        if (!actionCard) {
+            socket.emit('error', 'Карта действия не найдена!');
+            return;
+        }
+        
+        if (actionCard.usesLeft <= 0) {
+            socket.emit('error', 'Карта действия уже использована!');
+            return;
+        }
+        
+        // Проверяем возможность использования карты в текущей фазе
+        if (!canUseActionCard(actionCard, gameRoom.gamePhase)) {
+            socket.emit('error', `Карту "${actionCard.name}" нельзя использовать в текущей фазе!`);
+            return;
+        }
+        
+        // Используем карту
+        const success = useActionCard(player, actionCard, data.targetId);
+        
+        if (success) {
+            actionCard.usesLeft--;
+            console.log(`✨ ${player.name} used action card: ${actionCard.name}`);
+            
+            // Отправляем обновление всем игрокам
+            io.to('game-room').emit('action-card-used', {
+                playerId: player.id,
+                playerName: player.name,
+                cardName: actionCard.name,
+                cardType: actionCard.type,
+                players: gameRoom.players,
+                targetId: data.targetId
             });
-            
-            if (nextPlayer) {
-                gameRoom.currentTurnPlayer = nextPlayer.id;
-                console.log(`🔄 Continuing with player: ${nextPlayer.name}`);
-                startPlayerTurn();
-            } else {
-                startDiscussionPhase();
-            }
-        }
-    } else {
-        // Следующий игрок
-        gameRoom.currentTurnPlayer = alivePlayers[nextIndex].id;
-        console.log(`➡️ Next player: ${alivePlayers[nextIndex].name}`);
-        startPlayerTurn();
-    }
-}
-
-
-function startDiscussionPhase() {
-    console.log('💬 Starting discussion phase');
-    
-    gameRoom.gamePhase = 'discussion';
-    gameRoom.timeLeft = 300; // 5 минут на обсуждение
-    gameRoom.currentTurnPlayer = null;
-    gameRoom.skipDiscussionVotes = [];
-    
-    startGameTimer();
-    
-    io.to('game-room').emit('phase-changed', {
-        gamePhase: gameRoom.gamePhase,
-        timeLeft: gameRoom.timeLeft,
-        currentTurnPlayer: null,
-        players: gameRoom.players
-    });
-}
-
-function startJustificationPhase() {
-    console.log('⚖️ Starting justification phase');
-    
-    // Определяем игроков с максимальным количеством голосов
-    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
-    let maxVotes = 0;
-    
-    alivePlayers.forEach(player => {
-        if (player.votes > maxVotes) {
-            maxVotes = player.votes;
         }
     });
     
-    // Если никто не получил голосов или максимум голосов = 0
-    if (maxVotes === 0) {
-        console.log('📊 No votes - proceeding to next round');
-        nextRound();
-        return;
-    }
-    
-    // Находим всех игроков с максимальным количеством голосов
-    const playersToJustify = alivePlayers.filter(player => player.votes === maxVotes);
-    
-    console.log(`⚖️ Players to justify (${maxVotes} votes):`, playersToJustify.map(p => p.name));
-    
-    if (playersToJustify.length === 0) {
-        nextRound();
-        return;
-    }
-    
-    gameRoom.gamePhase = 'justification';
-    gameRoom.justificationQueue = [...playersToJustify];
-    gameRoom.currentJustifyingPlayer = null;
-    
-    // Даем всем возможность сменить голос в следующем голосовании
-    gameRoom.players.forEach(player => {
-        if (player.isAlive) {
-            gameRoom.canChangeVote[player.id] = true;
-        }
+    // Обработчик ошибок
+    socket.on('error', function(errorMessage) {
+        console.error('❌ Socket error:', errorMessage);
+        socket.emit('error', errorMessage);
     });
-    
-    // Начинаем первое оправдание
-    nextJustification();
-}
 
-function nextJustification() {
-    if (gameRoom.justificationQueue.length === 0) {
-        // Все оправдались - показываем результаты
-        console.log('✅ All justifications completed - showing results');
-        showResults();
-        return;
-    }
-    
-    const nextPlayer = gameRoom.justificationQueue.shift();
-    gameRoom.currentJustifyingPlayer = nextPlayer.id;
-    gameRoom.timeLeft = 120; // 2 минуты на оправдание
-    
-    console.log(`⚖️ Justification turn: ${nextPlayer.name}`);
-    
-    startGameTimer();
-    
-    io.to('game-room').emit('justification-started', {
-        justifyingPlayer: nextPlayer,
-        timeLeft: gameRoom.timeLeft,
-        remainingQueue: gameRoom.justificationQueue.length,
-        players: gameRoom.players
-    });
-}
+}); // КОНЕЦ io.on('connection')
 
-function startSecondVoting() {
-    console.log('🗳️ Starting second voting phase');
-    
-    gameRoom.gamePhase = 'voting';
-    gameRoom.timeLeft = 120; // 2 минуты на повторное голосование
-    
-    // НЕ сбрасываем голоса - они остаются
-    // НЕ сбрасываем hasVoted - игроки уже голосовали
-    
-    startGameTimer();
-    
-    io.to('game-room').emit('second-voting-started', {
-        gamePhase: gameRoom.gamePhase,
-        timeLeft: gameRoom.timeLeft,
-        players: gameRoom.players,
-        canChangeVote: gameRoom.canChangeVote
-    });
-}
-
-function startVotingPhase() {
-    gameRoom.gamePhase = 'voting';
-    gameRoom.timeLeft = 120; // 2 минуты на голосование
-    gameRoom.votingResults = {};
-    gameRoom.totalVotes = 0;
-    gameRoom.skipDiscussionVotes = [];
-    gameRoom.justificationQueue = [];
-    gameRoom.currentJustifyingPlayer = null;
-    gameRoom.canChangeVote = {};
-    
-    // Сбрасываем голоса
-    gameRoom.players.forEach(player => {
-        player.votes = 0;
-        player.hasVoted = false;
-        player.votedFor = null;
-    });
-    
-    console.log('🗳️ Starting voting phase');
-    
-    startGameTimer();
-    
-    io.to('game-room').emit('phase-changed', {
-        gamePhase: gameRoom.gamePhase,
-        timeLeft: gameRoom.timeLeft,
-        players: gameRoom.players
-    });
-}
-
-// ИСПРАВЛЯЕМ обработчик timeout - добавляем недостающие переходы
-function handlePhaseTimeout() {
-    console.log('⏰ Phase timeout:', gameRoom.gamePhase);
-    
-    switch (gameRoom.gamePhase) {
-        case 'revelation':
-            // Пропускаем ход игрока
-            nextPlayerTurn();
-            break;
-        case 'discussion':
-            startVotingPhase();
-            break;
-        case 'voting':
-            // ИСПРАВЛЕНО: проверяем, были ли голоса перед переходом к оправданиям
-            const hasVotes = Object.keys(gameRoom.votingResults).some(playerId => 
-                gameRoom.votingResults[playerId] && gameRoom.votingResults[playerId].length > 0
-            );
-            
-            if (hasVotes) {
-                startJustificationPhase();
-            } else {
-                // Если никто не голосовал - переходим к следующему раунду
-                nextRound();
-            }
-            break;
-        case 'justification':
-            // Время оправдания истекло - переходим к следующему
-            nextJustification();
-            break;
-    }
-}
-
-function showResults() {
-    gameRoom.gamePhase = 'results';
-    
-    // Определяем игрока с наибольшим количеством голосов
-    let maxVotes = 0;
-    let eliminatedPlayer = null;
-    
-    gameRoom.players.forEach(player => {
-        if (player.isAlive && player.votes > maxVotes) {
-            maxVotes = player.votes;
-            eliminatedPlayer = player;
-        }
-    });
-    
-    // Проверяем на ничью
-    const playersWithMaxVotes = gameRoom.players.filter(p => p.isAlive && p.votes === maxVotes);
-    
-    if (playersWithMaxVotes.length > 1) {
-        // Ничья - никого не исключаем
-        eliminatedPlayer = null;
-        console.log('🤝 Tie vote - no elimination');
-    } else if (eliminatedPlayer && maxVotes > 0) {
-        eliminatedPlayer.isAlive = false;
-        console.log('💀 Player eliminated:', eliminatedPlayer.name);
-    }
-    
-    // Сбрасываем состояние раунда
-    gameRoom.players.forEach(player => {
-        player.hasRevealed = false;
-        player.votes = 0;
-        player.hasVoted = false;
-        player.votedFor = null;
-        player.cardsRevealedThisRound = 0;
-        // НЕ сбрасываем revealedCharacteristics - они остаются на всю игру
-    });
-    
-    gameRoom.votingResults = {};
-    gameRoom.revealedThisRound = 0;
-    gameRoom.currentTurnPlayer = null;
-    gameRoom.justificationQueue = [];
-    gameRoom.currentJustifyingPlayer = null;
-    gameRoom.canChangeVote = {};
-    
-    io.to('game-room').emit('round-results', {
-        eliminatedPlayer: eliminatedPlayer ? eliminatedPlayer.name : null,
-        players: gameRoom.players,
-        votingResults: gameRoom.votingResults
-    });
-    
-    // Через 5 секунд переходим к следующему раунду
-    setTimeout(() => {
-        nextRound();
-    }, 5000);
-}
-
-function nextRound() {
-    gameRoom.currentRound++;
-    
-    // Проверяем условия окончания игры
-    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
-    
-    // Игра заканчивается когда остается 2 или меньше игроков
-    if (alivePlayers.length <= 2 || gameRoom.currentRound > gameRoom.maxRounds) {
-        endGame();
-        return;
-    }
-    
-    // Начинаем новый раунд
-    gameRoom.gamePhase = 'preparation';
-    gameRoom.timeLeft = 0;
-    gameRoom.currentTurnPlayer = null;
-    gameRoom.startRoundVotes = []; // ДОБАВЛЯЕМ: сброс голосов за начало раунда
-    
-    console.log('🔄 Starting round:', gameRoom.currentRound, 'Alive players:', alivePlayers.length);
-    
-    io.to('game-room').emit('new-round', {
-        currentRound: gameRoom.currentRound,
-        gamePhase: gameRoom.gamePhase,
-        timeLeft: gameRoom.timeLeft,
-        players: gameRoom.players
-    });
-}
-
-function endGame() {
-    gameRoom.gameState = 'finished';
-    gameRoom.gamePhase = 'finished';
-    
-    if (gameRoom.timer) {
-        clearInterval(gameRoom.timer);
-    }
-    
-    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
-    
-    console.log('🏁 Game ended. Winners:', alivePlayers.map(p => p.name));
-    
-    io.to('game-room').emit('game-ended', {
-        winners: alivePlayers,
-        players: gameRoom.players
-    });
-    
-    // Через 10 секунд сбрасываем игру
-    setTimeout(() => {
-        resetGame();
-    }, 10000);
-}
-
-function resetGame() {
-    console.log('🔄 Resetting game...');
-    
-    if (gameRoom.timer) {
-        clearInterval(gameRoom.timer);
-    }
-    
-    // Оставляем игроков, но сбрасываем игровое состояние
-    gameRoom.players.forEach((player) => {
-        player.isAlive = true;
-        player.votes = 0;
-        player.hasRevealed = false;
-        player.hasVoted = false;
-        player.votedFor = null;
-        player.cardsRevealedThisRound = 0;
-        player.revealedCharacteristics = [];
-        player.characteristics = null;
-        player.actionCards = [];
-    });
-    
-    gameRoom.gameState = 'lobby';
-    gameRoom.gamePhase = 'waiting';
-    gameRoom.currentRound = 1;
-    gameRoom.timer = null;
-    gameRoom.timeLeft = 0;
-    gameRoom.votingResults = {};
-    gameRoom.revealedThisRound = 0;
-    gameRoom.currentTurnPlayer = null;
-    gameRoom.playersWhoRevealed = [];
-    gameRoom.totalVotes = 0;
-    gameRoom.skipDiscussionVotes = [];
-    gameRoom.justificationQueue = [];
-    gameRoom.currentJustifyingPlayer = null;
-    gameRoom.canChangeVote = {};
-    gameRoom.startRoundVotes = [];
-    gameRoom.activeEffects = {}; // ДОБАВЛЯЕМ: сброс активных эффектов
-    
-    io.to('game-room').emit('game-reset', {
-        players: gameRoom.players,
-        gameState: gameRoom.gameState
-    });
-}
-
-// Вспомогательные функции для генерации данных
-const professions = [
-    "Врач", "Учитель", "Инженер", "Повар", "Программист", "Механик",
-    "Писатель", "Художник", "Музыкант", "Строитель", "Фермер", "Пилот",
-    "Медсестра", "Полицейский", "Пожарный", "Ветеринар", "Переводчик",
-    "Дизайнер", "Фотограф", "Журналист", "Психолог", "Бухгалтер"
-];
-
-const healthConditions = [
-    "Отличное здоровье", "Хорошее здоровье", "Удовлетворительное здоровье",
-    "Близорукость", "Дальнозоркость", "Астма", "Аллергия на пыль",
-    "Аллергия на животных", "Диабет", "Гипертония", "Артрит",
-    "Хроническая усталость", "Мигрени", "Бессонница", "Депрессия"
-];
-
-const hobbies = [
-    "Чтение", "Кулинария", "Садоводство", "Рисование", "Музыка",
-    "Спорт", "Танцы", "Фотография", "Путешествия", "Коллекционирование",
-    "Рукоделие", "Игры", "Рыбалка", "Охота", "Йога", "Медитация"
-];
-
-const phobias = [
-    "Боязнь темноты", "Боязнь высоты", "Боязнь замкнутых пространств",
-    "Боязнь пауков", "Боязнь змей", "Боязнь собак", "Боязнь воды",
-    "Боязнь огня", "Боязнь толпы", "Боязнь публичных выступлений"
-];
-
-const baggage = [
-    "Рюкзак с едой", "Аптечка", "Инструменты", "Оружие", "Книги",
-    "Семена растений", "Радио", "Фонарик", "Одеяла", "Одежда",
-    "Документы", "Деньги", "Украшения", "Лекарства", "Компьютер"
-];
-
-const facts = [
-    "Был в тюрьме", "Спас чью-то жизнь", "Выиграл в лотерею",
-    "Знает 5 языков", "Чемпион по шахматам", "Бывший военный",
-    "Имеет двойное гражданство", "Работал в цирке", "Писал книги",
-    "Изобрел что-то важное", "Путешествовал по всему миру",
-    "Выжил в авиакатастрофе", "Встречал знаменитость", "Умеет читать мысли",
-    "Владеет недвижимостью", "Участвовал в реалити-шоу", "Говорит на 3+ языках",
-    "Имеет татуировку", "Боится темноты", "Коллекционирует что-то редкое",
-    "Работал в другой стране", "Имеет необычное хобби", "Был на телевидении"
-];
-
-// Обновляем массив карт действий
-const actionCards = [
-    { 
-        id: 1, 
-        name: "Двойной голос", 
-        description: "Ваш голос считается за два во время голосования. Нужно активировать ДО голосования.", 
-        type: "voting", 
-        usesLeft: 1,
-        icon: "🗳️"
-    },
-    { 
-        id: 2, 
-        name: "Детектив", 
-        description: "Узнайте одну скрытую характеристику любого игрока", 
-        type: "investigative", 
-        usesLeft: 1,
-        icon: "🔍"
-    },
-    { 
-        id: 3, 
-        name: "Защитник", 
-        description: "Спасите одного игрока от исключения (включая себя)", 
-        type: "protective", 
-        usesLeft: 1,
-        icon: "🛡️"
-    },
-    { 
-        id: 4, 
-        name: "Анонимный голос", 
-        description: "Ваш голос не будет показан другим игрокам", 
-        type: "stealth", 
-        usesLeft: 1,
-        icon: "👤"
-    },
-    { 
-        id: 5, 
-        name: "Блокировщик", 
-        description: "Заблокируйте использование карты действия другого игрока", 
-        type: "disruptive", 
-        usesLeft: 1,
-        icon: "🚫"
-    },
-    { 
-        id: 6, 
-        name: "Лидер", 
-        description: "Принудительно начните следующую фазу игры", 
-        type: "control", 
-        usesLeft: 1,
-        icon: "👑"
-    }
-];
-
-// Добавляем обработчик использования карт действий
-socket.on('use-action-card', (data) => {
-    console.log('🎯 Action card use request:', data);
-    
-    const player = gameRoom.players.find(p => p.id === socket.id);
-    
-    if (!player || !player.isAlive) {
-        socket.emit('error', 'Вы не можете использовать карты действий!');
-        return;
-    }
-    
-    if (!player.actionCards || player.actionCards.length === 0) {
-        socket.emit('error', 'У вас нет карт действий!');
-        return;
-    }
-    
-    const actionCard = player.actionCards.find(card => card.id === data.cardId);
-    
-    if (!actionCard) {
-        socket.emit('error', 'Карта действия не найдена!');
-        return;
-    }
-    
-    if (actionCard.usesLeft <= 0) {
-        socket.emit('error', 'Карта действия уже использована!');
-        return;
-    }
-    
-    // Проверяем возможность использования карты в текущей фазе
-    if (!canUseActionCard(actionCard, gameRoom.gamePhase)) {
-        socket.emit('error', `Карту "${actionCard.name}" нельзя использовать в текущей фазе!`);
-        return;
-    }
-    
-    // Используем карту
-    const success = useActionCard(player, actionCard, data.targetId);
-    
-    if (success) {
-        actionCard.usesLeft--;
-        console.log(`✨ ${player.name} used action card: ${actionCard.name}`);
-        
-        // Отправляем обновление всем игрокам
-        io.to('game-room').emit('action-card-used', {
-            playerId: player.id,
-            playerName: player.name,
-            cardName: actionCard.name,
-            cardType: actionCard.type,
-            players: gameRoom.players,
-            targetId: data.targetId
-        });
-    }
-});
+// УБИРАЕМ ДУБЛИРУЮЩИЙ ОБРАБОТЧИК use-action-card который был вне connection блока
+// socket.on('use-action-card', ...) - УДАЛЯЕМ ПОЛНОСТЬЮ
 
 // Функция проверки возможности использования карты
 function canUseActionCard(card, gamePhase) {

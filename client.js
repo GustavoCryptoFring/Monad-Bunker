@@ -1258,6 +1258,12 @@ function showConnectionError(message) {
     }
 }
 
+// Обновляем socket.on('error') для обработки ошибок карт действий
+socket.on('error', function(errorMessage) {
+    console.error('❌ Server error:', errorMessage);
+    showNotification('Ошибка', errorMessage);
+});
+
 // === ИНИЦИАЛИЗАЦИЯ ===
 
 document.addEventListener('DOMContentLoaded', function() {
