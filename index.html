@@ -55,35 +55,10 @@
                         Начать игру (минимум 2 игрока)
                     </button>
                     
-                    <!-- ПЕРЕМЕЩЕННАЯ кнопка настроек уведомлений -->
-                    <button id="notificationSettingsBtn" class="notification-settings-btn" onclick="toggleNotificationSettings()" style="display: none;">
-                        ⚙️ Уведомления
-                    </button>
+                    <!-- УБИРАЕМ кнопку настроек уведомлений -->
                 </div>
                 
-                <!-- СКРЫТАЯ панель настроек уведомлений -->
-                <div class="notification-settings-panel" id="notificationSettingsPanel" style="display: none;">
-                    <h4>⚙️ Настройки уведомлений для всех игроков</h4>
-                    <div class="notification-options">
-                        <label class="notification-checkbox">
-                            <input type="checkbox" id="notifyGameStart" onchange="updateNotificationSettings()">
-                            <span>🚀 Уведомление о начале игры</span>
-                        </label>
-                        <label class="notification-checkbox">
-                            <input type="checkbox" id="notifyDiscussionSkipped" onchange="updateNotificationSettings()">
-                            <span>⏭️ Уведомление о пропуске обсуждения</span>
-                        </label>
-                        <label class="notification-checkbox">
-                            <input type="checkbox" id="notifyNewRound" onchange="updateNotificationSettings()">
-                            <span>🔄 Уведомление о новых раундах</span>
-                        </label>
-                        <!-- НОВЫЙ ЧЕКБОКС -->
-                        <label class="notification-checkbox">
-                            <input type="checkbox" id="notifyPlayerJoined" onchange="updateNotificationSettings()">
-                            <span>👥 Уведомление о присоединении игроков</span>
-                        </label>
-                    </div>
-                </div>
+                <!-- УБИРАЕМ всю панель настроек уведомлений -->
                 
                 <div class="game-info" id="waitingInfo">
                     <p>⏳ Ожидание хоста для начала игры...</p>

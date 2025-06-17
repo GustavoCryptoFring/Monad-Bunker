@@ -21,14 +21,7 @@ let gameState = {
     cardsRevealedThisRound: 0,
     requiredCardsThisRound: 1,
     skipDiscussionVotes: 0,
-    mySkipVote: false,
-    // НОВЫЕ НАСТРОЙКИ УВЕДОМЛЕНИЙ
-    notificationSettings: {
-        gameStart: false,
-        discussionSkipped: false,
-        newRound: false,
-        playerJoined: false  // ДОБАВЛЯЕМ НОВУЮ НАСТРОЙКУ
-    }
+    mySkipVote: false
 };
 
 // Socket.IO подключение
@@ -85,12 +78,6 @@ socket.on('room-state', function(data) {
     gameState.timeLeft = data.timeLeft || 0;
     gameState.currentTurnPlayer = data.currentTurnPlayer || null;
     gameState.maxPlayers = data.maxPlayers || 8;
-    gameState.notificationSettings = data.notificationSettings || { // НОВОЕ
-        gameStart: false,
-        discussionSkipped: false,
-        newRound: false,
-        playerJoined: false  // ДОБАВЛЯЕМ
-    };
     
     // Если мы уже в игре, показываем соответствующий экран
     if (gameState.playerId && gameState.serverGameState === 'lobby') {
@@ -114,12 +101,6 @@ socket.on('join-confirmed', function(data) {
     gameState.playerName = data.playerName;
     gameState.isHost = data.isHost;
     gameState.maxPlayers = data.maxPlayers;
-    gameState.notificationSettings = data.notificationSettings || {
-        gameStart: false,
-        discussionSkipped: false,
-        newRound: false,
-        playerJoined: false  // ДОБАВЛЯЕМ
-    };
     gameState.gamePhase = 'lobby';
     showLobbyScreen();
 });
@@ -128,13 +109,7 @@ socket.on('player-joined', function(data) {
     console.log('👋 Player joined:', data);
     gameState.players = data.players;
     gameState.maxPlayers = data.maxPlayers;
-    gameState.notificationSettings = data.notificationSettings || gameState.notificationSettings;
     updateLobbyDisplay();
-    
-    // УСЛОВНОЕ УВЕДОМЛЕНИЕ - показываем только если настройка включена И это не текущий игрок
-    if (data.newPlayer !== gameState.playerName && gameState.notificationSettings.playerJoined) {
-        showNotification('Игрок присоединился', `${data.newPlayer} присоединился к игре`);
-    }
 });
 
 socket.on('player-left', function(data) {
@@ -142,15 +117,12 @@ socket.on('player-left', function(data) {
     gameState.players = data.players;
     gameState.serverGameState = data.gameState;
     updateLobbyDisplay();
-    
-    showNotification('Игрок покинул игру', `${data.leftPlayer} покинул игру`);
 });
 
 socket.on('max-players-changed', function(data) {
     console.log('🔧 Max players changed:', data);
     gameState.maxPlayers = data.maxPlayers;
     gameState.players = data.players;
-    gameState.notificationSettings = data.notificationSettings || gameState.notificationSettings; // ДОБАВИЛИ
     updateLobbyDisplay();
 });
 
@@ -162,11 +134,6 @@ socket.on('game-started', function(data) {
     gameState.currentRound = data.currentRound;
     gameState.timeLeft = data.timeLeft;
     showGameScreen();
-    
-    // УСЛОВНОЕ УВЕДОМЛЕНИЕ О НАЧАЛЕ ИГРЫ
-    if (gameState.notificationSettings.gameStart) {
-        showNotification('Игра началась!', 'Характеристики розданы. Подготовьтесь к первому раунду.');
-    }
 });
 
 socket.on('game-reset', function(data) {
@@ -177,15 +144,7 @@ socket.on('game-reset', function(data) {
     gameState.currentRound = 1;
     gameState.timeLeft = 0;
     gameState.currentTurnPlayer = null;
-    gameState.notificationSettings = data.notificationSettings || { // ДОБАВИЛИ
-        gameStart: false,
-        discussionSkipped: false,
-        newRound: false,
-        playerJoined: false  // ДОБАВЛЯЕМ
-    };
     showLobbyScreen();
-    
-    showNotification('Игра сброшена', 'Возвращаемся в лобби');
 });
 
 socket.on('phase-changed', function(data) {
@@ -224,30 +183,6 @@ socket.on('characteristic-revealed', function(data) {
         gameState.requiredCardsThisRound = data.requiredCards;
     }
     
-    // НОВОЕ: Показываем уведомление об автоматическом раскрытии
-    if (data.autoRevealed) {
-        const isMe = data.playerId === gameState.playerId;
-        const message = isMe 
-            ? `Время истекло! Автоматически раскрыта характеристика: ${data.characteristic} - ${data.value}`
-            : `${data.playerName} не успел выбрать, автоматически раскрыто: ${data.characteristic}`;
-        
-        showNotification('Автоматическое раскрытие', message);
-    }
-    
-    updatePlayersGrid();
-});
-
-// НОВОЕ: Обработчик завершения автоматического раскрытия
-socket.on('auto-reveal-completed', function(data) {
-    console.log('🎲 Auto reveal completed:', data);
-    gameState.players = data.players;
-    
-    const isMe = data.playerName === gameState.playerName;
-    const message = isMe 
-        ? `Ваше время истекло. Автоматически раскрыто карт: ${data.cardsRevealed}`
-        : `${data.playerName} не успел выбрать карты. Раскрыто автоматически: ${data.cardsRevealed}`;
-    
-    showNotification('Ход завершен', message);
     updatePlayersGrid();
 });
 
@@ -304,11 +239,6 @@ socket.on('discussion-skipped', function(data) {
     gameState.skipDiscussionVotes = 0;
     gameState.mySkipVote = false;
     updateGameDisplay();
-    
-    // УСЛОВНОЕ УВЕДОМЛЕНИЕ О ПРОПУСКЕ ОБСУЖДЕНИЯ
-    if (gameState.notificationSettings.discussionSkipped) {
-        showNotification('Обсуждение пропущено', 'Достаточно игроков проголосовало за пропуск обсуждения');
-    }
 });
 
 socket.on('round-results', function(data) {
@@ -331,11 +261,6 @@ socket.on('new-round', function(data) {
     gameState.timeLeft = data.timeLeft;
     gameState.players = data.players;
     updateGameDisplay();
-    
-    // УСЛОВНОЕ УВЕДОМЛЕНИЕ О НОВОМ РАУНДЕ
-    if (gameState.notificationSettings.newRound) {
-        showNotification(`Раунд ${data.currentRound}`, 'Новый раунд начинается!');
-    }
 });
 
 socket.on('game-ended', function(data) {
@@ -359,12 +284,6 @@ socket.on('player-surrendered', function(data) {
     showNotification('Игрок сдался', message);
 });
 
-socket.on('notification-settings-updated', function(data) {
-    console.log('⚙️ Notification settings updated:', data);
-    gameState.notificationSettings = data.settings;
-    updateNotificationCheckboxes();
-});
-
 // === ФУНКЦИИ ОТОБРАЖЕНИЯ ЭКРАНОВ ===
 
 function showScreen(screenId) {
@@ -419,7 +338,6 @@ function updateLobbyDisplay() {
     const startGameBtn = document.getElementById('startGameBtn');
     const waitingInfo = document.getElementById('waitingInfo');
     const maxPlayersSelector = document.getElementById('maxPlayersSelector');
-    const notificationSettingsBtn = document.getElementById('notificationSettingsBtn'); // НОВОЕ
     
     if (currentPlayersCount) {
         currentPlayersCount.textContent = gameState.players.length;
@@ -459,10 +377,6 @@ function updateLobbyDisplay() {
         if (maxPlayersSelector) {
             maxPlayersSelector.style.display = 'block';
         }
-        // НОВОЕ: показываем кнопку настроек уведомлений для хоста
-        if (notificationSettingsBtn) {
-            notificationSettingsBtn.style.display = 'block';
-        }
     } else {
         if (startGameBtn) {
             startGameBtn.style.display = 'none';
@@ -473,80 +387,12 @@ function updateLobbyDisplay() {
         if (maxPlayersSelector) {
             maxPlayersSelector.style.display = 'none';
         }
-        // НОВОЕ: скрываем кнопку настроек уведомлений для не-хостов
-        if (notificationSettingsBtn) {
-            notificationSettingsBtn.style.display = 'none';
-        }
     }
     
     // Обновляем селектор максимального количества игроков
     const maxPlayersSelect = document.getElementById('maxPlayersSelect');
     if (maxPlayersSelect) {
         maxPlayersSelect.value = gameState.maxPlayers;
-    }
-    
-    // НОВОЕ: обновляем чекбоксы настроек уведомлений
-    updateNotificationCheckboxes();
-}
-
-// НОВАЯ ФУНКЦИЯ: переключение панели настроек уведомлений
-function toggleNotificationSettings() {
-    const panel = document.getElementById('notificationSettingsPanel');
-    const btn = document.getElementById('notificationSettingsBtn');
-    
-    if (!panel || !btn) return;
-    
-    if (panel.style.display === 'none' || panel.style.display === '') {
-        panel.style.display = 'block';
-        btn.classList.add('active');
-        btn.textContent = '⚙️ Скрыть настройки';
-    } else {
-        panel.style.display = 'none';
-        btn.classList.remove('active');
-        btn.textContent = '⚙️ Уведомления';
-    }
-}
-
-// НОВАЯ ФУНКЦИЯ: обновление настроек уведомлений
-function updateNotificationSettings() {
-    if (!gameState.isHost) {
-        return; // Только хост может изменять настройки
-    }
-    
-    const gameStartCheckbox = document.getElementById('notifyGameStart');
-    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
-    const newRoundCheckbox = document.getElementById('notifyNewRound');
-    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
-    
-    const settings = {
-        gameStart: gameStartCheckbox ? gameStartCheckbox.checked : false,
-        discussionSkipped: discussionSkippedCheckbox ? discussionSkippedCheckbox.checked : false,
-        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false,
-        playerJoined: playerJoinedCheckbox ? playerJoinedCheckbox.checked : false  // ДОБАВЛЯЕМ
-    };
-    
-    console.log('⚙️ Updating notification settings:', settings);
-    socket.emit('update-notification-settings', { settings: settings });
-}
-
-// НОВАЯ ФУНКЦИЯ: обновление чекбоксов настроек уведомлений
-function updateNotificationCheckboxes() {
-    const gameStartCheckbox = document.getElementById('notifyGameStart');
-    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
-    const newRoundCheckbox = document.getElementById('notifyNewRound');
-    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
-    
-    if (gameStartCheckbox) {
-        gameStartCheckbox.checked = gameState.notificationSettings.gameStart;
-    }
-    if (discussionSkippedCheckbox) {
-        discussionSkippedCheckbox.checked = gameState.notificationSettings.discussionSkipped;
-    }
-    if (newRoundCheckbox) {
-        newRoundCheckbox.checked = gameState.notificationSettings.newRound;
-    }
-    if (playerJoinedCheckbox) {  // ДОБАВЛЯЕМ
-        playerJoinedCheckbox.checked = gameState.notificationSettings.playerJoined;
     }
 }
 
@@ -604,7 +450,6 @@ function updateLobbyDisplay() {
     const startGameBtn = document.getElementById('startGameBtn');
     const waitingInfo = document.getElementById('waitingInfo');
     const maxPlayersSelector = document.getElementById('maxPlayersSelector');
-    const notificationSettingsBtn = document.getElementById('notificationSettingsBtn'); // НОВОЕ
     
     if (currentPlayersCount) {
         currentPlayersCount.textContent = gameState.players.length;
@@ -644,10 +489,6 @@ function updateLobbyDisplay() {
         if (maxPlayersSelector) {
             maxPlayersSelector.style.display = 'block';
         }
-        // НОВОЕ: показываем кнопку настроек уведомлений для хоста
-        if (notificationSettingsBtn) {
-            notificationSettingsBtn.style.display = 'block';
-        }
     } else {
         if (startGameBtn) {
             startGameBtn.style.display = 'none';
@@ -658,450 +499,12 @@ function updateLobbyDisplay() {
         if (maxPlayersSelector) {
             maxPlayersSelector.style.display = 'none';
         }
-        // НОВОЕ: скрываем кнопку настроек уведомлений для не-хостов
-        if (notificationSettingsBtn) {
-            notificationSettingsBtn.style.display = 'none';
-        }
     }
     
     // Обновляем селектор максимального количества игроков
     const maxPlayersSelect = document.getElementById('maxPlayersSelect');
     if (maxPlayersSelect) {
         maxPlayersSelect.value = gameState.maxPlayers;
-    }
-    
-    // НОВОЕ: обновляем чекбоксы настроек уведомлений
-    updateNotificationCheckboxes();
-}
-
-// НОВАЯ ФУНКЦИЯ: переключение панели настроек уведомлений
-function toggleNotificationSettings() {
-    const panel = document.getElementById('notificationSettingsPanel');
-    const btn = document.getElementById('notificationSettingsBtn');
-    
-    if (!panel || !btn) return;
-    
-    if (panel.style.display === 'none' || panel.style.display === '') {
-        panel.style.display = 'block';
-        btn.classList.add('active');
-        btn.textContent = '⚙️ Скрыть настройки';
-    } else {
-        panel.style.display = 'none';
-        btn.classList.remove('active');
-        btn.textContent = '⚙️ Уведомления';
-    }
-}
-
-// НОВАЯ ФУНКЦИЯ: обновление настроек уведомлений
-function updateNotificationSettings() {
-    if (!gameState.isHost) {
-        return; // Только хост может изменять настройки
-    }
-    
-    const gameStartCheckbox = document.getElementById('notifyGameStart');
-    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
-    const newRoundCheckbox = document.getElementById('notifyNewRound');
-    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
-    
-    const settings = {
-        gameStart: gameStartCheckbox ? gameStartCheckbox.checked : false,
-        discussionSkipped: discussionSkippedCheckbox ? discussionSkippedCheckbox.checked : false,
-        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false,
-        playerJoined: playerJoinedCheckbox ? playerJoinedCheckbox.checked : false  // ДОБАВЛЯЕМ
-    };
-    
-    console.log('⚙️ Updating notification settings:', settings);
-    socket.emit('update-notification-settings', { settings: settings });
-}
-
-// НОВАЯ ФУНКЦИЯ: обновление чекбоксов настроек уведомлений
-function updateNotificationCheckboxes() {
-    const gameStartCheckbox = document.getElementById('notifyGameStart');
-    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
-    const newRoundCheckbox = document.getElementById('notifyNewRound');
-    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
-    
-    if (gameStartCheckbox) {
-        gameStartCheckbox.checked = gameState.notificationSettings.gameStart;
-    }
-    if (discussionSkippedCheckbox) {
-        discussionSkippedCheckbox.checked = gameState.notificationSettings.discussionSkipped;
-    }
-    if (newRoundCheckbox) {
-        newRoundCheckbox.checked = gameState.notificationSettings.newRound;
-    }
-    if (playerJoinedCheckbox) {  // ДОБАВЛЯЕМ
-        playerJoinedCheckbox.checked = gameState.notificationSettings.playerJoined;
-    }
-}
-
-// === ФУНКЦИИ ОТОБРАЖЕНИЯ ЭКРАНОВ ===
-
-function showScreen(screenId) {
-    // Скрываем все экраны
-    const screens = document.querySelectorAll('.screen');
-    screens.forEach(screen => {
-        screen.style.display = 'none';
-    });
-    
-    // Показываем нужный экран
-    const targetScreen = document.getElementById(screenId);
-    if (targetScreen) {
-        targetScreen.style.display = 'block';
-    }
-}
-
-function showLoginScreen() {
-    console.log('📱 Showing login screen');
-    showScreen('loginScreen');
-    
-    // Устанавливаем фокус на поле ввода имени
-    const nameInput = document.getElementById('playerNameInput');
-    if (nameInput) {
-        nameInput.focus();
-    }
-}
-
-function showLobbyScreen() {
-    console.log('📱 Showing lobby screen');
-    showScreen('lobbyScreen');
-    updateLobbyDisplay();
-}
-
-function showGameScreen() {
-    console.log('📱 Showing game screen');
-    showScreen('gameScreen');
-    updateGameDisplay();
-}
-
-function showResultsScreen() {
-    console.log('📱 Showing results screen');
-    showScreen('resultsScreen');
-}
-
-// === ФУНКЦИИ ОБНОВЛЕНИЯ ЛОББИ ===
-
-function updateLobbyDisplay() {
-    // Обновляем счетчик игроков
-    const currentPlayersCount = document.getElementById('currentPlayersCount');
-    const maxPlayersCount = document.getElementById('maxPlayersCount');
-    const playersList = document.getElementById('playersList');
-    const startGameBtn = document.getElementById('startGameBtn');
-    const waitingInfo = document.getElementById('waitingInfo');
-    const maxPlayersSelector = document.getElementById('maxPlayersSelector');
-    const notificationSettingsBtn = document.getElementById('notificationSettingsBtn'); // НОВОЕ
-    
-    if (currentPlayersCount) {
-        currentPlayersCount.textContent = gameState.players.length;
-    }
-    
-    if (maxPlayersCount) {
-        maxPlayersCount.textContent = gameState.maxPlayers;
-    }
-    
-    // Обновляем список игроков
-    if (playersList) {
-        playersList.innerHTML = '';
-        gameState.players.forEach(player => {
-            const li = document.createElement('li');
-            li.className = player.isHost ? 'host' : '';
-            li.textContent = `${player.name}${player.isHost ? ' (Хост)' : ''}`;
-            playersList.appendChild(li);
-        });
-    }
-    
-    // Показываем/скрываем кнопки и селекторы
-    if (gameState.isHost) {
-        if (startGameBtn) {
-            startGameBtn.style.display = 'block';
-            startGameBtn.disabled = gameState.players.length < 2;
-            
-            // ОБНОВЛЯЕМ текст кнопки
-            if (gameState.players.length < 2) {
-                startGameBtn.textContent = 'Начать игру (минимум 2 игрока)';
-            } else {
-                startGameBtn.textContent = 'Начать игру';
-            }
-        }
-        if (waitingInfo) {
-            waitingInfo.style.display = 'none';
-        }
-        if (maxPlayersSelector) {
-            maxPlayersSelector.style.display = 'block';
-        }
-        // НОВОЕ: показываем кнопку настроек уведомлений для хоста
-        if (notificationSettingsBtn) {
-            notificationSettingsBtn.style.display = 'block';
-        }
-    } else {
-        if (startGameBtn) {
-            startGameBtn.style.display = 'none';
-        }
-        if (waitingInfo) {
-            waitingInfo.style.display = 'block';
-        }
-        if (maxPlayersSelector) {
-            maxPlayersSelector.style.display = 'none';
-        }
-        // НОВОЕ: скрываем кнопку настроек уведомлений для не-хостов
-        if (notificationSettingsBtn) {
-            notificationSettingsBtn.style.display = 'none';
-        }
-    }
-    
-    // Обновляем селектор максимального количества игроков
-    const maxPlayersSelect = document.getElementById('maxPlayersSelect');
-    if (maxPlayersSelect) {
-        maxPlayersSelect.value = gameState.maxPlayers;
-    }
-    
-    // НОВОЕ: обновляем чекбоксы настроек уведомлений
-    updateNotificationCheckboxes();
-}
-
-// НОВАЯ ФУНКЦИЯ: переключение панели настроек уведомлений
-function toggleNotificationSettings() {
-    const panel = document.getElementById('notificationSettingsPanel');
-    const btn = document.getElementById('notificationSettingsBtn');
-    
-    if (!panel || !btn) return;
-    
-    if (panel.style.display === 'none' || panel.style.display === '') {
-        panel.style.display = 'block';
-        btn.classList.add('active');
-        btn.textContent = '⚙️ Скрыть настройки';
-    } else {
-        panel.style.display = 'none';
-        btn.classList.remove('active');
-        btn.textContent = '⚙️ Уведомления';
-    }
-}
-
-// НОВАЯ ФУНКЦИЯ: обновление настроек уведомлений
-function updateNotificationSettings() {
-    if (!gameState.isHost) {
-        return; // Только хост может изменять настройки
-    }
-    
-    const gameStartCheckbox = document.getElementById('notifyGameStart');
-    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
-    const newRoundCheckbox = document.getElementById('notifyNewRound');
-    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
-    
-    const settings = {
-        gameStart: gameStartCheckbox ? gameStartCheckbox.checked : false,
-        discussionSkipped: discussionSkippedCheckbox ? discussionSkippedCheckbox.checked : false,
-        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false,
-        playerJoined: playerJoinedCheckbox ? playerJoinedCheckbox.checked : false  // ДОБАВЛЯЕМ
-    };
-    
-    console.log('⚙️ Updating notification settings:', settings);
-    socket.emit('update-notification-settings', { settings: settings });
-}
-
-// НОВАЯ ФУНКЦИЯ: обновление чекбоксов настроек уведомлений
-function updateNotificationCheckboxes() {
-    const gameStartCheckbox = document.getElementById('notifyGameStart');
-    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
-    const newRoundCheckbox = document.getElementById('notifyNewRound');
-    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
-    
-    if (gameStartCheckbox) {
-        gameStartCheckbox.checked = gameState.notificationSettings.gameStart;
-    }
-    if (discussionSkippedCheckbox) {
-        discussionSkippedCheckbox.checked = gameState.notificationSettings.discussionSkipped;
-    }
-    if (newRoundCheckbox) {
-        newRoundCheckbox.checked = gameState.notificationSettings.newRound;
-    }
-    if (playerJoinedCheckbox) {  // ДОБАВЛЯЕМ
-        playerJoinedCheckbox.checked = gameState.notificationSettings.playerJoined;
-    }
-}
-
-// === ФУНКЦИИ ОТОБРАЖЕНИЯ ЭКРАНОВ ===
-
-function showScreen(screenId) {
-    // Скрываем все экраны
-    const screens = document.querySelectorAll('.screen');
-    screens.forEach(screen => {
-        screen.style.display = 'none';
-    });
-    
-    // Показываем нужный экран
-    const targetScreen = document.getElementById(screenId);
-    if (targetScreen) {
-        targetScreen.style.display = 'block';
-    }
-}
-
-function showLoginScreen() {
-    console.log('📱 Showing login screen');
-    showScreen('loginScreen');
-    
-    // Устанавливаем фокус на поле ввода имени
-    const nameInput = document.getElementById('playerNameInput');
-    if (nameInput) {
-        nameInput.focus();
-    }
-}
-
-function showLobbyScreen() {
-    console.log('📱 Showing lobby screen');
-    showScreen('lobbyScreen');
-    updateLobbyDisplay();
-}
-
-function showGameScreen() {
-    console.log('📱 Showing game screen');
-    showScreen('gameScreen');
-    updateGameDisplay();
-}
-
-function showResultsScreen() {
-    console.log('📱 Showing results screen');
-    showScreen('resultsScreen');
-}
-
-// === ФУНКЦИИ ОБНОВЛЕНИЯ ЛОББИ ===
-
-function updateLobbyDisplay() {
-    // Обновляем счетчик игроков
-    const currentPlayersCount = document.getElementById('currentPlayersCount');
-    const maxPlayersCount = document.getElementById('maxPlayersCount');
-    const playersList = document.getElementById('playersList');
-    const startGameBtn = document.getElementById('startGameBtn');
-    const waitingInfo = document.getElementById('waitingInfo');
-    const maxPlayersSelector = document.getElementById('maxPlayersSelector');
-    const notificationSettingsBtn = document.getElementById('notificationSettingsBtn'); // НОВОЕ
-    
-    if (currentPlayersCount) {
-        currentPlayersCount.textContent = gameState.players.length;
-    }
-    
-    if (maxPlayersCount) {
-        maxPlayersCount.textContent = gameState.maxPlayers;
-    }
-    
-    // Обновляем список игроков
-    if (playersList) {
-        playersList.innerHTML = '';
-        gameState.players.forEach(player => {
-            const li = document.createElement('li');
-            li.className = player.isHost ? 'host' : '';
-            li.textContent = `${player.name}${player.isHost ? ' (Хост)' : ''}`;
-            playersList.appendChild(li);
-        });
-    }
-    
-    // Показываем/скрываем кнопки и селекторы
-    if (gameState.isHost) {
-        if (startGameBtn) {
-            startGameBtn.style.display = 'block';
-            startGameBtn.disabled = gameState.players.length < 2;
-            
-            // ОБНОВЛЯЕМ текст кнопки
-            if (gameState.players.length < 2) {
-                startGameBtn.textContent = 'Начать игру (минимум 2 игрока)';
-            } else {
-                startGameBtn.textContent = 'Начать игру';
-            }
-        }
-        if (waitingInfo) {
-            waitingInfo.style.display = 'none';
-        }
-        if (maxPlayersSelector) {
-            maxPlayersSelector.style.display = 'block';
-        }
-        // НОВОЕ: показываем кнопку настроек уведомлений для хоста
-        if (notificationSettingsBtn) {
-            notificationSettingsBtn.style.display = 'block';
-        }
-    } else {
-        if (startGameBtn) {
-            startGameBtn.style.display = 'none';
-        }
-        if (waitingInfo) {
-            waitingInfo.style.display = 'block';
-        }
-        if (maxPlayersSelector) {
-            maxPlayersSelector.style.display = 'none';
-        }
-        // НОВОЕ: скрываем кнопку настроек уведомлений для не-хостов
-        if (notificationSettingsBtn) {
-            notificationSettingsBtn.style.display = 'none';
-        }
-    }
-    
-    // Обновляем селектор максимального количества игроков
-    const maxPlayersSelect = document.getElementById('maxPlayersSelect');
-    if (maxPlayersSelect) {
-        maxPlayersSelect.value = gameState.maxPlayers;
-    }
-    
-    // НОВОЕ: обновляем чекбоксы настроек уведомлений
-    updateNotificationCheckboxes();
-}
-
-// НОВАЯ ФУНКЦИЯ: переключение панели настроек уведомлений
-function toggleNotificationSettings() {
-    const panel = document.getElementById('notificationSettingsPanel');
-    const btn = document.getElementById('notificationSettingsBtn');
-    
-    if (!panel || !btn) return;
-    
-    if (panel.style.display === 'none' || panel.style.display === '') {
-        panel.style.display = 'block';
-        btn.classList.add('active');
-        btn.textContent = '⚙️ Скрыть настройки';
-    } else {
-        panel.style.display = 'none';
-        btn.classList.remove('active');
-        btn.textContent = '⚙️ Уведомления';
-    }
-}
-
-// НОВАЯ ФУНКЦИЯ: обновление настроек уведомлений
-function updateNotificationSettings() {
-    if (!gameState.isHost) {
-        return; // Только хост может изменять настройки
-    }
-    
-    const gameStartCheckbox = document.getElementById('notifyGameStart');
-    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
-    const newRoundCheckbox = document.getElementById('notifyNewRound');
-    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
-    
-    const settings = {
-        gameStart: gameStartCheckbox ? gameStartCheckbox.checked : false,
-        discussionSkipped: discussionSkippedCheckbox ? discussionSkippedCheckbox.checked : false,
-        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false,
-        playerJoined: playerJoinedCheckbox ? playerJoinedCheckbox.checked : false  // ДОБАВЛЯЕМ
-    };
-    
-    console.log('⚙️ Updating notification settings:', settings);
-    socket.emit('update-notification-settings', { settings: settings });
-}
-
-// НОВАЯ ФУНКЦИЯ: обновление чекбоксов настроек уведомлений
-function updateNotificationCheckboxes() {
-    const gameStartCheckbox = document.getElementById('notifyGameStart');
-    const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
-    const newRoundCheckbox = document.getElementById('notifyNewRound');
-    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
-    
-    if (gameStartCheckbox) {
-        gameStartCheckbox.checked = gameState.notificationSettings.gameStart;
-    }
-    if (discussionSkippedCheckbox) {
-        discussionSkippedCheckbox.checked = gameState.notificationSettings.discussionSkipped;
-    }
-    if (newRoundCheckbox) {
-        newRoundCheckbox.checked = gameState.notificationSettings.newRound;
-    }
-    if (playerJoinedCheckbox) {  // ДОБАВЛЯЕМ
-        playerJoinedCheckbox.checked = gameState.notificationSettings.playerJoined;
     }
 }
 

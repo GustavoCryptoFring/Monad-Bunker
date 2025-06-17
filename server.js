@@ -177,34 +177,27 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Единая игровая комната для всех
+// Обновляем объект gameRoom - убираем notificationSettings
 const gameRoom = {
     players: [],
-    gameState: 'lobby', // lobby, playing, finished
-    maxPlayers: 8, // ИЗМЕНЕНО: по умолчанию 8 игроков
-    gamePhase: 'waiting', // waiting, preparation, revelation, discussion, voting, results, justification
+    gameState: 'lobby',
+    maxPlayers: 8,
+    gamePhase: 'waiting',
     currentRound: 1,
     maxRounds: 3,
     timer: null,
     timeLeft: 0,
     votingResults: {},
     revealedThisRound: 0,
-    currentTurnPlayer: null, // Для фазы раскрытия
-    playersWhoRevealed: [], // Кто уже раскрыл в этом раунде
-    totalVotes: 0, // Для досрочного завершения голосования
-    skipDiscussionVotes: [], // ДОБАВЛЕНО: голоса за пропуск обсуждения
-    // НОВЫЕ ПОЛЯ ДЛЯ ОПРАВДАНИЙ
-    justificationQueue: [], // Очередь игроков на оправдание
-    currentJustifyingPlayer: null, // Текущий оправдывающийся игрок
-    justificationPhase: 1, // Номер фазы оправдания (может быть несколько раундов)
-    canChangeVote: {}, // Отслеживание возможности смены голоса для каждого игрока
-    // НОВЫЕ НАСТРОЙКИ УВЕДОМЛЕНИЙ
-    notificationSettings: {
-        gameStart: false,
-        discussionSkipped: false,
-        newRound: false,
-        playerJoined: false  // ДОБАВЛЯЕМ НОВУЮ НАСТРОЙКУ
-    }
+    currentTurnPlayer: null,
+    playersWhoRevealed: [],
+    totalVotes: 0,
+    skipDiscussionVotes: [],
+    justificationQueue: [],
+    currentJustifyingPlayer: null,
+    justificationPhase: 1,
+    canChangeVote: {}
+    // УБИРАЕМ notificationSettings полностью
 };
 
 // Socket.IO логика
@@ -219,8 +212,8 @@ io.on('connection', (socket) => {
         currentRound: gameRoom.currentRound,
         timeLeft: gameRoom.timeLeft,
         currentTurnPlayer: gameRoom.currentTurnPlayer,
-        maxPlayers: gameRoom.maxPlayers,
-        notificationSettings: gameRoom.notificationSettings // НОВОЕ
+        maxPlayers: gameRoom.maxPlayers
+        // УБИРАЕМ notificationSettings
     });
     
     socket.on('join-game', (data) => {
@@ -261,22 +254,22 @@ io.on('connection', (socket) => {
         
         console.log('✅ Player joined:', data.playerName, 'Total players:', gameRoom.players.length);
         
-        // Подтверждение присоединения - ОБЯЗАТЕЛЬНО с maxPlayers
+        // Подтверждение присоединения - убираем notificationSettings
         socket.emit('join-confirmed', {
             playerId: socket.id,
             playerName: data.playerName,
             isHost: newPlayer.isHost,
-            maxPlayers: gameRoom.maxPlayers,
-            notificationSettings: gameRoom.notificationSettings // НОВОЕ
+            maxPlayers: gameRoom.maxPlayers
+            // УБИРАЕМ notificationSettings
         });
         
-        // Отправляем обновление всем игрокам
+        // Отправляем обновление всем игрокам - убираем notificationSettings
         io.to('game-room').emit('player-joined', {
             players: gameRoom.players,
             newPlayer: data.playerName,
             gameState: gameRoom.gameState,
-            maxPlayers: gameRoom.maxPlayers,
-            notificationSettings: gameRoom.notificationSettings // НОВОЕ
+            maxPlayers: gameRoom.maxPlayers
+            // УБИРАЕМ notificationSettings
         });
     });
     
@@ -637,8 +630,8 @@ io.on('connection', (socket) => {
             io.to('game-room').emit('discussion-skipped', {
                 gamePhase: 'voting',
                 timeLeft: 120,
-                players: gameRoom.players,
-                notificationSettings: gameRoom.notificationSettings // НОВОЕ
+                players: gameRoom.players
+                // УБИРАЕМ notificationSettings
             });
             
             startVotingPhase();
@@ -1076,8 +1069,8 @@ function nextRound() {
         currentRound: gameRoom.currentRound,
         gamePhase: gameRoom.gamePhase,
         timeLeft: gameRoom.timeLeft,
-        players: gameRoom.players,
-        notificationSettings: gameRoom.notificationSettings // НОВОЕ
+        players: gameRoom.players
+        // УБИРАЕМ notificationSettings
     });
 }
 
@@ -1138,18 +1131,12 @@ function resetGame() {
     gameRoom.justificationQueue = [];
     gameRoom.currentJustifyingPlayer = null;
     gameRoom.canChangeVote = {};
-    // СБРАСЫВАЕМ НАСТРОЙКИ УВЕДОМЛЕНИЙ К ЗНАЧЕНИЯМ ПО УМОЛЧАНИЮ
-    gameRoom.notificationSettings = {
-        gameStart: false,
-        discussionSkipped: false,
-        newRound: false,
-        playerJoined: false  // ДОБАВЛЯЕМ
-    };
+    // УБИРАЕМ сброс notificationSettings
     
     io.to('game-room').emit('game-reset', {
         players: gameRoom.players,
-        gameState: gameRoom.gameState,
-        notificationSettings: gameRoom.notificationSettings // НОВОЕ
+        gameState: gameRoom.gameState
+        // УБИРАЕМ notificationSettings
     });
 }
 
