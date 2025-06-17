@@ -104,6 +104,7 @@ socket.on('join-confirmed', function(data) {
     gameState.playerName = data.playerName;
     gameState.isHost = data.isHost;
     gameState.maxPlayers = data.maxPlayers;
+    gameState.startRoundVotes = data.startRoundVotes || 0; // ДОБАВЛЯЕМ
     gameState.gamePhase = 'lobby';
     showLobbyScreen();
 });
@@ -112,6 +113,7 @@ socket.on('player-joined', function(data) {
     console.log('👋 Player joined:', data);
     gameState.players = data.players;
     gameState.maxPlayers = data.maxPlayers;
+    gameState.startRoundVotes = data.startRoundVotes || 0; // ДОБАВЛЯЕМ
     updateLobbyDisplay();
 });
 
@@ -588,7 +590,51 @@ function startRound() {
     socket.emit('start-round');
 }
 
-// Обновляем функцию updateRoundActions - показываем кнопку всем в фазе preparation
+function changeMaxPlayers() {
+    const select = document.getElementById('maxPlayersSelect');
+    const newMaxPlayers = parseInt(select.value);
+    
+    console.log('🔧 Changing max players to:', newMaxPlayers);
+    socket.emit('change-max-players', { maxPlayers: newMaxPlayers });
+}
+
+// === ФУНКЦИИ ИГРОВОГО ПРОЦЕССА ===
+
+function getRequiredCardsForRound(round) {
+    if (round === 1) {
+        return 2; // Профессия + 1 карта на выбор
+    } else {
+        return 1; // 1 карта на выбор
+    }
+}
+
+function updateGameDisplay() {
+    // Обновляем информацию о раунде
+    const currentRoundElement = document.getElementById('currentRound');
+    const gameStatusElement = document.getElementById('gameStatus');
+    const phaseDisplayElement = document.getElementById('phaseDisplay');
+    const roundActionsElement = document.getElementById('roundActions');
+    
+    if (currentRoundElement) {
+        currentRoundElement.textContent = gameState.currentRound;
+    }
+    
+    if (gameStatusElement) {
+        gameStatusElement.textContent = getGameStatusText();
+    }
+    
+    if (phaseDisplayElement) {
+        phaseDisplayElement.textContent = getPhaseDisplayText();
+    }
+    
+    // ОБНОВЛЯЕМ отображение кнопок в верхней части
+    updateRoundActions();
+    
+    updatePlayersGrid();
+    updateTimerDisplay();
+}
+
+// НОВАЯ функция для управления кнопками в верхней части
 function updateRoundActions() {
     const roundActions = document.getElementById('roundActions');
     const startRoundBtn = document.getElementById('startRoundBtn');
@@ -1061,100 +1107,7 @@ function closeNotificationModal() {
     }
 }
 
-function createPlayerCard(player) {
-    const card = document.createElement('div');
-    const isCurrentPlayer = player.id === gameState.playerId;
-    const isCurrentTurn = player.id === gameState.currentTurnPlayer;
-    const isJustifying = player.id === gameState.currentJustifyingPlayer;
-    
-    card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''} ${isJustifying ? 'justifying' : ''}`;
-    
-    const characteristicOrder = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
-    
-    // ИСПРАВЛЕНО: Показываем подсказки только для текущего игрока
-    let turnInfo = '';
-    if (isCurrentTurn && gameState.gamePhase === 'revelation' && isCurrentPlayer) {
-        const requiredCards = getRequiredCardsForRound(gameState.currentRound);
-        const revealedCards = player.cardsRevealedThisRound || 0;
-        
-        if (gameState.currentRound === 1) {
-            if (revealedCards === 0) {
-                turnInfo = '<div class="turn-info">📋 Раскройте профессию</div>';
-            } else if (revealedCards === 1) {
-                turnInfo = '<div class="turn-info">🎯 Выберите любую характеристику</div>';
-            }
-        } else {
-            if (revealedCards === 0) {
-                turnInfo = '<div class="turn-info">🎯 Выберите любую характеристику</div>';
-            }
-        }
-    }
-    
-    card.innerHTML = `
-        <div class="player-header">
-            <div class="player-info">
-                <div class="player-avatar-container">
-                    <div class="player-avatar ${player.isAlive ? '' : 'eliminated-avatar'}">
-                        ${player.name.charAt(0).toUpperCase()}
-                    </div>
-                </div>
-                <div>
-                    <div class="player-name ${player.isAlive ? '' : 'eliminated-name'}">
-                        ${player.name}${player.isHost ? ' 👑' : ''}
-                    </div>
-                    ${isCurrentPlayer ? '<div class="player-status current">ВЫ</div>' : ''}
-                    ${isCurrentTurn ? '<div class="player-status turn">Ваш ход!</div>' : ''}
-                    ${isJustifying ? '<div class="player-status justifying">🎤 Оправдывается</div>' : ''}
-                    ${turnInfo}
-                </div>
-            </div>
-        </div>
-        
-        <div class="characteristics">
-            ${characteristicOrder.map(key => {
-                if (!player.characteristics || !player.characteristics[key]) return '';
-                
-                const isRevealed = player.revealedCharacteristics && player.revealedCharacteristics.includes(key);
-                const isOwnCard = isCurrentPlayer;
-                
-                // ИСПРАВЛЕНО: Возможность раскрытия только для текущего игрока в его ход
-                let canReveal = false;
-                if (isCurrentPlayer && isCurrentTurn && !isRevealed && gameState.gamePhase === 'revelation') {
-                    const requiredCards = getRequiredCardsForRound(gameState.currentRound);
-                    const revealedCards = player.cardsRevealedThisRound || 0;
-                    
-                    if (revealedCards < requiredCards) {
-                        if (gameState.currentRound === 1) {
-                            if (revealedCards === 0 && key === 'profession') {
-                                canReveal = true;
-                            } else if (revealedCards === 1 && key !== 'profession') {
-                                canReveal = true;
-                            }
-                        } else {
-                            canReveal = true;
-                        }
-                    }
-                }
-                
-                return `<div class="characteristic ${isRevealed ? 'revealed' : (isOwnCard ? 'own-hidden' : 'hidden')} ${canReveal ? 'clickable' : ''}" 
-                    ${canReveal ? `onclick="confirmRevealCharacteristic('${key}')"` : ''}>
-                    <span class="characteristic-name">${translateCharacteristic(key)}:</span>
-                    <span class="characteristic-value ${isOwnCard && !isRevealed ? 'own-characteristic' : ''}">
-                        ${isRevealed ? player.characteristics[key] : (isOwnCard ? player.characteristics[key] : '???')}
-                    </span>
-                </div>`;
-            }).join('')}
-        </div>
-        
-        <div class="player-actions">
-            ${gameState.gamePhase === 'voting' && !isCurrentPlayer && player.isAlive ? 
-                getVotingButtons(player) : ''
-            }
-        </div>
-    `;
-    
-    return card;
-}
+// УБИРАЕМ дублирование других функций - оставляем только первые версии
 
 // === ИНИЦИАЛИЗАЦИЯ ===
 

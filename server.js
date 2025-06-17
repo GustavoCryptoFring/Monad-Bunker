@@ -262,22 +262,22 @@ io.on('connection', (socket) => {
         
         console.log('✅ Player joined:', data.playerName, 'Total players:', gameRoom.players.length);
         
-        // Подтверждение присоединения - убираем notificationSettings
+        // Подтверждение присоединения - добавляем startRoundVotes
         socket.emit('join-confirmed', {
             playerId: socket.id,
             playerName: data.playerName,
             isHost: newPlayer.isHost,
-            maxPlayers: gameRoom.maxPlayers
-            // УБИРАЕМ notificationSettings
+            maxPlayers: gameRoom.maxPlayers,
+            startRoundVotes: gameRoom.startRoundVotes || [] // ДОБАВЛЯЕМ
         });
         
-        // Отправляем обновление всем игрокам - убираем notificationSettings
+        // Отправляем обновление всем игрокам - добавляем startRoundVotes
         io.to('game-room').emit('player-joined', {
             players: gameRoom.players,
             newPlayer: data.playerName,
             gameState: gameRoom.gameState,
-            maxPlayers: gameRoom.maxPlayers
-            // УБИРАЕМ notificationSettings
+            maxPlayers: gameRoom.maxPlayers,
+            startRoundVotes: gameRoom.startRoundVotes || [] // ДОБАВЛЯЕМ
         });
     });
     
@@ -330,6 +330,7 @@ io.on('connection', (socket) => {
         });
     });
     
+    // ИСПРАВЛЯЕМ обработчик start-round - убираем дублирование
     socket.on('start-round', () => {
         console.log('🎯 Round start vote from:', socket.id);
         
