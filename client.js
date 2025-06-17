@@ -1481,3 +1481,124 @@ function showGameScreen() {
     
     updateGameDisplay();
 }
+// ОБНОВЛЯЕМ обработчик game-started
+socket.on('game-started', function(data) {
+    console.log('🚀 Game started:', data);
+    gameState.players = data.players;
+    gameState.serverGameState = data.gameState;
+    gameState.gamePhase = data.gamePhase;
+    gameState.currentRound = data.currentRound;
+    gameState.timeLeft = data.timeLeft;
+    gameState.startRoundVotes = 0;
+    gameState.myStartRoundVote = false;
+    
+    // ОБНОВЛЯЕМ: Обработка истории - показываем сразу
+    if (data.story) {
+        gameState.currentStory = data.story;
+        updateStoryDisplay(data.story);
+        showStoryPanel(); // ДОБАВЛЯЕМ: показываем панель истории
+    }
+    
+    showGameScreen();
+});
+
+// НОВАЯ ФУНКЦИЯ: Показ панели истории
+function showStoryPanel() {
+    const storyPanel = document.getElementById('storyPanel');
+    if (storyPanel) {
+        storyPanel.style.display = 'block';
+        console.log('📜 Story panel shown');
+    }
+}
+
+// НОВАЯ ФУНКЦИЯ: Скрытие панели истории
+function hideStoryPanel() {
+    const storyPanel = document.getElementById('storyPanel');
+    if (storyPanel) {
+        storyPanel.style.display = 'none';
+        console.log('📜 Story panel hidden');
+    }
+}
+
+// ОБНОВЛЯЕМ функцию updateStoryDisplay
+function updateStoryDisplay(story) {
+    const storyContent = document.getElementById('storyContent');
+    
+    if (!storyContent) {
+        console.error('❌ Story content element not found');
+        return;
+    }
+    
+    if (story) {
+        console.log('📜 Updating story display:', story.title);
+        storyContent.innerHTML = story.content;
+        showStoryPanel(); // ДОБАВЛЯЕМ: показываем панель при обновлении содержимого
+    } else {
+        storyContent.innerHTML = `
+            <div class="story-loading">
+                Ожидание начала игры...
+            </div>
+        `;
+        hideStoryPanel(); // ДОБАВЛЯЕМ: скрываем панель если нет истории
+    }
+}
+
+// ОБНОВЛЯЕМ функцию showGameScreen
+function showGameScreen() {
+    console.log('📱 Showing game screen');
+    showScreen('gameScreen');
+    
+    // Проверяем и показываем историю если она есть
+    if (gameState.currentStory) {
+        updateStoryDisplay(gameState.currentStory);
+    } else {
+        hideStoryPanel(); // Скрываем если истории нет
+    }
+    
+    updateGameDisplay();
+}
+
+// ОБНОВЛЯЕМ обработчик room-state
+socket.on('room-state', function(data) {
+    console.log('🏠 Room state received:', data);
+    gameState.players = data.players || [];
+    gameState.serverGameState = data.gameState || 'lobby';
+    gameState.gamePhase = data.gamePhase || 'waiting';
+    gameState.currentRound = data.currentRound || 1;
+    gameState.timeLeft = data.timeLeft || 0;
+    gameState.currentTurnPlayer = data.currentTurnPlayer || null;
+    gameState.maxPlayers = data.maxPlayers || 8;
+    gameState.startRoundVotes = data.startRoundVotes || 0;
+    
+    // ОБНОВЛЯЕМ: Обработка истории при переподключении
+    if (data.story) {
+        gameState.currentStory = data.story;
+        updateStoryDisplay(data.story);
+    } else {
+        gameState.currentStory = null;
+        hideStoryPanel(); // Скрываем если истории нет
+    }
+    
+    // Если мы уже в игре, показываем соответствующий экран
+    if (gameState.playerId && gameState.serverGameState === 'lobby') {
+        hideStoryPanel(); // В лобби история не нужна
+        showLobbyScreen();
+    } else if (gameState.playerId && gameState.serverGameState === 'playing') {
+        showGameScreen();
+    }
+});
+
+// ОБНОВЛЯЕМ обработчик game-reset
+socket.on('game-reset', function(data) {
+    console.log('🔄 Game reset:', data);
+    gameState.players = data.players;
+    gameState.serverGameState = data.gameState;
+    gameState.gamePhase = 'lobby';
+    gameState.currentRound = 1;
+    gameState.timeLeft = 0;
+    gameState.currentTurnPlayer = null;
+    gameState.currentStory = null; // ДОБАВЛЯЕМ: сброс истории
+    
+    hideStoryPanel(); // ДОБАВЛЯЕМ: скрываем историю при сбросе
+    showLobbyScreen();
+});

@@ -73,27 +73,42 @@
                     <h2>РАУНД <span id="currentRound">1</span></h2>
                     <p id="gameStatus">Ожидание начала игры...</p>
                     
-                    <!-- ПЕРЕМЕЩАЕМ кнопки действий В ЦЕНТР round-info -->
-                    <div class="round-actions" id="roundActions" style="display: none;">
-                        <!-- Кнопка начала раунда (для всех игроков) -->
-                        <button id="startRoundBtn" class="center-action-btn" onclick="startRound()" style="display: none;">
-                            🚀 Начать раунд
-                        </button>
+                    <!-- НОВАЯ СТРУКТУРА: История слева + кнопки по центру -->
+                    <div class="center-content">
+                        <!-- ПЕРЕМЕЩАЕМ блок с историей в центральную область -->
+                        <div class="story-panel" id="storyPanel" style="display: none;">
+                            <div class="story-header">
+                                <h3>📜 История</h3>
+                            </div>
+                            <div class="story-content" id="storyContent">
+                                <div class="story-loading">
+                                    Ожидание начала игры...
+                                </div>
+                            </div>
+                        </div>
                         
-                        <!-- Кнопка пропуска обсуждения -->
-                        <button id="skipDiscussionBtn" class="center-action-btn" onclick="voteToSkipDiscussion()" style="display: none;">
-                            ⏭️ Пропустить обсуждение (<span id="skipVotesCount">0</span>/2)
-                        </button>
-                        
-                        <!-- Кнопка завершения оправдания -->
-                        <button id="finishJustificationBtn" class="center-action-btn" onclick="finishJustification()" style="display: none;">
-                            ✅ Завершить оправдание
-                        </button>
-                        
-                        <!-- Кнопка сдачи -->
-                        <button id="surrenderBtn" class="center-action-btn surrender-btn" onclick="surrender()" style="display: none;">
-                            🏳️ Сдаться
-                        </button>
+                        <!-- Кнопки действий справа от истории -->
+                        <div class="round-actions" id="roundActions" style="display: none;">
+                            <!-- Кнопка начала раунда (для всех игроков) -->
+                            <button id="startRoundBtn" class="center-action-btn" onclick="startRound()" style="display: none;">
+                                🚀 Начать раунд
+                            </button>
+                            
+                            <!-- Кнопка пропуска обсуждения -->
+                            <button id="skipDiscussionBtn" class="center-action-btn" onclick="voteToSkipDiscussion()" style="display: none;">
+                                ⏭️ Пропустить обсуждение (<span id="skipVotesCount">0</span>/2)
+                            </button>
+                            
+                            <!-- Кнопка завершения оправдания -->
+                            <button id="finishJustificationBtn" class="center-action-btn" onclick="finishJustification()" style="display: none;">
+                                ✅ Завершить оправдание
+                            </button>
+                            
+                            <!-- Кнопка сдачи -->
+                            <button id="surrenderBtn" class="center-action-btn surrender-btn" onclick="surrender()" style="display: none;">
+                                🏳️ Сдаться
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="timer-info">
@@ -102,22 +117,9 @@
                 </div>
             </div>
             
-            <!-- НОВЫЙ БЛОК: Контейнер для истории и сетки игроков -->
-            <div class="game-content">
-                <!-- ДОБАВЛЯЕМ блок с историей слева -->
-                <div class="story-panel" id="storyPanel">
-                    <div class="story-header">
-                        <h3>📜 История игры</h3>
-                    </div>
-                    <div class="story-content" id="storyContent">
-                        <p>История будет загружена при начале игры...</p>
-                    </div>
-                </div>
-                
-                <!-- Сетка игроков справа -->
-                <div class="players-grid" id="playersGrid">
-                    <!-- Карточки игроков -->
-                </div>
+            <!-- Только сетка игроков - убираем старый game-content -->
+            <div class="players-grid" id="playersGrid">
+                <!-- Карточки игроков -->
             </div>
 
             <div class="game-actions" id="gameActions">
