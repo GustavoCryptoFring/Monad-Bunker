@@ -914,7 +914,7 @@ function createPlayerCard(player) {
         }
     }
 
-    // НОВОЕ: Формируем индикатор карты действия
+    // ИСПРАВЛЕНО: Формируем индикатор карты действия БЕЗ СОДЕРЖИМОГО
     let actionCardIndicator = '';
     if (player.actionCards && player.actionCards.length > 0) {
         const actionCard = player.actionCards[0];
@@ -924,9 +924,9 @@ function createPlayerCard(player) {
         const indicatorClass = `action-card-indicator ${!canUse ? 'used' : ''} ${!isOwner ? 'not-owner' : ''}`;
         const clickHandler = isOwner && canUse ? `onclick="showActionCard('${actionCard.id}')"` : '';
         
+        // УБИРАЕМ ИКОНКУ - просто пустой кружок
         actionCardIndicator = `
             <div class="${indicatorClass}" ${clickHandler} title="${actionCard.name}">
-                ${actionCard.icon || '✨'}
             </div>
         `;
     }
@@ -944,7 +944,6 @@ function createPlayerCard(player) {
                 <div>
                     <div class="player-name ${player.isAlive ? '' : 'eliminated-name'}">
                         ${player.name}${player.isHost ? ' 👑' : ''}
-
                     </div>
                     ${isCurrentPlayer ? '<div class="player-status current">ВЫ</div>' : ''}
                     ${isCurrentTurn ? '<div class="player-status turn">Ваш ход!</div>' : ''}
@@ -1008,6 +1007,7 @@ function showActionCard(cardId) {
     const actionCard = me.actionCards.find(card => card.id === parseInt(cardId));
     if (!actionCard) return;
     
+    // В МОДАЛЬНОМ ОКНЕ ПОКАЗЫВАЕМ ИКОНКУ
     document.getElementById('actionCardName').textContent = `${actionCard.icon || '✨'} ${actionCard.name}`;
     document.getElementById('actionCardDescription').textContent = actionCard.description;
     
