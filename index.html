@@ -33,6 +33,7 @@
             <div class="room-setup">
                 <h2>Лобби игры</h2>
                 
+                <!-- ДОБАВИЛИ селектор количества игроков -->
                 <div class="room-settings" id="maxPlayersSelector" style="display: none;">
                     <label>Максимум игроков: 
                         <select id="maxPlayersSelect" onchange="changeMaxPlayers()">
@@ -48,11 +49,16 @@
                     <ul id="playersList"></ul>
                 </div>
 
+                <!-- НОВАЯ СТРУКТУРА: кнопка старта и настройки в одной строке -->
                 <div class="lobby-actions">
                     <button id="startGameBtn" class="start-game-btn" onclick="startGame()" style="display: none;" disabled>
                         Начать игру (минимум 2 игрока)
                     </button>
+                    
+                    <!-- УБИРАЕМ кнопку настроек уведомлений -->
                 </div>
+                
+                <!-- УБИРАЕМ всю панель настроек уведомлений -->
                 
                 <div class="game-info" id="waitingInfo">
                     <p>⏳ Ожидание хоста для начала игры...</p>
@@ -76,9 +82,15 @@
                         </div>
                         <div class="bunker-info" id="bunkerInfo">
                             <h4>🏠 Ваш бункер:</h4>
-                            <!-- ИЗМЕНЯЕМ: Заменяем структуру комнат на сплошной текст -->
-                            <div class="bunker-description">
-                                <p id="bunkerDescription">Загрузка информации о бункере...</p>
+                            <div class="bunker-details">
+                                <div class="bunker-room" id="bunkerRoom1">
+                                    <span class="room-icon">🏠</span>
+                                    <span class="room-name" id="roomName1">Загрузка...</span>
+                                </div>
+                                <div class="bunker-room" id="bunkerRoom2">
+                                    <span class="room-icon">🏠</span>
+                                    <span class="room-name" id="roomName2">Загрузка...</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -151,6 +163,7 @@
             </div>
         </div>
 
+        <!-- ОБНОВЛЕННОЕ модальное окно подтверждения раскрытия -->
         <div id="confirmRevealModal" class="modal" style="display: none;">
             <div class="modal-content">
                 <h3>Раскрытие характеристики</h3>
@@ -176,6 +189,7 @@
             </div>
         </div>
 
+        <!-- Добавляем модальное окно для карт действий после существующих модальных окон -->
         <div id="actionCardModal" class="modal" style="display: none;">
             <div class="modal-content">
                 <h3>🎯 Карта действия</h3>

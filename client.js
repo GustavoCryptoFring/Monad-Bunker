@@ -22,9 +22,8 @@ let gameState = {
     requiredCardsThisRound: 1,
     skipDiscussionVotes: 0,
     mySkipVote: false,
-    startRoundVotes: 0,
-    myStartRoundVote: false,
-    scenario: null // ДОБАВЛЯЕМ сценарий
+    startRoundVotes: 0,      // ДОБАВЛЯЕМ: количество голосов за начало раунда
+    myStartRoundVote: false  // ДОБАВЛЯЕМ: проголосовал ли я за начало раунда
 };
 
 // Socket.IO подключение
@@ -139,9 +138,8 @@ socket.on('game-started', function(data) {
     gameState.gamePhase = data.gamePhase;
     gameState.currentRound = data.currentRound;
     gameState.timeLeft = data.timeLeft;
-    gameState.startRoundVotes = 0;
-    gameState.myStartRoundVote = false;
-    // gameState.scenario = data.scenario; // УБИРАЕМ - сценарий придет позже
+    gameState.startRoundVotes = 0;      // ДОБАВЛЯЕМ: сброс голосов
+    gameState.myStartRoundVote = false; // ДОБАВЛЯЕМ: сброс моего голоса
     showGameScreen();
 });
 
@@ -163,12 +161,6 @@ socket.on('phase-changed', function(data) {
     gameState.players = data.players;
     gameState.currentTurnPlayer = data.currentTurnPlayer || null;
     gameState.currentRound = data.currentRound || gameState.currentRound;
-    
-    // ДОБАВЛЯЕМ: Получаем сценарий при изменении фазы
-    if (data.scenario) {
-        gameState.scenario = data.scenario;
-        console.log('🎲 Scenario received:', data.scenario.title);
-    }
     
     gameState.requiredCardsThisRound = getRequiredCardsForRound(gameState.currentRound);
     
@@ -371,13 +363,6 @@ function showLobbyScreen() {
 
 function showGameScreen() {
     console.log('📱 Showing game screen');
-    console.log('🎮 Game state:', {
-        phase: gameState.gamePhase,
-        players: gameState.players.length,
-        playerId: gameState.playerId,
-        scenario: gameState.scenario ? gameState.scenario.title : 'Not loaded'
-    });
-    
     showScreen('gameScreen');
     updateGameDisplay();
 }
@@ -490,13 +475,6 @@ function showLobbyScreen() {
 
 function showGameScreen() {
     console.log('📱 Showing game screen');
-    console.log('🎮 Game state:', {
-        phase: gameState.gamePhase,
-        players: gameState.players.length,
-        playerId: gameState.playerId,
-        scenario: gameState.scenario ? gameState.scenario.title : 'Not loaded'
-    });
-    
     showScreen('gameScreen');
     updateGameDisplay();
 }
@@ -657,14 +635,12 @@ function getRequiredCardsForRound(round) {
     }
 }
 
-// ОБНОВЛЯЕМ функцию updateGameDisplay
 function updateGameDisplay() {
-    console.log('🎮 Updating game display. Phase:', gameState.gamePhase, 'Players:', gameState.players.length);
-    
     // Обновляем информацию о раунде
     const currentRoundElement = document.getElementById('currentRound');
     const gameStatusElement = document.getElementById('gameStatus');
     const phaseDisplayElement = document.getElementById('phaseDisplay');
+    const roundActionsElement = document.getElementById('roundActions');
     
     if (currentRoundElement) {
         currentRoundElement.textContent = gameState.currentRound;
@@ -678,31 +654,22 @@ function updateGameDisplay() {
         phaseDisplayElement.textContent = getPhaseDisplayText();
     }
     
-    // ДОБАВЛЯЕМ: Обновляем историю
-    updateStoryDisplay();
-    
-    // ИСПРАВЛЯЕМ: Убеждаемся что функции вызываются
+    // ОБНОВЛЯЕМ отображение кнопок в верхней части
     updateRoundActions();
+    
     updatePlayersGrid();
     updateTimerDisplay();
-    
-    console.log('✅ Game display updated');
 }
 
-// ИСПРАВЛЯЕМ функцию для управления кнопками в верхней части
+// НОВАЯ функция для управления кнопками в верхней части
 function updateRoundActions() {
-    console.log('🎯 Updating round actions. Phase:', gameState.gamePhase, 'My ID:', gameState.playerId);
-    
     const roundActions = document.getElementById('roundActions');
     const startRoundBtn = document.getElementById('startRoundBtn');
     const skipDiscussionBtn = document.getElementById('skipDiscussionBtn');
     const finishJustificationBtn = document.getElementById('finishJustificationBtn');
     const surrenderBtn = document.getElementById('surrenderBtn');
     
-    if (!roundActions) {
-        console.error('❌ roundActions element not found');
-        return;
-    }
+    if (!roundActions) return;
     
     // Скрываем все кнопки по умолчанию
     if (startRoundBtn) startRoundBtn.style.display = 'none';
@@ -713,21 +680,13 @@ function updateRoundActions() {
     const isMyTurn = gameState.currentTurnPlayer === gameState.playerId;
     const isMyJustification = gameState.currentJustifyingPlayer === gameState.playerId;
     const alivePlayers = gameState.players.filter(p => p.isAlive);
-    const amAlive = alivePlayers.some(p => p.id === gameState.playerId);
     
     let hasVisibleButtons = false;
     
-    console.log('🎯 Phase check:', {
-        phase: gameState.gamePhase,
-        amAlive: amAlive,
-        playerId: gameState.playerId,
-        alivePlayers: alivePlayers.length
-    });
-    
     switch (gameState.gamePhase) {
         case 'preparation':
-            // ИСПРАВЛЯЕМ: Показываем кнопку всем живым игрокам
-            if (startRoundBtn && amAlive) {
+            // ИЗМЕНЕНО: Показываем кнопку всем живым игрокам
+            if (startRoundBtn && alivePlayers.some(p => p.id === gameState.playerId)) {
                 startRoundBtn.style.display = 'block';
                 hasVisibleButtons = true;
                 
@@ -738,19 +697,17 @@ function updateRoundActions() {
                 if (gameState.myStartRoundVote) {
                     startRoundBtn.textContent = `🎯 Проголосовали (${currentVotes}/${requiredVotes})`;
                     startRoundBtn.disabled = true;
-                    startRoundBtn.classList.add('voted-skip');
+                    startRoundBtn.classList.add('voted-skip'); // Используем тот же стиль что и для пропуска
                 } else {
                     startRoundBtn.textContent = `🚀 Начать раунд (${currentVotes}/${requiredVotes})`;
                     startRoundBtn.disabled = false;
                     startRoundBtn.classList.remove('voted-skip');
                 }
-                
-                console.log('✅ Start round button shown');
             }
             break;
             
         case 'discussion':
-            if (skipDiscussionBtn && amAlive) {
+            if (skipDiscussionBtn && alivePlayers.some(p => p.id === gameState.playerId)) {
                 skipDiscussionBtn.style.display = 'block';
                 hasVisibleButtons = true;
                 
@@ -785,8 +742,6 @@ function updateRoundActions() {
     
     // Показываем/скрываем контейнер с кнопками
     roundActions.style.display = hasVisibleButtons ? 'flex' : 'none';
-    
-    console.log('🎯 Round actions updated. Visible:', hasVisibleButtons);
 }
 
 function getGameStatusText() {
@@ -1443,46 +1398,6 @@ function translateCharacteristic(key) {
         'fact2': 'Факт 2'
     };
     return translations[key] || key;
-}
-
-// ДОБАВЛЯЕМ функцию обновления истории
-function updateStoryDisplay() {
-    if (!gameState.scenario) {
-        // Если сценарий еще не выбран, показываем заглушки
-        const storyTitle = document.getElementById('storyTitle');
-        const storyDescription = document.getElementById('storyDescription'); 
-        const bunkerDescription = document.getElementById('bunkerDescription');
-        
-        if (storyTitle) {
-            storyTitle.textContent = 'Загрузка...';
-        }
-        
-        if (storyDescription) {
-            storyDescription.textContent = 'Определяется сценарий...';
-        }
-        
-        if (bunkerDescription) {
-            bunkerDescription.textContent = 'Загрузка информации о бункере...';
-        }
-        
-        return;
-    }
-    
-    const storyTitle = document.getElementById('storyTitle');
-    const storyDescription = document.getElementById('storyDescription'); 
-    const bunkerDescription = document.getElementById('bunkerDescription');
-    
-    if (storyTitle) {
-        storyTitle.textContent = gameState.scenario.title;
-    }
-    
-    if (storyDescription) {
-        storyDescription.textContent = gameState.scenario.description;
-    }
-    
-    if (bunkerDescription && gameState.scenario.bunkerDescription) {
-        bunkerDescription.textContent = gameState.scenario.bunkerDescription;
-    }
 }
 
 console.log('🎮 Bunker Game Client Loaded');
