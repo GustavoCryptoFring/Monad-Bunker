@@ -26,7 +26,8 @@ let gameState = {
     notificationSettings: {
         gameStart: false,
         discussionSkipped: false,
-        newRound: false
+        newRound: false,
+        playerJoined: false  // ДОБАВЛЯЕМ НОВУЮ НАСТРОЙКУ
     }
 };
 
@@ -87,7 +88,8 @@ socket.on('room-state', function(data) {
     gameState.notificationSettings = data.notificationSettings || { // НОВОЕ
         gameStart: false,
         discussionSkipped: false,
-        newRound: false
+        newRound: false,
+        playerJoined: false  // ДОБАВЛЯЕМ
     };
     
     // Если мы уже в игре, показываем соответствующий экран
@@ -115,7 +117,8 @@ socket.on('join-confirmed', function(data) {
     gameState.notificationSettings = data.notificationSettings || {
         gameStart: false,
         discussionSkipped: false,
-        newRound: false
+        newRound: false,
+        playerJoined: false  // ДОБАВЛЯЕМ
     };
     gameState.gamePhase = 'lobby';
     showLobbyScreen();
@@ -125,10 +128,11 @@ socket.on('player-joined', function(data) {
     console.log('👋 Player joined:', data);
     gameState.players = data.players;
     gameState.maxPlayers = data.maxPlayers;
-    gameState.notificationSettings = data.notificationSettings || gameState.notificationSettings; // ДОБАВИЛИ
+    gameState.notificationSettings = data.notificationSettings || gameState.notificationSettings;
     updateLobbyDisplay();
     
-    if (data.newPlayer !== gameState.playerName) {
+    // УСЛОВНОЕ УВЕДОМЛЕНИЕ - показываем только если настройка включена И это не текущий игрок
+    if (data.newPlayer !== gameState.playerName && gameState.notificationSettings.playerJoined) {
         showNotification('Игрок присоединился', `${data.newPlayer} присоединился к игре`);
     }
 });
@@ -176,7 +180,8 @@ socket.on('game-reset', function(data) {
     gameState.notificationSettings = data.notificationSettings || { // ДОБАВИЛИ
         gameStart: false,
         discussionSkipped: false,
-        newRound: false
+        newRound: false,
+        playerJoined: false  // ДОБАВЛЯЕМ
     };
     showLobbyScreen();
     
@@ -511,11 +516,13 @@ function updateNotificationSettings() {
     const gameStartCheckbox = document.getElementById('notifyGameStart');
     const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
     const newRoundCheckbox = document.getElementById('notifyNewRound');
+    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
     
     const settings = {
         gameStart: gameStartCheckbox ? gameStartCheckbox.checked : false,
         discussionSkipped: discussionSkippedCheckbox ? discussionSkippedCheckbox.checked : false,
-        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false
+        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false,
+        playerJoined: playerJoinedCheckbox ? playerJoinedCheckbox.checked : false  // ДОБАВЛЯЕМ
     };
     
     console.log('⚙️ Updating notification settings:', settings);
@@ -527,6 +534,7 @@ function updateNotificationCheckboxes() {
     const gameStartCheckbox = document.getElementById('notifyGameStart');
     const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
     const newRoundCheckbox = document.getElementById('notifyNewRound');
+    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
     
     if (gameStartCheckbox) {
         gameStartCheckbox.checked = gameState.notificationSettings.gameStart;
@@ -536,6 +544,9 @@ function updateNotificationCheckboxes() {
     }
     if (newRoundCheckbox) {
         newRoundCheckbox.checked = gameState.notificationSettings.newRound;
+    }
+    if (playerJoinedCheckbox) {  // ДОБАВЛЯЕМ
+        playerJoinedCheckbox.checked = gameState.notificationSettings.playerJoined;
     }
 }
 
@@ -690,11 +701,13 @@ function updateNotificationSettings() {
     const gameStartCheckbox = document.getElementById('notifyGameStart');
     const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
     const newRoundCheckbox = document.getElementById('notifyNewRound');
+    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
     
     const settings = {
         gameStart: gameStartCheckbox ? gameStartCheckbox.checked : false,
         discussionSkipped: discussionSkippedCheckbox ? discussionSkippedCheckbox.checked : false,
-        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false
+        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false,
+        playerJoined: playerJoinedCheckbox ? playerJoinedCheckbox.checked : false  // ДОБАВЛЯЕМ
     };
     
     console.log('⚙️ Updating notification settings:', settings);
@@ -706,6 +719,7 @@ function updateNotificationCheckboxes() {
     const gameStartCheckbox = document.getElementById('notifyGameStart');
     const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
     const newRoundCheckbox = document.getElementById('notifyNewRound');
+    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
     
     if (gameStartCheckbox) {
         gameStartCheckbox.checked = gameState.notificationSettings.gameStart;
@@ -715,6 +729,9 @@ function updateNotificationCheckboxes() {
     }
     if (newRoundCheckbox) {
         newRoundCheckbox.checked = gameState.notificationSettings.newRound;
+    }
+    if (playerJoinedCheckbox) {  // ДОБАВЛЯЕМ
+        playerJoinedCheckbox.checked = gameState.notificationSettings.playerJoined;
     }
 }
 
@@ -869,11 +886,13 @@ function updateNotificationSettings() {
     const gameStartCheckbox = document.getElementById('notifyGameStart');
     const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
     const newRoundCheckbox = document.getElementById('notifyNewRound');
+    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
     
     const settings = {
         gameStart: gameStartCheckbox ? gameStartCheckbox.checked : false,
         discussionSkipped: discussionSkippedCheckbox ? discussionSkippedCheckbox.checked : false,
-        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false
+        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false,
+        playerJoined: playerJoinedCheckbox ? playerJoinedCheckbox.checked : false  // ДОБАВЛЯЕМ
     };
     
     console.log('⚙️ Updating notification settings:', settings);
@@ -885,6 +904,7 @@ function updateNotificationCheckboxes() {
     const gameStartCheckbox = document.getElementById('notifyGameStart');
     const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
     const newRoundCheckbox = document.getElementById('notifyNewRound');
+    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
     
     if (gameStartCheckbox) {
         gameStartCheckbox.checked = gameState.notificationSettings.gameStart;
@@ -894,6 +914,9 @@ function updateNotificationCheckboxes() {
     }
     if (newRoundCheckbox) {
         newRoundCheckbox.checked = gameState.notificationSettings.newRound;
+    }
+    if (playerJoinedCheckbox) {  // ДОБАВЛЯЕМ
+        playerJoinedCheckbox.checked = gameState.notificationSettings.playerJoined;
     }
 }
 
@@ -1048,11 +1071,13 @@ function updateNotificationSettings() {
     const gameStartCheckbox = document.getElementById('notifyGameStart');
     const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
     const newRoundCheckbox = document.getElementById('notifyNewRound');
+    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
     
     const settings = {
         gameStart: gameStartCheckbox ? gameStartCheckbox.checked : false,
         discussionSkipped: discussionSkippedCheckbox ? discussionSkippedCheckbox.checked : false,
-        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false
+        newRound: newRoundCheckbox ? newRoundCheckbox.checked : false,
+        playerJoined: playerJoinedCheckbox ? playerJoinedCheckbox.checked : false  // ДОБАВЛЯЕМ
     };
     
     console.log('⚙️ Updating notification settings:', settings);
@@ -1064,6 +1089,7 @@ function updateNotificationCheckboxes() {
     const gameStartCheckbox = document.getElementById('notifyGameStart');
     const discussionSkippedCheckbox = document.getElementById('notifyDiscussionSkipped');
     const newRoundCheckbox = document.getElementById('notifyNewRound');
+    const playerJoinedCheckbox = document.getElementById('notifyPlayerJoined');  // ДОБАВЛЯЕМ
     
     if (gameStartCheckbox) {
         gameStartCheckbox.checked = gameState.notificationSettings.gameStart;
@@ -1073,6 +1099,9 @@ function updateNotificationCheckboxes() {
     }
     if (newRoundCheckbox) {
         newRoundCheckbox.checked = gameState.notificationSettings.newRound;
+    }
+    if (playerJoinedCheckbox) {  // ДОБАВЛЯЕМ
+        playerJoinedCheckbox.checked = gameState.notificationSettings.playerJoined;
     }
 }
 

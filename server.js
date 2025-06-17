@@ -40,6 +40,138 @@ app.get('/api/health', (req, res) => {
     }
 });
 
+// ИСПРАВЛЕНО: Обработчик timeout с автоматическим раскрытием карт
+function handlePhaseTimeout() {
+    console.log('⏰ Phase timeout:', gameRoom.gamePhase);
+    
+    switch (gameRoom.gamePhase) {
+        case 'revelation':
+            // ИСПРАВЛЕНО: Автоматически раскрываем карты если игрок не успел
+            const currentPlayer = gameRoom.players.find(p => p.id === gameRoom.currentTurnPlayer);
+            if (currentPlayer && currentPlayer.isAlive) {
+                const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
+                const currentlyRevealed = currentPlayer.cardsRevealedThisRound || 0;
+                
+                if (currentlyRevealed < requiredCards) {
+                    console.log(`⏰ Time's up for ${currentPlayer.name}, auto-revealing remaining cards`);
+                    autoRevealRemainingCards(currentPlayer);
+                }
+            }
+            
+            // Переходим к следующему игроку
+            nextPlayerTurn();
+            break;
+        case 'discussion':
+            startVotingPhase();
+            break;
+        case 'voting':
+            // ИСПРАВЛЕНО: проверяем, были ли голоса перед переходом к оправданиям
+            const hasVotes = Object.keys(gameRoom.votingResults).some(playerId => 
+                gameRoom.votingResults[playerId] && gameRoom.votingResults[playerId].length > 0
+            );
+            
+            if (hasVotes) {
+                startJustificationPhase();
+            } else {
+                // Если никто не голосовал - переходим к следующему раунду
+                nextRound();
+            }
+            break;
+        case 'justification':
+            // Время оправдания истекло - переходим к следующему
+            nextJustification();
+            break;
+    }
+}
+
+// НОВАЯ ФУНКЦИЯ: Автоматическое раскрытие оставшихся карт
+async function autoRevealRemainingCards(player) {
+    const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
+    const currentlyRevealed = player.cardsRevealedThisRound || 0;
+    const cardsToReveal = requiredCards - currentlyRevealed;
+    
+    if (cardsToReveal <= 0) return;
+    
+    // Получаем доступные для раскрытия характеристики
+    const allCharacteristics = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
+    const alreadyRevealed = player.revealedCharacteristics || [];
+    const availableCharacteristics = allCharacteristics.filter(char => 
+        !alreadyRevealed.includes(char) && player.characteristics[char]
+    );
+    
+    // В первом раунде, если профессия не раскрыта, раскрываем её первой
+    if (gameRoom.currentRound === 1 && !alreadyRevealed.includes('profession')) {
+        if (!player.revealedCharacteristics) {
+            player.revealedCharacteristics = [];
+        }
+        
+        player.revealedCharacteristics.push('profession');
+        player.cardsRevealedThisRound = (player.cardsRevealedThisRound || 0) + 1;
+        
+        console.log(`🎲 Auto-revealed profession for ${player.name}: ${player.characteristics.profession}`);
+        
+        // Отправляем уведомление о раскрытии
+        io.to('game-room').emit('characteristic-revealed', {
+            playerId: player.id,
+            playerName: player.name,
+            characteristic: 'profession',
+            value: player.characteristics.profession,
+            players: gameRoom.players,
+            cardsRevealedThisRound: player.cardsRevealedThisRound,
+            requiredCards: requiredCards,
+            autoRevealed: true
+        });
+        
+        // Обновляем доступные характеристики
+        const professionIndex = availableCharacteristics.indexOf('profession');
+        if (professionIndex !== -1) {
+            availableCharacteristics.splice(professionIndex, 1);
+        }
+    }
+    
+    // Раскрываем оставшиеся карты случайно
+    const remainingToReveal = requiredCards - (player.cardsRevealedThisRound || 0);
+    
+    for (let i = 0; i < remainingToReveal && availableCharacteristics.length > 0; i++) {
+        const randomIndex = Math.floor(Math.random() * availableCharacteristics.length);
+        const characteristic = availableCharacteristics.splice(randomIndex, 1)[0];
+        
+        if (!player.revealedCharacteristics) {
+            player.revealedCharacteristics = [];
+        }
+        
+        player.revealedCharacteristics.push(characteristic);
+        player.cardsRevealedThisRound = (player.cardsRevealedThisRound || 0) + 1;
+        
+        console.log(`🎲 Auto-revealed ${characteristic} for ${player.name}: ${player.characteristics[characteristic]}`);
+        
+        // Отправляем уведомление о раскрытии
+        io.to('game-room').emit('characteristic-revealed', {
+            playerId: player.id,
+            playerName: player.name,
+            characteristic: characteristic,
+            value: player.characteristics[characteristic],
+            players: gameRoom.players,
+            cardsRevealedThisRound: player.cardsRevealedThisRound,
+            requiredCards: requiredCards,
+            autoRevealed: true
+        });
+        
+        // Небольшая задержка между раскрытиями для лучшего UX
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    // Отмечаем что игрок завершил раскрытие
+    player.hasRevealed = true;
+    
+    // Уведомляем о завершении автоматического раскрытия
+    io.to('game-room').emit('auto-reveal-completed', {
+        playerName: player.name,
+        cardsRevealed: player.cardsRevealedThisRound,
+        players: gameRoom.players
+    });
+}
+
 // Catch-all для неопределенных роутов
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
@@ -70,7 +202,8 @@ const gameRoom = {
     notificationSettings: {
         gameStart: false,
         discussionSkipped: false,
-        newRound: false
+        newRound: false,
+        playerJoined: false  // ДОБАВЛЯЕМ НОВУЮ НАСТРОЙКУ
     }
 };
 
@@ -1009,7 +1142,8 @@ function resetGame() {
     gameRoom.notificationSettings = {
         gameStart: false,
         discussionSkipped: false,
-        newRound: false
+        newRound: false,
+        playerJoined: false  // ДОБАВЛЯЕМ
     };
     
     io.to('game-room').emit('game-reset', {
