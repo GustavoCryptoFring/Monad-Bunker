@@ -226,6 +226,12 @@ socket.on('second-voting-started', function(data) {
     gameState.timeLeft = data.timeLeft;
     gameState.players = data.players;
     gameState.canChangeVote = data.canChangeVote || {};
+    
+    // Показываем уведомление о втором голосовании
+    if (data.isSecondVoting) {
+        showNotification('Второе голосование', 'Игроки оправдались. Голосуйте повторно среди них.');
+    }
+    
     updateGameDisplay();
 });
 
@@ -766,7 +772,6 @@ function getGameStatusText() {
                         }
                     }
                 } else {
-                    // ИСПРАВЛЕНО: Убираем детальную информацию для других игроков
                     return `Ход игрока: ${currentPlayer.name}`;
                 }
             }
@@ -774,6 +779,11 @@ function getGameStatusText() {
         case 'discussion': 
             return 'Фаза обсуждения';
         case 'voting': 
+            // ДОБАВЛЯЕМ проверку на повторное голосование
+            const justificationQueue = gameState.players.filter(p => p.id === gameState.currentJustifyingPlayer);
+            if (justificationQueue.length > 0) {
+                return 'Повторное голосование';
+            }
             return 'Фаза голосования';
         case 'justification':
             const justifyingPlayer = gameState.players.find(p => p.id === gameState.currentJustifyingPlayer);
