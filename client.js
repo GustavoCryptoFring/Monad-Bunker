@@ -1164,7 +1164,7 @@ function surrender() {
 function translateCharacteristic(key) {
     const translations = {
         'profession': 'Профессия',
-        'health': 'Здоровье',
+        'health': 'Здоровье', 
         'hobby': 'Хобби',
         'phobia': 'Фобия',
         'baggage': 'Багаж',
@@ -1293,5 +1293,101 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// ДОБАВЛЯЕМ В КОНЕЦ client.js если их нет
+
+// Обработчик для смены максимального количества игроков
+socket.on('change-max-players', function(data) {
+    console.log('🔧 Max players changed:', data);
+    gameState.maxPlayers = data.maxPlayers;
+    gameState.players = data.players;
+    updateLobbyDisplay();
+});
+
+// Функция закрытия модального окна характеристик
+function closeCharacteristicModal() {
+    const modal = document.getElementById('characteristicModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Функция обработки Enter для поля ввода имени
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📱 DOM loaded, initializing...');
+    
+    // Показываем экран входа при загрузке
+    showLoginScreen();
+    
+    // Добавляем обработчик Enter для поля ввода имени
+    const playerNameInput = document.getElementById('playerNameInput');
+    if (playerNameInput) {
+        playerNameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                joinGame();
+            }
+        });
+    }
+    
+    // Обработчик для кнопки присоединения
+    const joinGameBtn = document.getElementById('joinGameBtn');
+    if (joinGameBtn) {
+        joinGameBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('🎯 Join button clicked');
+            joinGame();
+        });
+    }
+    
+    // Закрытие модальных окон по клику вне области
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('modal')) {
+            e.target.style.display = 'none';
+        }
+    });
+});
+
+// Проверяем все функции голосования
+function voteForPlayer(playerId) {
+    console.log('🗳️ Voting for player:', playerId);
+    
+    if (gameState.gamePhase !== 'voting') {
+        showNotification('Ошибка', 'Сейчас не время для голосования!');
+        return;
+    }
+    
+    const me = gameState.players.find(p => p.id === gameState.playerId);
+    if (!me || !me.isAlive) {
+        showNotification('Ошибка', 'Вы не можете голосовать!');
+        return;
+    }
+    
+    if (me.hasVoted && !gameState.canChangeVote[gameState.playerId]) {
+        showNotification('Ошибка', 'Вы уже проголосовали!');
+        return;
+    }
+    
+    if (me.hasVoted && gameState.canChangeVote[gameState.playerId]) {
+        socket.emit('change-vote', { targetId: playerId });
+        gameState.hasChangedVote = true;
+    } else {
+        socket.emit('vote-player', { targetId: playerId });
+    }
+}
+
+// Убеждаемся что все функции переведены
+function translateCharacteristic(key) {
+    const translations = {
+        'profession': 'Профессия',
+        'health': 'Здоровье', 
+        'hobby': 'Хобби',
+        'phobia': 'Фобия',
+        'baggage': 'Багаж',
+        'fact1': 'Факт 1',
+        'fact2': 'Факт 2'
+    };
+    return translations[key] || key;
+}
 
 console.log('🎮 Bunker Game Client Loaded');
