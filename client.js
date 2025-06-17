@@ -654,6 +654,163 @@ function updateTimerDisplay() {
     }
 }
 
+// ПРОВЕРЯЕМ что функция createPlayerCard существует и работает
+function createPlayerCard(player) {
+    const card = document.createElement('div');
+    const isCurrentPlayer = player.id === gameState.playerId;
+    const isCurrentTurn = player.id === gameState.currentTurnPlayer;
+    const isJustifying = player.id === gameState.currentJustifyingPlayer;
+    
+    // Проверяем активные эффекты
+    const hasDoubleVote = player.activeEffects && player.activeEffects.doubleVote;
+    
+    card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''} ${isJustifying ? 'justifying' : ''} ${hasDoubleVote ? 'double-vote' : ''}`;
+    
+    const characteristicOrder = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
+    
+    // Показываем подсказки только для текущего игрока
+    let turnInfo = '';
+    if (isCurrentTurn && gameState.gamePhase === 'revelation' && isCurrentPlayer) {
+        const requiredCards = getRequiredCardsForRound(gameState.currentRound);
+        const revealedCards = player.cardsRevealedThisRound || 0;
+        
+        if (gameState.currentRound === 1) {
+            if (revealedCards === 0) {
+                turnInfo = '<div class="turn-info">📋 Раскройте профессию</div>';
+            } else if (revealedCards === 1) {
+                turnInfo = '<div class="turn-info">🎯 Выберите любую характеристику</div>';
+            }
+        } else {
+            if (revealedCards === 0) {
+                turnInfo = '<div class="turn-info">🎯 Выберите любую характеристику</div>';
+            }
+        }
+    }
+
+    // Отображение информации о голосовании
+    let votingInfo = '';
+    if (gameState.gamePhase === 'voting' || gameState.gamePhase === 'justification' || gameState.gamePhase === 'results') {
+        const votesForPlayer = player.votes || 0;
+        if (votesForPlayer > 0) {
+            const votersForThisPlayer = getVotersForPlayer(player.id);
+            votingInfo = `
+                <div class="voting-info">
+                    <div class="votes-count">Голосов: ${votesForPlayer}</div>
+                    ${votersForThisPlayer.length > 0 ? `
+                        <div class="voters-list">
+                            Проголосовали: ${votersForThisPlayer.join(', ')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        } else if (player.isAlive) {
+            votingInfo = '<div class="voting-info"><div class="votes-count">Голосов: 0</div></div>';
+        }
+        
+        if (player.isAlive && player.hasVoted && player.votedFor) {
+            const votedForPlayer = gameState.players.find(p => p.id === player.votedFor);
+            if (votedForPlayer) {
+                votingInfo += `
+                    <div class="voted-for-info">
+                        ${isCurrentPlayer ? 'Вы проголосовали' : player.name + ' проголосовал'} за: 
+                        <strong class="voted-target">${votedForPlayer.name}</strong>
+                    </div>
+                `;
+            }
+        } else if (player.isAlive && gameState.gamePhase === 'voting') {
+            votingInfo += `
+                <div class="voted-for-info not-voted">
+                    ${isCurrentPlayer ? 'Вы еще не проголосовали' : player.name + ' еще не проголосовал'}
+                </div>
+            `;
+        }
+    }
+
+    // Формируем индикатор карты действия
+    let actionCardIndicator = '';
+    if (player.actionCards && player.actionCards.length > 0) {
+        const actionCard = player.actionCards[0];
+        const canUse = actionCard.usesLeft > 0;
+        const isOwner = isCurrentPlayer;
+        
+        const indicatorClass = `action-card-indicator ${!canUse ? 'used' : ''} ${!isOwner ? 'not-owner' : ''}`;
+        const clickHandler = isOwner && canUse ? `onclick="showActionCard('${actionCard.id}')"` : '';
+        
+        actionCardIndicator = `
+            <div class="${indicatorClass}" ${clickHandler} title="${actionCard.name}">
+            </div>
+        `;
+    }
+    
+    card.innerHTML = `
+        <div class="player-header">
+            <div class="player-info">
+                <div class="player-avatar-container">
+                    <div class="player-avatar ${player.isAlive ? '' : 'eliminated-avatar'}">
+                        ${player.name.charAt(0).toUpperCase()}
+                    </div>
+                    ${actionCardIndicator}
+                    ${hasDoubleVote ? '<div class="double-vote-indicator">🗳️×2</div>' : ''}
+                </div>
+                <div>
+                    <div class="player-name ${player.isAlive ? '' : 'eliminated-name'}">
+                        ${player.name}${player.isHost ? ' 👑' : ''}
+                    </div>
+                    ${isCurrentPlayer ? '<div class="player-status current">ВЫ</div>' : ''}
+                    ${isCurrentTurn ? '<div class="player-status turn">Ваш ход!</div>' : ''}
+                    ${isJustifying ? '<div class="player-status justifying">🎤 Оправдывается</div>' : ''}
+                    ${turnInfo}
+                    ${votingInfo}
+                </div>
+            </div>
+        </div>
+        
+        <div class="characteristics">
+            ${characteristicOrder.map(key => {
+                if (!player.characteristics || !player.characteristics[key]) return '';
+                
+                const isRevealed = player.revealedCharacteristics && player.revealedCharacteristics.includes(key);
+                const isOwnCard = isCurrentPlayer;
+                
+                let canReveal = false;
+                if (isCurrentPlayer && isCurrentTurn && !isRevealed && gameState.gamePhase === 'revelation') {
+                    const requiredCards = getRequiredCardsForRound(gameState.currentRound);
+                    const revealedCards = player.cardsRevealedThisRound || 0;
+                    
+                    if (revealedCards < requiredCards) {
+                        if (gameState.currentRound === 1) {
+                            if (revealedCards === 0 && key === 'profession') {
+                                canReveal = true;
+                            } else if (revealedCards === 1 && key !== 'profession') {
+                                canReveal = true;
+                            }
+                        } else {
+                            canReveal = true;
+                        }
+                    }
+                }
+                
+                return `<div class="characteristic ${isRevealed ? 'revealed' : (isOwnCard ? 'own-hidden' : 'hidden')} ${canReveal ? 'clickable' : ''}" 
+                    ${canReveal ? `onclick="confirmRevealCharacteristic('${key}')"` : ''}>
+                    <span class="characteristic-name">${translateCharacteristic(key)}:</span>
+                    <span class="characteristic-value ${isOwnCard && !isRevealed ? 'own-characteristic' : ''}">
+                        ${isRevealed ? player.characteristics[key] : (isOwnCard ? player.characteristics[key] : '???')}
+                    </span>
+                </div>`;}
+            ).join('')}
+        </div>
+        
+        <div class="player-actions">
+            ${gameState.gamePhase === 'voting' && !isCurrentPlayer && player.isAlive ? 
+                getVotingButtons(player) : ''
+            }
+        </div>
+    `;
+    
+    return card;
+}
+
+// ПРОВЕРЯЕМ что функция updatePlayersGrid существует
 function updatePlayersGrid() {
     const playersGrid = document.getElementById('playersGrid');
     
@@ -675,7 +832,7 @@ function updatePlayersGrid() {
     gameState.players.forEach(player => {
         const playerCard = createPlayerCard(player);
         
-        // НОВОЕ: Добавляем класс для игроков с максимальным количеством голосов
+        // Добавляем класс для игроков с максимальным количеством голосов
         if (player.isAlive && (player.votes || 0) === maxVotes && maxVotes > 0) {
             playerCard.classList.add('most-voted');
         }
@@ -728,7 +885,6 @@ function createPlayerCard(player) {
                 <div class="voting-info">
                     <div class="votes-count">Голосов: ${votesForPlayer}</div>
                     ${votersForThisPlayer.length > 0 ? `
-
                         <div class="voters-list">
                             Проголосовали: ${votersForThisPlayer.join(', ')}
                         </div>
@@ -758,7 +914,7 @@ function createPlayerCard(player) {
         }
     }
 
-    // ИСПРАВЛЕНО: Формируем индикатор карты действия БЕЗ СОДЕРЖИМОГО
+    // Формируем индикатор карты действия
     let actionCardIndicator = '';
     if (player.actionCards && player.actionCards.length > 0) {
         const actionCard = player.actionCards[0];
@@ -768,7 +924,6 @@ function createPlayerCard(player) {
         const indicatorClass = `action-card-indicator ${!canUse ? 'used' : ''} ${!isOwner ? 'not-owner' : ''}`;
         const clickHandler = isOwner && canUse ? `onclick="showActionCard('${actionCard.id}')"` : '';
         
-        // УБИРАЕМ ИКОНКУ - просто пустой кружок
         actionCardIndicator = `
             <div class="${indicatorClass}" ${clickHandler} title="${actionCard.name}">
             </div>
@@ -1280,7 +1435,7 @@ function showGameScreen() {
     if (gameState.currentStory) {
         updateStoryDisplay(gameState.currentStory);
     } else {
-        hideStoryPanel();
+        hideStoryPanel(); // Скрываем если истории нет
     }
     
     updateGameDisplay();

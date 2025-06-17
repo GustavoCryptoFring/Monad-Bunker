@@ -746,98 +746,35 @@ body {
     display: flex;
     gap: 20px;
     align-items: flex-start;
-    justify-content: flex-start; /* ИЗМЕНЕНО: выравниваем по левому краю */
+    justify-content: flex-start; /* История слева */
     margin-top: 25px;
     flex-wrap: wrap;
 }
 
-/* УМЕНЬШАЕМ ПАНЕЛЬ С ИСТОРИЕЙ В 2 РАЗА */
+/* ИСПРАВЛЯЕМ ПАНЕЛЬ С ИСТОРИЕЙ - делаем шире в 2 раза */
 .story-panel {
-    width: 140px;        /* УМЕНЬШЕНО: было 280px */
-    min-width: 130px;    /* УМЕНЬШЕНО: было 260px */
-    max-width: 160px;    /* УМЕНЬШЕНО: было 320px */
+    width: 280px;        /* УВЕЛИЧЕНО: было 140px */
+    min-width: 260px;    /* УВЕЛИЧЕНО: было 130px */
+    max-width: 320px;    /* УВЕЛИЧЕНО: было 160px */
     background: rgba(44, 62, 80, 0.9);
-    border-radius: 10px; /* УМЕНЬШЕНО: было 15px */
-    padding: 10px;       /* УМЕНЬШЕНО: было 15px */
+    border-radius: 10px;
+    padding: 10px;
     border: 2px solid rgba(155, 89, 182, 0.3);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-    max-height: 200px;   /* УМЕНЬШЕНО: было 400px */
+    max-height: 200px;   /* ОСТАВЛЯЕМ ТАКУЮ ЖЕ ВЫСОТУ */
     overflow-y: auto;
     flex-shrink: 0;
     animation: storyFadeIn 0.5s ease-out;
-    order: 1;            /* ДОБАВЛЕНО: первый элемент */
-}
-
-.story-header {
-    text-align: center;
-    margin-bottom: 8px;  /* УМЕНЬШЕНО: было 12px */
-    padding-bottom: 6px; /* УМЕНЬШЕНО: было 8px */
-    border-bottom: 1px solid rgba(155, 89, 182, 0.3); /* УМЕНЬШЕНО: было 2px */
-}
-
-.story-header h3 {
-    color: #9b59b6;
-    font-size: 0.9em;    /* УМЕНЬШЕНО: было 1.1em */
-    margin: 0;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    order: 1;            /* ПЕРВЫЙ элемент - самый левый */
 }
 
 .story-content {
     color: #ecf0f1;
-    line-height: 1.3;    /* УМЕНЬШЕНО: было 1.5 */
-    font-size: 0.7em;    /* УМЕНЬШЕНО: было 0.85em */
+    line-height: 1.3;
+    font-size: 0.8em;    /* УВЕЛИЧИВАЕМ шрифт для лучшей читаемости */
 }
 
-.story-content p {
-    margin-bottom: 8px;  /* УМЕНЬШЕНО: было 12px */
-    text-align: justify;
-}
-
-.story-content h4 {
-    color: #e67e22;
-    font-size: 0.85em;   /* УМЕНЬШЕНО: было 1em */
-    margin: 10px 0 6px 0; /* УМЕНЬШЕНО: было 15px 0 8px 0 */
-    text-align: center;
-    font-weight: bold;
-}
-
-.story-content .story-title {
-    color: #f39c12;
-    font-size: 0.9em;    /* УМЕНЬШЕНО: было 1.1em */
-    font-weight: bold;
-    text-align: center;
-    margin-bottom: 8px;  /* УМЕНЬШЕНО: было 12px */
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-.story-content .story-highlight {
-    background: rgba(231, 76, 60, 0.2);
-    border-left: 2px solid #e74c3c; /* УМЕНЬШЕНО: было 3px */
-    padding: 6px 8px;    /* УМЕНЬШЕНО: было 8px 12px */
-    margin: 8px 0;       /* УМЕНЬШЕНО: было 12px 0 */
-    border-radius: 0 4px 4px 0; /* УМЕНЬШЕНО: было 0 6px 6px 0 */
-    font-style: italic;
-    color: #f8c471;
-    font-size: 0.8em;    /* УМЕНЬШЕНО: было 0.9em */
-}
-
-.story-content .story-objective {
-    background: rgba(52, 152, 219, 0.2);
-    border: 1px solid rgba(52, 152, 219, 0.4); /* УМЕНЬШЕНО: было 2px */
-    border-radius: 6px;  /* УМЕНЬШЕНО: было 8px */
-    padding: 8px;        /* УМЕНЬШЕНО: было 12px */
-    margin: 8px 0;       /* УМЕНЬШЕНО: было 12px 0 */
-    text-align: center;
-}
-
-.story-content .story-objective h5 {
-    color: #3498db;
-    margin: 0 0 6px 0;   /* УМЕНЬШЕНО: было 0 0 8px 0 */
-    font-size: 0.8em;    /* УМЕНЬШЕНО: было 0.95em */
-    font-weight: bold;
-}
-
-/* ОБНОВЛЯЕМ СТИЛИ ДЛЯ КНОПОК - ДЕЛАЕМ ИХ МЕНЬШЕ */
+/* ОБНОВЛЯЕМ СТИЛИ ДЛЯ КНОПОК */
 .round-actions {
     background: rgba(44, 62, 80, 0.5);
     border-radius: 15px;
@@ -850,55 +787,409 @@ body {
     justify-content: center;
     padding: 20px;
     min-height: 120px;
-    min-width: 250px;    /* УМЕНЬШЕНО: было 320px */
+    min-width: 250px;
     flex-shrink: 0;
-    order: 2;            /* ДОБАВЛЕНО: второй элемент */
-    margin-left: 20px;   /* ДОБАВЛЕНО: отступ от истории */
+    order: 2;            /* ВТОРОЙ элемент */
+    margin-left: 20px;   /* Отступ от истории */
 }
 
-.center-action-btn {
-    background: linear-gradient(45deg, #e74c3c, #c0392b);
-    color: white;
-    border: none;
-    padding: 15px 30px;  /* УМЕНЬШЕНО: было 18px 40px */
-    border-radius: 25px; /* УМЕНЬШЕНО: было 30px */
-    font-size: 1.1em;    /* УМЕНЬШЕНО: было 1.3em */
-    font-weight: bold;
-    cursor: pointer;
+/* ВОЗВРАЩАЕМ СЕТКУ ИГРОКОВ */
+.players-grid {
+    display: grid;
+    gap: 20px;
+    margin-bottom: 20px;
+    padding: 0 10px;
+    margin-top: 20px;
+    order: 3; /* ТРЕТИЙ элемент - после истории и кнопок */
+    width: 100%; /* Занимает всю ширину */
+}
+
+/* Адаптивная сетка в зависимости от количества игроков */
+.players-grid.players-1,
+.players-grid.players-2 {
+    grid-template-columns: repeat(2, 1fr);
+    max-width: 800px;
+    margin: 20px auto 20px auto;
+}
+
+.players-grid.players-3,
+.players-grid.players-4 {
+    grid-template-columns: repeat(2, 1fr);
+    max-width: 1000px;
+    margin: 20px auto 20px auto;
+}
+
+.players-grid.players-5,
+.players-grid.players-6 {
+    grid-template-columns: repeat(3, 1fr);
+    max-width: 1200px;
+    margin: 20px auto 20px auto;
+}
+
+.players-grid.players-7,
+.players-grid.players-8 {
+    grid-template-columns: repeat(4, 1fr);
+    max-width: 1400px;
+    margin: 20px auto 20px auto;
+}
+
+.players-grid.players-9,
+.players-grid.players-10,
+.players-grid.players-11,
+.players-grid.players-12 {
+    grid-template-columns: repeat(4, 1fr);
+    max-width: 1400px;
+    margin: 20px auto 20px auto;
+}
+
+/* ВОЗВРАЩАЕМ ВСЕ СТИЛИ КАРТОЧЕК ИГРОКОВ */
+.player-card {
+    background: rgba(44, 62, 80, 0.9);
+    border-radius: 15px;
+    padding: 20px;
+    border: 2px solid rgba(52, 152, 219, 0.3);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     transition: all 0.3s ease;
-    box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    min-width: 220px;    /* УМЕНЬШЕНО: было 280px */
     position: relative;
     overflow: hidden;
 }
 
-/* СКРОЛЛБАР ДЛЯ ПАНЕЛИ ИСТОРИИ - УМЕНЬШАЕМ */
-.story-panel::-webkit-scrollbar {
-    width: 4px;          /* УМЕНЬШЕНО: было 6px */
+.player-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 
-.story-panel::-webkit-scrollbar-track {
-    background: rgba(44, 62, 80, 0.3);
-    border-radius: 2px;  /* УМЕНЬШЕНО: было 3px */
+.player-card.current-player {
+    border-color: #f39c12;
+    background: rgba(243, 156, 18, 0.1);
 }
 
-.story-panel::-webkit-scrollbar-thumb {
-    background: rgba(155, 89, 182, 0.6);
-    border-radius: 2px;  /* УМЕНЬШЕНО: было 3px */
+.player-card.current-turn {
+    border-color: #e74c3c;
+    background: rgba(231, 76, 60, 0.1);
+    animation: pulse-border 2s infinite;
 }
 
-/* ИНДИКАТОР ЗАГРУЗКИ ИСТОРИИ - УМЕНЬШАЕМ */
-.story-loading {
-    text-align: center;
-    color: #9b59b6;
+.player-card.justifying {
+    border-color: #9b59b6;
+    background: rgba(155, 89, 182, 0.1);
+    animation: justifying-glow 2s infinite;
+}
+
+.player-card.eliminated {
+    opacity: 0.5;
+    background: rgba(44, 62, 80, 0.5);
+    border-color: rgba(127, 140, 141, 0.5);
+}
+
+.player-card.most-voted {
+    border-color: #e74c3c;
+    background: rgba(231, 76, 60, 0.2);
+    animation: danger-glow 2s infinite;
+}
+
+.player-card.double-vote {
+    border-color: #f39c12;
+    box-shadow: 0 0 20px rgba(243, 156, 18, 0.5);
+}
+
+@keyframes pulse-border {
+    0% { border-color: #e74c3c; }
+    50% { border-color: #c0392b; }
+    100% { border-color: #e74c3c; }
+}
+
+@keyframes justifying-glow {
+    0% { box-shadow: 0 4px 15px rgba(155, 89, 182, 0.3); }
+    50% { box-shadow: 0 8px 25px rgba(155, 89, 182, 0.6); }
+    100% { box-shadow: 0 4px 15px rgba(155, 89, 182, 0.3); }
+}
+
+@keyframes danger-glow {
+    0% { box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3); }
+    50% { box-shadow: 0 8px 25px rgba(231, 76, 60, 0.6); }
+    100% { box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3); }
+}
+
+.player-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.player-info {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.player-avatar-container {
+    position: relative;
+    margin-right: 15px;
+}
+
+.player-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(45deg, #3498db, #2980b9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5em;
+    font-weight: bold;
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.player-avatar.eliminated-avatar {
+    background: linear-gradient(45deg, #7f8c8d, #95a5a6);
+    opacity: 0.6;
+}
+
+.player-name {
+    font-size: 1.3em;
+    font-weight: bold;
+    color: #ecf0f1;
+    margin-bottom: 5px;
+}
+
+.player-name.eliminated-name {
+    color: #7f8c8d;
+    text-decoration: line-through;
+}
+
+.player-status {
+    font-size: 0.9em;
+    padding: 4px 8px;
+    border-radius: 15px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    display: inline-block;
+}
+
+.player-status.current {
+    background: #f39c12;
+    color: white;
+}
+
+.player-status.turn {
+    background: #e74c3c;
+    color: white;
+    animation: pulse 1s infinite;
+}
+
+.player-status.justifying {
+    background: #9b59b6;
+    color: white;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.turn-info {
+    background: rgba(231, 76, 60, 0.2);
+    border-left: 4px solid #e74c3c;
+    padding: 8px 12px;
+    margin: 10px 0;
+    border-radius: 0 8px 8px 0;
     font-style: italic;
-    padding: 10px;       /* УМЕНЬШЕНО: было 15px */
-    font-size: 0.75em;   /* УМЕНЬШЕНО: было 0.9em */
+    color: #f8c471;
+    font-size: 0.9em;
 }
 
-/* АДАПТИВНОСТЬ ДЛЯ ИСТОРИИ - ОБНОВЛЯЕМ */
+.characteristics {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.characteristic {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+}
+
+.characteristic.revealed {
+    background: rgba(46, 204, 113, 0.2);
+    border-color: #2ecc71;
+}
+
+.characteristic.hidden {
+    background: rgba(127, 140, 141, 0.2);
+    border-color: #7f8c8d;
+}
+
+.characteristic.own-hidden {
+    background: rgba(52, 152, 219, 0.2);
+    border-color: #3498db;
+}
+
+.characteristic.clickable {
+    cursor: pointer;
+    background: rgba(243, 156, 18, 0.2);
+    border-color: #f39c12;
+}
+
+.characteristic.clickable:hover {
+    background: rgba(243, 156, 18, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.characteristic-name {
+    font-weight: bold;
+    color: #f39c12;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.characteristic-value {
+    color: #ecf0f1;
+}
+
+.characteristic-value.own-characteristic {
+    color: #85c1e9;
+    font-weight: bold;
+}
+
+.voting-info {
+    background: rgba(52, 73, 94, 0.6);
+    padding: 10px;
+    border-radius: 8px;
+    margin: 10px 0;
+    border-left: 4px solid #3498db;
+}
+
+.votes-count {
+    font-weight: bold;
+    color: #f39c12;
+    margin-bottom: 5px;
+}
+
+.voters-list {
+    font-size: 0.9em;
+    color: #bdc3c7;
+    font-style: italic;
+}
+
+.voted-for-info {
+    background: rgba(52, 152, 219, 0.2);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-top: 8px;
+    border-left: 3px solid #3498db;
+    font-size: 0.9em;
+}
+
+.voted-for-info.not-voted {
+    background: rgba(231, 76, 60, 0.2);
+    border-left-color: #e74c3c;
+    color: #f8c471;
+}
+
+.voted-target {
+    color: #f39c12;
+    font-weight: bold;
+}
+
+.player-actions {
+    margin-top: 15px;
+}
+
+.vote-section {
+    text-align: center;
+}
+
+.vote-player-btn {
+    background: linear-gradient(45deg, #e74c3c, #c0392b);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.vote-player-btn:hover:not(:disabled) {
+    background: linear-gradient(45deg, #c0392b, #a93226);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+}
+
+.vote-player-btn.voted {
+    background: linear-gradient(45deg, #2ecc71, #27ae60);
+    cursor: not-allowed;
+}
+
+.vote-player-btn.change-vote {
+    background: linear-gradient(45deg, #f39c12, #e67e22);
+}
+
+.vote-player-btn.change-vote:hover {
+    background: linear-gradient(45deg, #e67e22, #d35400);
+}
+
+.vote-player-btn:disabled {
+    background: linear-gradient(45deg, #7f8c8d, #95a5a6);
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* КАРТЫ ДЕЙСТВИЙ */
+.action-card-indicator {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(45deg, #f39c12, #e67e22);
+    border: 2px solid white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.action-card-indicator:hover {
+    transform: scale(1.2);
+    box-shadow: 0 4px 12px rgba(243, 156, 18, 0.5);
+}
+
+.action-card-indicator.used {
+    background: linear-gradient(45deg, #7f8c8d, #95a5a6);
+    cursor: not-allowed;
+}
+
+.action-card-indicator.not-owner {
+    cursor: default;
+    background: linear-gradient(45deg, #3498db, #2980b9);
+}
+
+.double-vote-indicator {
+    position: absolute;
+    top: 55px;
+    right: -5px;
+    background: linear-gradient(45deg, #f39c12, #e67e22);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.8em;
+    font-weight: bold;
+    border: 1px solid white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* АДАПТИВНОСТЬ */
 @media (max-width: 1200px) {
     .center-content {
         flex-direction: column;
@@ -908,58 +1199,62 @@ body {
     
     .story-panel {
         width: 100%;
-        max-width: 300px;   /* УМЕНЬШЕНО: было 500px */
-        max-height: 150px;  /* УМЕНЬШЕНО: было 250px */
+        max-width: 400px;   /* Увеличиваем для планшетов */
+        max-height: 150px;
         order: 2;
     }
     
     .round-actions {
         order: 1;
-        min-width: 200px;   /* УМЕНЬШЕНО: было 280px */
+        min-width: 200px;
         margin-left: 0;
+    }
+    
+    .players-grid {
+        order: 3;
+        grid-template-columns: repeat(2, 1fr) !important;
     }
 }
 
 @media (max-width: 768px) {
     .story-panel {
-        padding: 8px;       /* УМЕНЬШЕНО: было 12px */
-        max-height: 120px;  /* УМЕНЬШЕНО: было 200px */
+        padding: 8px;
+        max-height: 120px;
     }
     
     .story-header h3 {
-        font-size: 0.8em;   /* УМЕНЬШЕНО: было 1em */
+        font-size: 0.9em;
     }
     
     .story-content {
-        font-size: 0.65em;  /* УМЕНЬШЕНО: было 0.8em */
+        font-size: 0.75em;
     }
     
     .center-action-btn {
-        padding: 10px 25px; /* УМЕНЬШЕНО: было 12px 30px */
-        font-size: 1em;     /* УМЕНЬШЕНО: было 1.1em */
-        min-width: 180px;   /* УМЕНЬШЕНО: было 240px */
+        padding: 10px 25px;
+        font-size: 1em;
+        min-width: 180px;
+    }
+    
+    .players-grid {
+        grid-template-columns: 1fr !important;
+        gap: 15px;
+        padding: 0 5px;
+    }
+    
+    .player-card {
+        padding: 15px;
     }
 }
 
-@media (max-width: 480px) {
-    .story-panel {
-        padding: 6px;       /* УМЕНЬШЕНО: было 10px */
-        max-height: 100px;  /* УМЕНЬШЕНО: было 180px */
+/* АНИМАЦИЯ ПОЯВЛЕНИЯ ИСТОРИИ */
+@keyframes storyFadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
     }
-    
-    .story-content {
-        font-size: 0.6em;   /* УМЕНЬШЕНО: было 0.75em */
-        line-height: 1.2;   /* УМЕНЬШЕНО: было 1.4 */
-    }
-    
-    .center-action-btn {
-        padding: 8px 20px;  /* УМЕНЬШЕНО: было 10px 25px */
-        font-size: 0.9em;   /* УМЕНЬШЕНО: было 1em */
-        min-width: 160px;   /* УМЕНЬШЕНО: было 200px */
-    }
-    
-    .round-actions {
-        padding: 15px;
-        min-width: 180px;   /* УМЕНЬШЕНО: было 260px */
+    to {
+        opacity: 1;
+        transform: translateX(0);
     }
 }
