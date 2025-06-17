@@ -10,6 +10,23 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 // === МАССИВЫ КАРТ ДЕЙСТВИЙ И ХАРАКТЕРИСТИКИ ===
+const bunkerFeatures = [
+  'Запасы чистой воды (100 литров)',
+  'Аптечка первой помощи (20 наборов)',
+  'Электрогенератор (топливо на 48 ч)',
+  'Запас консервов (200 банок)',
+  'Укреплённые стены и вентиляция',
+  'Спальный отсек на 10 человек',
+  'Склад инструментов и запчастей',
+  'Радиостанция (дальность 50 км)',
+  'Система очистки воздуха',
+  'Лаборатория для анализа проб',
+  'Тренажёрный зал',
+  'Зарядная станция для техники',
+  'Библиотека (100 книг)',
+  'Гидропонный огород',
+  'Запас топлива для транспорта'
+];
 const stories = [
   {
     title: 'Потерянный радиопередатчик',
@@ -926,6 +943,7 @@ io.on('connection', (socket) => {
         
         const player = gameRoom.players.find(p => p.id === socket.id);
         const chosenStory = stories[Math.floor(Math.random() * stories.length)];
+        const shuffledBunker = bunkerFeatures.sort(() => 0.5 - Math.random());
         if (!player || !player.isHost) {
             socket.emit('error', 'Только хост может начать игру!');
             return;

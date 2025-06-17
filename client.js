@@ -179,11 +179,10 @@ socket.on('game-started', function(data) {
     document.getElementById('storyTitle').textContent       = story.title;
     document.getElementById('storyDescription').textContent = story.description;
 
-    // ── Рендерим характеристики бункера (как было)
-    const shuffled = bunkerFeatures.sort(() => 0.5 - Math.random());
-    const selectedFeatures = shuffled.slice(0, 5);
+       // ── Рендерим единый список бункера от сервера
+    const chosen = data.bunkerFeatures || [];
     document.getElementById('storyScrollText').innerHTML =
-      selectedFeatures.map(f => `<div>• ${f}</div>`).join('');
+      chosen.map(f => `<div>• ${f}</div>`).join('');
 
     // ── Показываем экран
     showGameScreen();
