@@ -141,7 +141,7 @@ socket.on('game-started', function(data) {
     gameState.timeLeft = data.timeLeft;
     gameState.startRoundVotes = 0;
     gameState.myStartRoundVote = false;
-    gameState.scenario = data.scenario; // ДОБАВЛЯЕМ сценарий
+    // gameState.scenario = data.scenario; // УБИРАЕМ - сценарий придет позже
     showGameScreen();
 });
 
@@ -163,6 +163,12 @@ socket.on('phase-changed', function(data) {
     gameState.players = data.players;
     gameState.currentTurnPlayer = data.currentTurnPlayer || null;
     gameState.currentRound = data.currentRound || gameState.currentRound;
+    
+    // ДОБАВЛЯЕМ: Получаем сценарий при изменении фазы
+    if (data.scenario) {
+        gameState.scenario = data.scenario;
+        console.log('🎲 Scenario received:', data.scenario.title);
+    }
     
     gameState.requiredCardsThisRound = getRequiredCardsForRound(gameState.currentRound);
     

@@ -877,50 +877,432 @@ body {
     min-width: 0; /* Позволяет блоку сжиматься */
 }
 
-/* === АДАПТИВНОСТЬ ДЛЯ МОБИЛЬНЫХ === */
+/* === ДОБАВЛЯЕМ НЕДОСТАЮЩИЕ СТИЛИ ДЛЯ СЕТКИ ИГРОКОВ === */
+.players-grid {
+    display: grid;
+    gap: 20px;
+    margin-bottom: 20px;
+    padding: 20px;
+    background: rgba(52, 73, 94, 0.6);
+    border-radius: 15px;
+}
+
+/* Адаптивная сетка в зависимости от количества игроков */
+.players-2 { grid-template-columns: repeat(2, 1fr); }
+.players-3 { grid-template-columns: repeat(3, 1fr); }
+.players-4 { grid-template-columns: repeat(2, 1fr); }
+.players-5 { grid-template-columns: repeat(3, 1fr); }
+.players-6 { grid-template-columns: repeat(3, 1fr); }
+.players-7 { grid-template-columns: repeat(3, 1fr); }
+.players-8 { grid-template-columns: repeat(4, 1fr); }
+.players-9 { grid-template-columns: repeat(3, 1fr); }
+.players-10 { grid-template-columns: repeat(4, 1fr); }
+.players-11 { grid-template-columns: repeat(4, 1fr); }
+.players-12 { grid-template-columns: repeat(4, 1fr); }
+.players-13 { grid-template-columns: repeat(4, 1fr); }
+.players-14 { grid-template-columns: repeat(4, 1fr); }
+.players-15 { grid-template-columns: repeat(5, 1fr); }
+.players-16 { grid-template-columns: repeat(4, 1fr); }
+
+/* Стили карточек игроков */
+.player-card {
+    background: rgba(44, 62, 80, 0.9);
+    border-radius: 15px;
+    padding: 15px;
+    border: 2px solid rgba(52, 152, 219, 0.3);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.player-card:hover {
+    border-color: rgba(52, 152, 219, 0.6);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.player-card.current-player {
+    border-color: rgba(243, 156, 18, 0.8);
+    box-shadow: 0 0 20px rgba(243, 156, 18, 0.3);
+}
+
+.player-card.current-turn {
+    border-color: rgba(46, 204, 113, 0.8);
+    box-shadow: 0 0 20px rgba(46, 204, 113, 0.4);
+    animation: pulse-turn 2s infinite;
+}
+
+@keyframes pulse-turn {
+    0% { box-shadow: 0 0 20px rgba(46, 204, 113, 0.4); }
+    50% { box-shadow: 0 0 30px rgba(46, 204, 113, 0.7); }
+    100% { box-shadow: 0 0 20px rgba(46, 204, 113, 0.4); }
+}
+
+.player-card.justifying {
+    border-color: rgba(231, 76, 60, 0.8);
+    box-shadow: 0 0 20px rgba(231, 76, 60, 0.4);
+    animation: pulse-justify 1.5s infinite;
+}
+
+@keyframes pulse-justify {
+    0% { box-shadow: 0 0 20px rgba(231, 76, 60, 0.4); }
+    50% { box-shadow: 0 0 35px rgba(231, 76, 60, 0.8); }
+    100% { box-shadow: 0 0 20px rgba(231, 76, 60, 0.4); }
+}
+
+.player-card.most-voted {
+    border-color: rgba(231, 76, 60, 0.8);
+    background: rgba(231, 76, 60, 0.1);
+}
+
+.player-card.eliminated {
+    opacity: 0.5;
+    border-color: rgba(149, 165, 166, 0.5);
+    background: rgba(149, 165, 166, 0.2);
+}
+
+.player-header {
+    margin-bottom: 15px;
+}
+
+.player-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.player-avatar-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.player-avatar {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5em;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.player-avatar.eliminated-avatar {
+    background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+}
+
+.player-name {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #ecf0f1;
+    margin-bottom: 5px;
+}
+
+.player-name.eliminated-name {
+    color: #95a5a6;
+}
+
+.player-status {
+    font-size: 0.9em;
+    padding: 4px 8px;
+    border-radius: 15px;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+.player-status.current {
+    background: rgba(243, 156, 18, 0.8);
+    color: white;
+}
+
+.player-status.turn {
+    background: rgba(46, 204, 113, 0.8);
+    color: white;
+    animation: pulse-status 1s infinite;
+}
+
+.player-status.justifying {
+    background: rgba(231, 76, 60, 0.8);
+    color: white;
+    animation: pulse-status 1s infinite;
+}
+
+@keyframes pulse-status {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.turn-info {
+    background: rgba(46, 204, 113, 0.2);
+    color: #2ecc71;
+    padding: 8px;
+    border-radius: 8px;
+    font-size: 0.9em;
+    text-align: center;
+    margin-top: 5px;
+    border: 1px solid rgba(46, 204, 113, 0.4);
+}
+
+.voting-info {
+    margin-top: 10px;
+    padding: 8px;
+    background: rgba(52, 152, 219, 0.1);
+    border-radius: 8px;
+    border: 1px solid rgba(52, 152, 219, 0.3);
+}
+
+.votes-count {
+    color: #3498db;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+.voters-list {
+    color: #ecf0f1;
+    font-size: 0.8em;
+    text-align: center;
+}
+
+.voted-for-info {
+    margin-top: 5px;
+    padding: 6px;
+    background: rgba(243, 156, 18, 0.1);
+    border-radius: 6px;
+    font-size: 0.85em;
+    text-align: center;
+    color: #f39c12;
+}
+
+.voted-for-info.not-voted {
+    background: rgba(149, 165, 166, 0.1);
+    color: #95a5a6;
+}
+
+.voted-target {
+    color: #e67e22;
+    font-weight: bold;
+}
+
+/* Характеристики */
+.characteristics {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.characteristic {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.9em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.characteristic.revealed {
+    background: rgba(46, 204, 113, 0.2);
+    border: 1px solid rgba(46, 204, 113, 0.4);
+    color: #2ecc71;
+}
+
+.characteristic.own-hidden {
+    background: rgba(243, 156, 18, 0.2);
+    border: 1px solid rgba(243, 156, 18, 0.4);
+    color: #f39c12;
+    cursor: default;
+}
+
+.characteristic.hidden {
+    background: rgba(149, 165, 166, 0.2);
+    border: 1px solid rgba(149, 165, 166, 0.4);
+    color: #95a5a6;
+}
+
+.characteristic.clickable {
+    cursor: pointer;
+    border-color: rgba(46, 204, 113, 0.6);
+    box-shadow: 0 0 10px rgba(46, 204, 113, 0.3);
+    animation: pulse-clickable 2s infinite;
+}
+
+@keyframes pulse-clickable {
+    0% { box-shadow: 0 0 10px rgba(46, 204, 113, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(46, 204, 113, 0.6); }
+    100% { box-shadow: 0 0 10px rgba(46, 204, 113, 0.3); }
+}
+
+.characteristic.clickable:hover {
+    background: rgba(46, 204, 113, 0.3);
+    transform: translateY(-1px);
+}
+
+.characteristic-name {
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+.characteristic-value {
+    text-align: right;
+    flex: 1;
+}
+
+.characteristic-value.own-characteristic {
+    font-weight: bold;
+    color: #f39c12;
+}
+
+/* Действия игрока */
+.player-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.vote-section {
+    display: flex;
+    justify-content: center;
+}
+
+.vote-player-btn {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 120px;
+}
+
+.vote-player-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #c0392b, #a93226);
+    transform: translateY(-2px);
+}
+
+.vote-player-btn.change-vote {
+    background: linear-gradient(135deg, #f39c12, #e67e22);
+}
+
+.vote-player-btn.change-vote:hover:not(:disabled) {
+    background: linear-gradient(135deg, #e67e22, #d35400);
+}
+
+.vote-player-btn.voted {
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    cursor: not-allowed;
+}
+
+.vote-player-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Карты действий */
+.action-card-indicator {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 20px;
+    height: 20px;
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    border-radius: 50%;
+    border: 2px solid white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 10;
+}
+
+.action-card-indicator:hover {
+    transform: scale(1.2);
+    box-shadow: 0 0 15px rgba(155, 89, 182, 0.6);
+}
+
+.action-card-indicator.used {
+    background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+    cursor: not-allowed;
+}
+
+.action-card-indicator.not-owner {
+    cursor: default;
+}
+
+.double-vote-indicator {
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    background: rgba(243, 156, 18, 0.9);
+    color: white;
+    font-size: 0.7em;
+    padding: 2px 4px;
+    border-radius: 8px;
+    font-weight: bold;
+    z-index: 10;
+}
+
+/* Адаптивность для мобильных */
 @media (max-width: 1200px) {
-    .game-layout {
-        flex-direction: column;
-        gap: 15px;
+    .players-2,
+    .players-3,
+    .players-4,
+    .players-5,
+    .players-6,
+    .players-7,
+    .players-8 { 
+        grid-template-columns: repeat(2, 1fr); 
     }
     
-    .story-panel {
-        width: 100%;
-        max-width: none;
-        min-width: 0;
-        order: -1; /* История сверху на мобильных */
-    }
-    
-    .bunker-details {
-        flex-direction: row;
-        justify-content: space-around;
-    }
-    
-    .bunker-room {
-        flex: 1;
-        justify-content: center;
-        text-align: center;
+    .players-9,
+    .players-10,
+    .players-11,
+    .players-12,
+    .players-13,
+    .players-14,
+    .players-15,
+    .players-16 { 
+        grid-template-columns: repeat(3, 1fr); 
     }
 }
 
 @media (max-width: 768px) {
-    .story-panel {
+    .players-grid {
+        grid-template-columns: 1fr !important;
+        gap: 15px;
         padding: 15px;
     }
     
-    .story-scenario,
-    .bunker-info {
+    .player-card {
         padding: 12px;
     }
     
-    .bunker-details {
-        flex-direction: column;
-        gap: 8px;
+    .player-info {
+        gap: 10px;
     }
     
-    .bunker-room {
-        padding: 10px;
+    .player-avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 1.2em;
+    }
+    
+    .characteristics {
+        gap: 6px;
+    }
+    
+    .characteristic {
+        padding: 6px 10px;
+        font-size: 0.85em;
     }
 }
-
-/* ...existing code... */

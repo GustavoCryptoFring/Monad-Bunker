@@ -379,6 +379,13 @@ function getRequiredCardsForRound(round) {
 function startRevelationPhase() {
     console.log('🔍 Starting revelation phase');
     
+    // ДОБАВЛЯЕМ: Выбираем случайный сценарий ЗДЕСЬ
+    if (!gameRoom.scenario) {
+        const selectedScenario = getRandomScenario();
+        gameRoom.scenario = selectedScenario;
+        console.log('🎲 Selected scenario:', selectedScenario.title);
+    }
+    
     gameRoom.gamePhase = 'revelation';
     gameRoom.timeLeft = 60;
     gameRoom.revealedThisRound = 0;
@@ -396,13 +403,14 @@ function startRevelationPhase() {
         gameRoom.currentTurnPlayer = alivePlayers[0].id;
     }
     
-    // Отправляем уведомление о начале фазы
+    // ОБНОВЛЯЕМ: Отправляем сценарий вместе с началом раскрытия
     io.to('game-room').emit('phase-changed', {
         gamePhase: gameRoom.gamePhase,
         timeLeft: gameRoom.timeLeft,
         players: gameRoom.players,
         currentTurnPlayer: gameRoom.currentTurnPlayer,
-        currentRound: gameRoom.currentRound
+        currentRound: gameRoom.currentRound,
+        scenario: gameRoom.scenario // ДОБАВЛЯЕМ сценарий
     });
     
     startGameTimer();
@@ -956,9 +964,9 @@ io.on('connection', (socket) => {
             return;
         }
         
-        // ДОБАВЛЯЕМ: Выбираем случайный сценарий
-        const selectedScenario = getRandomScenario();
-        gameRoom.scenario = selectedScenario;
+        // УБИРАЕМ: Выбор сценария из start-game
+        // const selectedScenario = getRandomScenario();
+        // gameRoom.scenario = selectedScenario;
         
         // Генерируем характеристики для всех игроков
         gameRoom.players.forEach(player => {
@@ -977,16 +985,16 @@ io.on('connection', (socket) => {
         gameRoom.playersWhoRevealed = [];
         gameRoom.currentTurnPlayer = null;
         
-        console.log('🚀 Game started! Players:', gameRoom.players.length, 'Scenario:', selectedScenario.title);
+        console.log('🚀 Game started! Players:', gameRoom.players.length);
         
-        // ОБНОВЛЯЕМ: Отправляем сценарий вместе с данными игры
+        // ИЗМЕНЯЕМ: Не отправляем сценарий при старте игры
         io.to('game-room').emit('game-started', {
             players: gameRoom.players,
             gameState: gameRoom.gameState,
             gamePhase: gameRoom.gamePhase,
             currentRound: gameRoom.currentRound,
-            timeLeft: gameRoom.timeLeft,
-            scenario: selectedScenario // ДОБАВЛЯЕМ сценарий
+            timeLeft: gameRoom.timeLeft
+            // scenario: selectedScenario // УБИРАЕМ
         });
     });
     
@@ -1480,6 +1488,7 @@ function resetGame() {
         gameRoom.canChangeVote = {};
         gameRoom.startRoundVotes = [];
         gameRoom.activeEffects = {};
+        gameRoom.scenario = null; // ДОБАВЛЯЕМ: Сбрасываем сценарий
         
         io.to('game-room').emit('game-reset', {
             players: gameRoom.players,
