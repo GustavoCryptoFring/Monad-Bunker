@@ -80,10 +80,20 @@ socket.on('room-state', function(data) {
     gameState.timeLeft = data.timeLeft || 0;
     gameState.currentTurnPlayer = data.currentTurnPlayer || null;
     gameState.maxPlayers = data.maxPlayers || 8;
-    gameState.startRoundVotes = data.startRoundVotes || 0; // ДОБАВЛЯЕМ
+    gameState.startRoundVotes = data.startRoundVotes || 0;
+    
+    // ДОБАВЛЯЕМ: Обработка истории при переподключении
+    if (data.story) {
+        gameState.currentStory = data.story;
+        updateStoryDisplay(data.story);
+    } else {
+        gameState.currentStory = null;
+        hideStoryPanel();
+    }
     
     // Если мы уже в игре, показываем соответствующий экран
     if (gameState.playerId && gameState.serverGameState === 'lobby') {
+        hideStoryPanel(); // В лобби история не нужна
         showLobbyScreen();
     } else if (gameState.playerId && gameState.serverGameState === 'playing') {
         showGameScreen();
@@ -856,3 +866,483 @@ function updatePlayersGrid() {
 
 // УБИРАЕМ ДУБЛИРУЮЩУЮСЯ ФУНКЦИЮ createPlayerCard - оставляем только одну
 // (Оставляем ту что с правильной логикой карт действий)
+
+// ДОБАВЛЯЕМ ФУНКЦИЮ joinGame В НАЧАЛО client.js (после объявления gameState)
+
+function joinGame() {
+    console.log('🎯 Attempting to join game...');
+    
+    const playerNameInput = document.getElementById('playerNameInput');
+    const joinBtn = document.getElementById('joinGameBtn');
+    
+    if (!playerNameInput) {
+        console.error('❌ Player name input not found');
+        return;
+    }
+    
+    const playerName = playerNameInput.value.trim();
+    
+    if (!playerName) {
+        showNotification('Ошибка', 'Введите ваше имя!');
+        playerNameInput.focus();
+        return;
+    }
+    
+    if (playerName.length < 2) {
+        showNotification('Ошибка', 'Имя должно содержать минимум 2 символа!');
+        playerNameInput.focus();
+        return;
+    }
+    
+    if (playerName.length > 20) {
+        showNotification('Ошибка', 'Имя не должно превышать 20 символов!');
+        playerNameInput.focus();
+        return;
+    }
+    
+    // Блокируем кнопку на время подключения
+    if (joinBtn) {
+        joinBtn.disabled = true;
+        joinBtn.textContent = 'Подключение...';
+    }
+    
+    console.log('🚀 Joining game with name:', playerName);
+    
+    // Отправляем запрос на присоединение
+    socket.emit('join-game', { 
+        playerName: playerName 
+    });
+}
+
+// ДОБАВЛЯЕМ ФУНКЦИИ ДЛЯ ЛОББИ И ИГРЫ
+
+function startGame() {
+    console.log('🎮 Starting game...');
+    
+    if (!gameState.isHost) {
+        showNotification('Ошибка', 'Только хост может начать игру!');
+        return;
+    }
+    
+    if (gameState.players.length < 2) {
+        showNotification('Ошибка', 'Для начала игры нужно минимум 2 игрока!');
+        return;
+    }
+    
+    socket.emit('start-game');
+}
+
+function changeMaxPlayers() {
+    const select = document.getElementById('maxPlayersSelect');
+    if (!select) return;
+    
+    const newMaxPlayers = parseInt(select.value);
+    console.log('🔧 Changing max players to:', newMaxPlayers);
+    
+    socket.emit('change-max-players', { maxPlayers: newMaxPlayers });
+}
+
+function startRound() {
+    console.log('🎯 Voting to start round');
+    socket.emit('start-round');
+}
+
+function voteToSkipDiscussion() {
+    console.log('⏭️ Voting to skip discussion');
+    socket.emit('vote-skip-discussion');
+}
+
+function finishJustification() {
+    console.log('✅ Finishing justification');
+    socket.emit('finish-justification');
+}
+
+function surrender() {
+    console.log('🏳️ Surrendering');
+    
+    if (confirm('Вы уверены, что хотите сдаться? Это действие нельзя отменить.')) {
+        socket.emit('surrender');
+    }
+}
+
+// ДОБАВЛЯЕМ ФУНКЦИИ ДЛЯ ХАРАКТЕРИСТИК
+
+function confirmRevealCharacteristic(characteristic) {
+    console.log('🔍 Confirming reveal characteristic:', characteristic);
+    
+    const player = gameState.players.find(p => p.id === gameState.playerId);
+    if (!player || !player.characteristics || !player.characteristics[characteristic]) {
+        showNotification('Ошибка', 'Характеристика не найдена!');
+        return;
+    }
+    
+    // Показываем модальное окно подтверждения
+    const modal = document.getElementById('confirmRevealModal');
+    const nameElement = document.getElementById('confirmCharacteristicName');
+    const valueElement = document.getElementById('confirmCharacteristicValue');
+    const progressElement = document.getElementById('revealProgress');
+    
+    if (modal && nameElement && valueElement && progressElement) {
+        nameElement.textContent = translateCharacteristic(characteristic);
+        valueElement.textContent = player.characteristics[characteristic];
+        
+        // Показываем прогресс
+        const requiredCards = getRequiredCardsForRound(gameState.currentRound);
+        const currentCards = player.cardsRevealedThisRound || 0;
+        progressElement.innerHTML = `
+            <p>Раскрыто карт в этом раунде: ${currentCards}/${requiredCards}</p>
+            ${gameState.currentRound === 1 && currentCards === 0 ? 
+                '<p class="reveal-hint">В первом раунде сначала нужно раскрыть профессию</p>' : 
+                ''
+            }
+        `;
+        
+        // Сохраняем характеристику для подтверждения
+        modal.dataset.characteristic = characteristic;
+        modal.style.display = 'flex';
+    }
+}
+
+function confirmReveal() {
+    const modal = document.getElementById('confirmRevealModal');
+    const characteristic = modal.dataset.characteristic;
+    
+    if (characteristic) {
+        socket.emit('reveal-characteristic', { characteristic: characteristic });
+        modal.style.display = 'none';
+    }
+}
+
+function cancelReveal() {
+    const modal = document.getElementById('confirmRevealModal');
+    modal.style.display = 'none';
+}
+
+function translateCharacteristic(key) {
+    const translations = {
+        'profession': 'Профессия',
+        'health': 'Здоровье',
+        'hobby': 'Хобби',
+        'phobia': 'Фобия',
+        'baggage': 'Багаж',
+        'fact1': 'Факт 1',
+        'fact2': 'Факт 2'
+    };
+    return translations[key] || key;
+}
+
+// ДОБАВЛЯЕМ ФУНКЦИИ ДЛЯ ГОЛОСОВАНИЯ
+
+function voteForPlayer(targetId) {
+    console.log('🗳️ Voting for player:', targetId);
+    
+    if (gameState.gamePhase !== 'voting') {
+        showNotification('Ошибка', 'Сейчас не время для голосования!');
+        return;
+    }
+    
+    if (gameState.myVote) {
+        showNotification('Ошибка', 'Вы уже проголосовали!');
+        return;
+    }
+    
+    socket.emit('vote-player', { targetId: targetId });
+}
+
+function changeVote(targetId) {
+    console.log('🔄 Changing vote to:', targetId);
+    
+    if (gameState.gamePhase !== 'voting') {
+        showNotification('Ошибка', 'Сейчас не время для голосования!');
+        return;
+    }
+    
+    if (!gameState.canChangeVote[gameState.playerId]) {
+        showNotification('Ошибка', 'Вы уже использовали возможность смены голоса!');
+        return;
+    }
+    
+    socket.emit('change-vote', { targetId: targetId });
+}
+
+function getVotingButtons(player) {
+    const isCurrentPlayer = player.id === gameState.playerId;
+    const hasVoted = gameState.myVote !== null;
+    const canChange = gameState.canChangeVote[gameState.playerId] && hasVoted;
+    
+    if (isCurrentPlayer) {
+        return '';
+    }
+    
+    if (!hasVoted) {
+        return `
+            <div class="vote-section">
+                <button class="vote-player-btn" onclick="voteForPlayer('${player.id}')">
+                    🗳️ Голосовать
+                </button>
+            </div>
+        `;
+    } else if (canChange && gameState.myVote !== player.id) {
+        return `
+            <div class="vote-section">
+                <button class="vote-player-btn change-vote" onclick="changeVote('${player.id}')">
+                    🔄 Изменить голос
+                </button>
+            </div>
+        `;
+    } else if (gameState.myVote === player.id) {
+        return `
+            <div class="vote-section">
+                <button class="vote-player-btn voted" disabled>
+                    ✅ Проголосовали
+                </button>
+            </div>
+        `;
+    }
+    
+    return '';
+}
+
+function getVotersForPlayer(playerId) {
+    if (!gameState.votingResults[playerId]) return [];
+    
+    return gameState.votingResults[playerId]
+        .map(voterId => {
+            const voter = gameState.players.find(p => p.id === voterId);
+            return voter ? voter.name : 'Неизвестный';
+        })
+        .filter((name, index, arr) => arr.indexOf(name) === index); // Убираем дубликаты
+}
+
+// ДОБАВЛЯЕМ ФУНКЦИИ ДЛЯ КАРТ ДЕЙСТВИЙ
+
+function showActionCard(cardId) {
+    console.log('🎯 Showing action card:', cardId);
+    
+    const player = gameState.players.find(p => p.id === gameState.playerId);
+    if (!player || !player.actionCards) {
+        showNotification('Ошибка', 'У вас нет карт действий!');
+        return;
+    }
+    
+    const actionCard = player.actionCards.find(card => card.id == cardId);
+    if (!actionCard) {
+        showNotification('Ошибка', 'Карта действия не найдена!');
+        return;
+    }
+    
+    // Показываем модальное окно с картой
+    const modal = document.getElementById('actionCardModal');
+    const nameElement = document.getElementById('actionCardName');
+    const descriptionElement = document.getElementById('actionCardDescription');
+    const usesElement = document.getElementById('actionCardUses');
+    const useButton = document.getElementById('useActionCardBtn');
+    
+    if (modal && nameElement && descriptionElement && usesElement && useButton) {
+        nameElement.innerHTML = `${actionCard.icon} ${actionCard.name}`;
+        descriptionElement.textContent = actionCard.description;
+        usesElement.textContent = `Использований осталось: ${actionCard.usesLeft}`;
+        
+        // Настраиваем кнопку использования
+        if (actionCard.usesLeft > 0) {
+            useButton.disabled = false;
+            useButton.onclick = () => useActionCard(cardId);
+        } else {
+            useButton.disabled = true;
+            useButton.textContent = '❌ Уже использована';
+        }
+        
+        modal.style.display = 'flex';
+    }
+}
+
+function useActionCard(cardId) {
+    console.log('✨ Using action card:', cardId);
+    
+    // Закрываем модальное окно
+    closeActionCardModal();
+    
+    // Отправляем запрос на использование карты
+    socket.emit('use-action-card', { cardId: cardId });
+}
+
+function closeActionCardModal() {
+    const modal = document.getElementById('actionCardModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// ДОБАВЛЯЕМ ФУНКЦИИ ДЛЯ УВЕДОМЛЕНИЙ И МОДАЛЬНЫХ ОКОН
+
+function showNotification(title, message) {
+    console.log(`📢 ${title}: ${message}`);
+    
+    const modal = document.getElementById('notificationModal');
+    const titleElement = document.getElementById('notificationTitle');
+    const messageElement = document.getElementById('notificationMessage');
+    
+    if (modal && titleElement && messageElement) {
+        titleElement.textContent = title;
+        messageElement.textContent = message;
+        modal.style.display = 'flex';
+    } else {
+        // Fallback к alert если модальное окно не найдено
+        alert(`${title}: ${message}`);
+    }
+}
+
+function closeNotificationModal() {
+    const modal = document.getElementById('notificationModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function showConnectionError(message) {
+    // Создаем или показываем элемент ошибки подключения
+    let errorElement = document.getElementById('connectionError');
+    
+    if (!errorElement) {
+        errorElement = document.createElement('div');
+        errorElement.id = 'connectionError';
+        errorElement.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(231, 76, 60, 0.9);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 10px;
+            z-index: 2000;
+            font-weight: bold;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        `;
+        document.body.appendChild(errorElement);
+    }
+    
+    errorElement.textContent = message;
+    errorElement.style.display = 'block';
+}
+
+// ДОБАВЛЯЕМ ФУНКЦИИ ДЛЯ РАБОТЫ С ИСТОРИЕЙ
+
+function updateStoryDisplay(story) {
+    const storyContent = document.getElementById('storyContent');
+    
+    if (!storyContent) {
+        console.error('❌ Story content element not found');
+        return;
+    }
+    
+    if (story) {
+        console.log('📜 Updating story display:', story.title);
+        storyContent.innerHTML = story.content;
+        showStoryPanel();
+    } else {
+        storyContent.innerHTML = `
+            <div class="story-loading">
+                Ожидание начала игры...
+            </div>
+        `;
+        hideStoryPanel();
+    }
+}
+
+function showStoryPanel() {
+    const storyPanel = document.getElementById('storyPanel');
+    if (storyPanel) {
+        storyPanel.style.display = 'block';
+        console.log('📜 Story panel shown');
+    }
+}
+
+function hideStoryPanel() {
+    const storyPanel = document.getElementById('storyPanel');
+    if (storyPanel) {
+        storyPanel.style.display = 'none';
+        console.log('📜 Story panel hidden');
+    }
+}
+
+// ОБНОВЛЯЕМ обработчик ошибок (разблокируем кнопку при ошибке)
+socket.on('error', function(errorMessage) {
+    console.error('❌ Server error:', errorMessage);
+    
+    // ДОБАВЛЕНО: Разблокируем кнопку при ошибке
+    const joinBtn = document.getElementById('joinGameBtn');
+    if (joinBtn && joinBtn.textContent === 'Подключение...') {
+        joinBtn.disabled = false;
+        joinBtn.textContent = 'Присоединиться к игре';
+    }
+    
+    showNotification('Ошибка', errorMessage);
+});
+
+// ОБНОВЛЯЕМ room-state - добавляем историю
+socket.on('room-state', function(data) {
+    console.log('🏠 Room state received:', data);
+    gameState.players = data.players || [];
+    gameState.serverGameState = data.gameState || 'lobby';
+    gameState.gamePhase = data.gamePhase || 'waiting';
+    gameState.currentRound = data.currentRound || 1;
+    gameState.timeLeft = data.timeLeft || 0;
+    gameState.currentTurnPlayer = data.currentTurnPlayer || null;
+    gameState.maxPlayers = data.maxPlayers || 8;
+    gameState.startRoundVotes = data.startRoundVotes || 0;
+    
+    // ДОБАВЛЯЕМ: Обработка истории при переподключении
+    if (data.story) {
+        gameState.currentStory = data.story;
+        updateStoryDisplay(data.story);
+    } else {
+        gameState.currentStory = null;
+        hideStoryPanel();
+    }
+    
+    // Если мы уже в игре, показываем соответствующий экран
+    if (gameState.playerId && gameState.serverGameState === 'lobby') {
+        hideStoryPanel(); // В лобби история не нужна
+        showLobbyScreen();
+    } else if (gameState.playerId && gameState.serverGameState === 'playing') {
+        showGameScreen();
+    }
+});
+
+// ОБНОВЛЯЕМ инициализацию DOM
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📱 DOM loaded, initializing...');
+    
+    // Показываем экран входа при загрузке
+    showLoginScreen();
+    
+    // Добавляем обработчик Enter для поля ввода имени
+    const playerNameInput = document.getElementById('playerNameInput');
+    if (playerNameInput) {
+        playerNameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                joinGame(); // Вызываем нашу функцию
+            }
+        });
+    }
+    
+    // Обработчик для кнопки присоединения
+    const joinGameBtn = document.getElementById('joinGameBtn');
+    if (joinGameBtn) {
+        joinGameBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('🎯 Join button clicked');
+            joinGame(); // Вызываем нашу функцию
+        });
+    }
+    
+    // Закрытие модальных окон по клику вне области
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('modal')) {
+            e.target.style.display = 'none';
+        }
+    });
+});
