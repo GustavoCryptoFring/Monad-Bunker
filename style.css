@@ -1366,3 +1366,174 @@ body {
         border-left-color: #e74c3c;
     }
 }
+
+/* НОВЫЕ СТИЛИ ДЛЯ КАРТ ДЕЙСТВИЙ */
+.action-card-indicator {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(45deg, #f1c40f, #f39c12);
+    border: 2px solid #fff;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    color: #2c3e50;
+    box-shadow: 0 2px 8px rgba(243, 156, 18, 0.6);
+    animation: pulse-gold 2s infinite;
+}
+
+.action-card-indicator:hover {
+    transform: scale(1.2);
+    box-shadow: 0 4px 15px rgba(243, 156, 18, 0.8);
+}
+
+.action-card-indicator.used {
+    background: linear-gradient(45deg, #95a5a6, #7f8c8d);
+    cursor: not-allowed;
+    animation: none;
+    box-shadow: 0 2px 8px rgba(149, 165, 166, 0.4);
+    color: #ecf0f1;
+}
+
+.action-card-indicator.used:hover {
+    transform: none;
+    box-shadow: 0 2px 8px rgba(149, 165, 166, 0.4);
+}
+
+.action-card-indicator.not-owner {
+    cursor: default;
+    opacity: 0.8;
+}
+
+.action-card-indicator.not-owner:hover {
+    transform: none;
+}
+
+@keyframes pulse-gold {
+    0% { 
+        box-shadow: 0 2px 8px rgba(243, 156, 18, 0.6);
+    }
+    50% { 
+        box-shadow: 0 4px 15px rgba(243, 156, 18, 0.9);
+    }
+    100% { 
+        box-shadow: 0 2px 8px rgba(243, 156, 18, 0.6);
+    }
+}
+
+/* СТИЛИ ДЛЯ МОДАЛЬНОГО ОКНА КАРТ ДЕЙСТВИЙ */
+.action-card-display {
+    background: rgba(44, 62, 80, 0.6);
+    padding: 20px;
+    border-radius: 10px;
+    margin: 15px 0;
+    border-left: 4px solid #f39c12;
+}
+
+.action-card-name {
+    color: #f39c12;
+    font-size: 1.3em;
+    font-weight: bold;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.action-card-description {
+    color: #ecf0f1;
+    font-size: 1.1em;
+    line-height: 1.5;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.action-card-uses {
+    color: #3498db;
+    font-size: 1em;
+    font-weight: bold;
+    text-align: center;
+    padding: 8px 12px;
+    background: rgba(52, 152, 219, 0.2);
+    border-radius: 8px;
+    border: 1px solid rgba(52, 152, 219, 0.3);
+}
+
+.action-card-uses.no-uses {
+    color: #e74c3c;
+    background: rgba(231, 76, 60, 0.2);
+    border-color: rgba(231, 76, 60, 0.3);
+}
+
+/* ОБНОВЛЯЕМ ПОЗИЦИОНИРОВАНИЕ АВАТАРА */
+.player-avatar-container {
+    position: relative;
+    margin-right: 15px;
+}
+
+/* СТИЛИ ДЛЯ АКТИВИРОВАННЫХ ЭФФЕКТОВ */
+.player-card.double-vote {
+    border-color: #f39c12;
+    box-shadow: 0 0 20px rgba(243, 156, 18, 0.6);
+}
+
+.player-card.double-vote .player-name::after {
+    content: " 🗳️×2";
+    color: #f39c12;
+    font-weight: bold;
+}
+
+.double-vote-indicator {
+    position: absolute;
+    top: -10px;
+    left: -10px;
+    background: linear-gradient(45deg, #f39c12, #e67e22);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(243, 156, 18, 0.6);
+    animation: pulse-double-vote 2s infinite;
+}
+
+@keyframes pulse-double-vote {
+    0% { 
+        transform: scale(1);
+        box-shadow: 0 2px 8px rgba(243, 156, 18, 0.6);
+    }
+    50% { 
+        transform: scale(1.1);
+        box-shadow: 0 4px 15px rgba(243, 156, 18, 0.9);
+    }
+    100% { 
+        transform: scale(1);
+        box-shadow: 0 2px 8px rgba(243, 156, 18, 0.6);
+    }
+}
+
+/* АДАПТИВНОСТЬ */
+@media (max-width: 768px) {
+    .action-card-indicator {
+        width: 18px;
+        height: 18px;
+        font-size: 10px;
+    }
+    
+    .action-card-display {
+        padding: 15px;
+    }
+    
+    .action-card-name {
+        font-size: 1.2em;
+    }
+    
+    .action-card-description {
+        font-size: 1em;
+    }
+}

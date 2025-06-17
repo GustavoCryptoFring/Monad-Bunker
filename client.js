@@ -301,6 +301,27 @@ socket.on('start-round-vote-update', function(data) {
     updateRoundActions();
 });
 
+// Добавляем обработчики событий карт действий
+socket.on('action-card-used', function(data) {
+    console.log('✨ Action card used:', data);
+    gameState.players = data.players;
+    
+    updatePlayersGrid();
+    
+    const message = data.targetId 
+        ? `${data.playerName} использовал карту "${data.cardName}"`
+        : `${data.playerName} использовал карту "${data.cardName}"`;
+    
+    showNotification('Карта действия', message);
+});
+
+socket.on('detective-result', function(data) {
+    console.log('🔍 Detective result:', data);
+    
+    const message = `Характеристика игрока ${data.targetName}:\n${translateCharacteristic(data.characteristic)}: ${data.value}`;
+    showNotification('Результат детектива', message);
+});
+
 // === ФУНКЦИИ ОТОБРАЖЕНИЯ ЭКРАНОВ ===
 
 function showScreen(screenId) {
@@ -827,11 +848,14 @@ function createPlayerCard(player) {
     const isCurrentTurn = player.id === gameState.currentTurnPlayer;
     const isJustifying = player.id === gameState.currentJustifyingPlayer;
     
-    card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''} ${isJustifying ? 'justifying' : ''}`;
+    // Проверяем активные эффекты
+    const hasDoubleVote = player.activeEffects && player.activeEffects.doubleVote;
+    
+    card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''} ${isJustifying ? 'justifying' : ''} ${hasDoubleVote ? 'double-vote' : ''}`;
     
     const characteristicOrder = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
     
-    // ИСПРАВЛЕНО: Показываем подсказки только для текущего игрока
+    // Показываем подсказки только для текущего игрока
     let turnInfo = '';
     if (isCurrentTurn && gameState.gamePhase === 'revelation' && isCurrentPlayer) {
         const requiredCards = getRequiredCardsForRound(gameState.currentRound);
@@ -850,19 +874,16 @@ function createPlayerCard(player) {
         }
     }
 
-    // НОВОЕ: Отображение информации о голосовании
+    // Отображение информации о голосовании
     let votingInfo = '';
     if (gameState.gamePhase === 'voting' || gameState.gamePhase === 'justification' || gameState.gamePhase === 'results') {
-        // Показываем количество голосов за этого игрока
         const votesForPlayer = player.votes || 0;
         if (votesForPlayer > 0) {
-            // Получаем список тех, кто проголосовал за этого игрока
             const votersForThisPlayer = getVotersForPlayer(player.id);
             votingInfo = `
                 <div class="voting-info">
                     <div class="votes-count">Голосов: ${votesForPlayer}</div>
                     ${votersForThisPlayer.length > 0 ? `
-
                         <div class="voters-list">
                             Проголосовали: ${votersForThisPlayer.join(', ')}
                         </div>
@@ -873,7 +894,6 @@ function createPlayerCard(player) {
             votingInfo = '<div class="voting-info"><div class="votes-count">Голосов: 0</div></div>';
         }
         
-        // Показываем за кого проголосовал этот игрок
         if (player.isAlive && player.hasVoted && player.votedFor) {
             const votedForPlayer = gameState.players.find(p => p.id === player.votedFor);
             if (votedForPlayer) {
@@ -892,6 +912,23 @@ function createPlayerCard(player) {
             `;
         }
     }
+
+    // НОВОЕ: Формируем индикатор карты действия
+    let actionCardIndicator = '';
+    if (player.actionCards && player.actionCards.length > 0) {
+        const actionCard = player.actionCards[0];
+        const canUse = actionCard.usesLeft > 0;
+        const isOwner = isCurrentPlayer;
+        
+        const indicatorClass = `action-card-indicator ${!canUse ? 'used' : ''} ${!isOwner ? 'not-owner' : ''}`;
+        const clickHandler = isOwner && canUse ? `onclick="showActionCard('${actionCard.id}')"` : '';
+        
+        actionCardIndicator = `
+            <div class="${indicatorClass}" ${clickHandler} title="${actionCard.name}">
+                ${actionCard.icon || '✨'}
+            </div>
+        `;
+    }
     
     card.innerHTML = `
         <div class="player-header">
@@ -900,6 +937,8 @@ function createPlayerCard(player) {
                     <div class="player-avatar ${player.isAlive ? '' : 'eliminated-avatar'}">
                         ${player.name.charAt(0).toUpperCase()}
                     </div>
+                    ${actionCardIndicator}
+                    ${hasDoubleVote ? '<div class="double-vote-indicator">🗳️×2</div>' : ''}
                 </div>
                 <div>
                     <div class="player-name ${player.isAlive ? '' : 'eliminated-name'}">
@@ -921,7 +960,6 @@ function createPlayerCard(player) {
                 const isRevealed = player.revealedCharacteristics && player.revealedCharacteristics.includes(key);
                 const isOwnCard = isCurrentPlayer;
                 
-                // ИСПРАВЛЕНО: Возможность раскрытия только для текущего игрока в его ход
                 let canReveal = false;
                 if (isCurrentPlayer && isCurrentTurn && !isRevealed && gameState.gamePhase === 'revelation') {
                     const requiredCards = getRequiredCardsForRound(gameState.currentRound);
@@ -960,228 +998,79 @@ function createPlayerCard(player) {
     return card;
 }
 
-// НОВАЯ ФУНКЦИЯ: Получаем список игроков, проголосовавших за конкретного игрока
-function getVotersForPlayer(playerId) {
-    if (!gameState.votingResults || !gameState.votingResults[playerId]) {
-        return [];
-    }
-    
-    return gameState.votingResults[playerId].map(voterId => {
-        const voter = gameState.players.find(p => p.id === voterId);
-        return voter ? voter.name : 'Неизвестный';
-    });
-}
-
-function confirmRevealCharacteristic(characteristic) {
-    const player = gameState.players.find(p => p.id === gameState.playerId);
-    if (!player || !player.characteristics) return;
-    
-    if (gameState.gamePhase !== 'revelation') {
-        console.log('❌ Not revelation phase');
-        return;
-    }
-    
-    if (gameState.currentTurnPlayer !== gameState.playerId) {
-        console.log('❌ Not my turn');
-        return;
-    }
-    
-    if (player.revealedCharacteristics && player.revealedCharacteristics.includes(characteristic)) {
-        console.log('❌ Already revealed');
-        return;
-    }
-    
-    const requiredCards = getRequiredCardsForRound(gameState.currentRound);
-    const revealedCards = player.cardsRevealedThisRound || 0;
-    
-    if (revealedCards >= requiredCards) {
-        showNotification('Ошибка', 'Вы уже раскрыли максимальное количество карт в этом раунде!');
-        return;
-    }
-    
-    if (gameState.currentRound === 1 && revealedCards === 0 && characteristic !== 'profession') {
-        showNotification('Ошибка', 'В первом раунде нужно сначала раскрыть профессию!');
-        return;
-    }
-    
-    const characteristicName = translateCharacteristic(characteristic);
-    const characteristicValue = player.characteristics[characteristic];
-    
-    let progressInfo = '';
-    if (gameState.currentRound === 1) {
-        if (revealedCards === 0) {
-            progressInfo = '(Обязательная карта: Профессия)';
-        } else if (revealedCards === 1) {
-            progressInfo = '(Карта на выбор)';
-        }
-    } else {
-        progressInfo = '(Карта на выбор)';
-    }
-    
-    document.getElementById('confirmCharacteristicName').textContent = characteristicName;
-    document.getElementById('confirmCharacteristicValue').textContent = characteristicValue;
-    
-    const progressElement = document.getElementById('revealProgress');
-    if (progressElement) {
-        progressElement.textContent = progressInfo;
-    }
-    
-    document.getElementById('confirmRevealModal').style.display = 'flex';
-    window.characteristicToReveal = characteristic;
-}
-
-function confirmReveal() {
-    if (window.characteristicToReveal) {
-        console.log('🔍 Revealing characteristic:', window.characteristicToReveal);
-        socket.emit('reveal-characteristic', { characteristic: window.characteristicToReveal });
-        document.getElementById('confirmRevealModal').style.display = 'none';
-        window.characteristicToReveal = null;
-    }
-}
-
-function cancelReveal() {
-    document.getElementById('confirmRevealModal').style.display = 'none';
-    window.characteristicToReveal = null;
-}
-
-function translateCharacteristic(key) {
-    const translations = {
-        'profession': 'Профессия',
-        'health': 'Здоровье',
-        'hobby': 'Хобби',
-        'phobia': 'Фобия',
-        'baggage': 'Багаж',
-        'fact1': 'Факт 1',
-        'fact2': 'Факт 2'
-    };
-    
-    return translations[key] || key;
-}
-
-function getVotingButtons(player) {
+// НОВЫЕ ФУНКЦИИ ДЛЯ КАРТ ДЕЙСТВИЙ
+function showActionCard(cardId) {
     const me = gameState.players.find(p => p.id === gameState.playerId);
-    if (!me || !me.isAlive) return '';
+    if (!me || !me.actionCards) return;
     
-    const hasVoted = me.hasVoted;
-    const votedFor = me.votedFor;
-    const canChange = gameState.canChangeVote[gameState.playerId] && !gameState.hasChangedVote;
+    const actionCard = me.actionCards.find(card => card.id === parseInt(cardId));
+    if (!actionCard) return;
     
-    let buttonText = 'Голосовать';
-    let buttonClass = 'vote-player-btn';
-    let isDisabled = false;
+    document.getElementById('actionCardName').textContent = `${actionCard.icon || '✨'} ${actionCard.name}`;
+    document.getElementById('actionCardDescription').textContent = actionCard.description;
     
-    if (hasVoted) {
-        if (votedFor === player.id) {
-            if (canChange) {
-                buttonText = 'Изменить голос';
-                buttonClass = 'vote-player-btn change-vote';
-                isDisabled = false; // ИСПРАВЛЕНО: разрешаем смену голоса
-            } else {
-                buttonText = '✅ Проголосовано';
-                buttonClass = 'vote-player-btn voted';
-                isDisabled = true;
-            }
+    const usesElement = document.getElementById('actionCardUses');
+    const useButton = document.getElementById('useActionCardBtn');
+    
+    if (actionCard.usesLeft > 0) {
+        usesElement.textContent = `Использований осталось: ${actionCard.usesLeft}`;
+        usesElement.className = 'action-card-uses';
+        useButton.disabled = false;
+        useButton.style.display = 'inline-block';
+    } else {
+        usesElement.textContent = 'Карта уже использована';
+        usesElement.className = 'action-card-uses no-uses';
+        useButton.disabled = true;
+        useButton.style.display = 'none';
+    }
+    
+    window.currentActionCard = actionCard;
+    document.getElementById('actionCardModal').style.display = 'flex';
+}
+
+function closeActionCardModal() {
+    document.getElementById('actionCardModal').style.display = 'none';
+    window.currentActionCard = null;
+}
+
+function useActionCard() {
+    if (!window.currentActionCard) return;
+    
+    const card = window.currentActionCard;
+    let targetId = null;
+    
+    // Для некоторых карт нужно выбрать цель
+    if (['investigative', 'protective', 'disruptive'].includes(card.type)) {
+        const alivePlayers = gameState.players.filter(p => p.isAlive);
+        const targetName = prompt(`Выберите цель для карты "${card.name}":\n` + 
+            alivePlayers.map((p, i) => `${i + 1}. ${p.name}`).join('\n'));
+        
+        if (!targetName) return;
+        
+        const targetIndex = parseInt(targetName) - 1;
+        if (targetIndex >= 0 && targetIndex < alivePlayers.length) {
+            targetId = alivePlayers[targetIndex].id;
         } else {
-            if (canChange) {
-                buttonText = 'Изменить на этого';
-                buttonClass = 'vote-player-btn change-vote';
-                isDisabled = false;
-            } else {
-                buttonText = 'Голосовать';
-                buttonClass = 'vote-player-btn';
-                isDisabled = true;
-            }
+            showNotification('Ошибка', 'Неверно выбрана цель');
+            return;
         }
     }
-
-    // НОВОЕ: Добавляем информацию о текущих голосах в кнопку
-    const currentVotes = player.votes || 0;
-    if (currentVotes > 0) {
-        buttonText += ` (${currentVotes})`;
-    }
     
-    return `
-        <div class="vote-section">
-            <button class="${buttonClass}" 
-                    onclick="voteForPlayer('${player.id}')" 
-                    ${isDisabled ? 'disabled' : ''}>
-                ${buttonText}
-            </button>
-        </div>
-    `;
+    console.log('✨ Using action card:', card.name, 'Target:', targetId);
+    socket.emit('use-action-card', { 
+        cardId: card.id, 
+        targetId: targetId 
+    });
+    
+    closeActionCardModal();
 }
 
-function voteForPlayer(targetId) {
-    const me = gameState.players.find(p => p.id === gameState.playerId);
-    if (!me || !me.isAlive) return;
-    
-    if (gameState.gamePhase !== 'voting') {
-        showNotification('Ошибка', 'Сейчас не время для голосования!');
-        return;
-    }
-    
-    if (me.hasVoted && !gameState.canChangeVote[gameState.playerId]) {
-        showNotification('Ошибка', 'Вы уже проголосовали!');
-        return;
-    }
-    
-    if (me.hasVoted && gameState.canChangeVote[gameState.playerId]) {
-        console.log('🔄 Changing vote to:', targetId);
-        socket.emit('change-vote', { targetId: targetId });
-        gameState.hasChangedVote = true;
-    } else {
-        console.log('🗳️ Voting for:', targetId);
-        socket.emit('vote-player', { targetId: targetId });
-    }
-}
+// Обновляем socket.on('error') для обработки ошибок карт действий
+socket.on('error', function(errorMessage) {
+    console.error('❌ Server error:', errorMessage);
+    showNotification('Ошибка', errorMessage);
+});
 
-function finishJustification() {
-    console.log('✅ Finishing justification...');
-    socket.emit('finish-justification');
-}
-
-function surrender() {
-    if (confirm('Вы уверены, что хотите сдаться и покинуть игру?')) {
-        console.log('🏳️ Surrendering...');
-        socket.emit('surrender');
-    }
-}
-
-function voteToSkipDiscussion() {
-    if (gameState.gamePhase !== 'discussion') {
-        showNotification('Ошибка', 'Сейчас не фаза обсуждения');
-        return;
-    }
-    
-    if (gameState.mySkipVote) {
-        showNotification('Ошибка', 'Вы уже проголосовали за пропуск');
-        return;
-    }
-    
-    console.log('⏭️ Voting to skip discussion...');
-    socket.emit('vote-skip-discussion');
-}
-
-function showNotification(title, message) {
-    const modal = document.getElementById('notificationModal');
-    const titleElement = document.getElementById('notificationTitle');
-    const messageElement = document.getElementById('notificationMessage');
-    
-    if (modal && titleElement && messageElement) {
-        titleElement.textContent = title;
-        messageElement.textContent = message;
-        modal.style.display = 'flex';
-    } else {
-        alert(`${title}: ${message}`);
-    }
-}
-
-function closeNotificationModal() {
-    const modal = document.getElementById('notificationModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
 
 // УБИРАЕМ дублирование других функций - оставляем только первые версии
 
