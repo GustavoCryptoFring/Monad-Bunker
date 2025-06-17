@@ -80,9 +80,9 @@ socket.on('room-state', function(data) {
     gameState.timeLeft = data.timeLeft || 0;
     gameState.currentTurnPlayer = data.currentTurnPlayer || null;
     gameState.maxPlayers = data.maxPlayers || 8;
-    gameState.startRoundVotes = data.startRoundVotes || 0;
+    gameState.startRoundVotes = data.startRoundVotes || [];
     
-    // ДОБАВЛЯЕМ: Обработка истории при переподключении
+    // Обработка истории при переподключении
     if (data.story) {
         gameState.currentStory = data.story;
         updateStoryDisplay(data.story);
@@ -91,31 +91,40 @@ socket.on('room-state', function(data) {
         hideStoryPanel();
     }
     
-    // Если мы уже в игре, показываем соответствующий экран
-    if (gameState.playerId && gameState.serverGameState === 'lobby') {
-        hideStoryPanel(); // В лобби история не нужна
-        showLobbyScreen();
-    } else if (gameState.playerId && gameState.serverGameState === 'playing') {
-        showGameScreen();
+    // ИСПРАВЛЯЕМ: Правильное отображение экранов
+    if (gameState.playerId) {
+        if (gameState.serverGameState === 'lobby') {
+            hideStoryPanel(); // В лобби история не нужна
+            showLobbyScreen();
+        } else if (gameState.serverGameState === 'playing') {
+            showGameScreen();
+        }
+    } else {
+        // Если нет playerId - показываем экран входа
+        showLoginScreen();
     }
 });
 
 socket.on('join-confirmed', function(data) {
     console.log('✅ Join confirmed:', data);
     
-    // ИСПРАВЛЕНО: Правильно разблокируем кнопку
+    // Разблокируем кнопку
     const joinBtn = document.getElementById('joinGameBtn');
     if (joinBtn) {
         joinBtn.disabled = false;
         joinBtn.textContent = 'Присоединиться к игре';
     }
     
+    // ИСПРАВЛЯЕМ: Правильно устанавливаем состояние
     gameState.playerId = data.playerId;
     gameState.playerName = data.playerName;
     gameState.isHost = data.isHost;
     gameState.maxPlayers = data.maxPlayers;
-    gameState.startRoundVotes = data.startRoundVotes || 0;
-    gameState.gamePhase = 'lobby';
+    gameState.startRoundVotes = data.startRoundVotes || [];
+    gameState.serverGameState = 'lobby'; // ДОБАВЛЯЕМ: устанавливаем состояние лобби
+    gameState.gamePhase = 'waiting';     // ДОБАВЛЯЕМ: устанавливаем фазу ожидания
+    
+    // Показываем лобби
     showLobbyScreen();
 });
 
@@ -123,22 +132,35 @@ socket.on('player-joined', function(data) {
     console.log('👋 Player joined:', data);
     gameState.players = data.players;
     gameState.maxPlayers = data.maxPlayers;
-    gameState.startRoundVotes = data.startRoundVotes || 0; // ДОБАВЛЯЕМ
-    updateLobbyDisplay();
+    gameState.startRoundVotes = data.startRoundVotes || [];
+    gameState.serverGameState = data.gameState || 'lobby'; // ДОБАВЛЯЕМ
+    
+    // ИСПРАВЛЯЕМ: Обновляем лобби только если мы в лобби
+    if (gameState.serverGameState === 'lobby') {
+        updateLobbyDisplay();
+    }
 });
 
 socket.on('player-left', function(data) {
     console.log('👋 Player left:', data);
     gameState.players = data.players;
-    gameState.serverGameState = data.gameState;
-    updateLobbyDisplay();
+    gameState.serverGameState = data.gameState || 'lobby'; // ДОБАВЛЯЕМ
+    
+    // ИСПРАВЛЯЕМ: Обновляем лобби только если мы в лобби
+    if (gameState.serverGameState === 'lobby') {
+        updateLobbyDisplay();
+    }
 });
 
 socket.on('max-players-changed', function(data) {
     console.log('🔧 Max players changed:', data);
     gameState.maxPlayers = data.maxPlayers;
     gameState.players = data.players;
-    updateLobbyDisplay();
+    
+    // Обновляем лобби если мы в лобби
+    if (gameState.serverGameState === 'lobby') {
+        updateLobbyDisplay();
+    }
 });
 
 socket.on('game-started', function(data) {
@@ -164,15 +186,17 @@ socket.on('game-started', function(data) {
 socket.on('game-reset', function(data) {
     console.log('🔄 Game reset:', data);
     gameState.players = data.players;
-    gameState.serverGameState = data.gameState;
-    gameState.gamePhase = 'lobby';
+    gameState.serverGameState = 'lobby'; // ИСПРАВЛЯЕМ: устанавливаем лобби
+    gameState.gamePhase = 'waiting';     // ИСПРАВЛЯЕМ: устанавливаем ожидание
     gameState.currentRound = 1;
     gameState.timeLeft = 0;
     gameState.currentTurnPlayer = null;
-    gameState.currentStory = null; // ДОБАВЛЯЕМ: сброс истории
+    gameState.currentStory = null;
+    gameState.startRoundVotes = [];
+    gameState.myStartRoundVote = false;
     
-    hideStoryPanel(); // ДОБАВЛЯЕМ: скрываем историю при сбросе
-    showLobbyScreen();
+    hideStoryPanel(); // Скрываем историю при сбросе
+    showLobbyScreen(); // ИСПРАВЛЯЕМ: показываем лобби
 });
 
 socket.on('phase-changed', function(data) {
@@ -404,6 +428,8 @@ function showResultsScreen() {
 // === ФУНКЦИИ ОБНОВЛЕНИЯ ЛОББИ ===
 
 function updateLobbyDisplay() {
+    console.log('🏠 Updating lobby display. Players:', gameState.players.length, 'Host:', gameState.isHost);
+    
     // Обновляем счетчик игроков
     const currentPlayersCount = document.getElementById('currentPlayersCount');
     const maxPlayersCount = document.getElementById('maxPlayersCount');
@@ -426,37 +452,55 @@ function updateLobbyDisplay() {
         gameState.players.forEach(player => {
             const li = document.createElement('li');
             li.className = player.isHost ? 'host' : '';
-            li.textContent = `${player.name}${player.isHost ? ' (Хост)' : ''}`;
+            li.innerHTML = `
+                <span class="player-name">${player.name}</span>
+                ${player.isHost ? ' <span class="host-badge">👑 Хост</span>' : ''}
+                ${player.id === gameState.playerId ? ' <span class="you-badge">(Вы)</span>' : ''}
+            `;
             playersList.appendChild(li);
         });
     }
     
-    // Показываем/скрываем кнопки и селекторы
+    // ИСПРАВЛЯЕМ: Показываем/скрываем элементы в зависимости от роли
     if (gameState.isHost) {
+        console.log('🎯 Player is host - showing host controls');
+        
         if (startGameBtn) {
             startGameBtn.style.display = 'block';
             startGameBtn.disabled = gameState.players.length < 2;
             
-            // ОБНОВЛЯЕМ текст кнопки
+            // Обновляем текст кнопки
             if (gameState.players.length < 2) {
                 startGameBtn.textContent = 'Начать игру (минимум 2 игрока)';
+                startGameBtn.className = 'start-game-btn disabled';
             } else {
-                startGameBtn.textContent = 'Начать игру';
+                startGameBtn.textContent = `🚀 Начать игру (${gameState.players.length} игроков)`;
+                startGameBtn.className = 'start-game-btn';
             }
         }
+        
         if (waitingInfo) {
             waitingInfo.style.display = 'none';
         }
+        
         if (maxPlayersSelector) {
             maxPlayersSelector.style.display = 'block';
         }
     } else {
+        console.log('👥 Player is not host - showing waiting state');
+        
         if (startGameBtn) {
             startGameBtn.style.display = 'none';
         }
+        
         if (waitingInfo) {
             waitingInfo.style.display = 'block';
+            waitingInfo.innerHTML = `
+                <p>⏳ Ожидание хоста для начала игры...</p>
+                <p>Игроков в лобби: ${gameState.players.length}/${gameState.maxPlayers}</p>
+            `;
         }
+        
         if (maxPlayersSelector) {
             maxPlayersSelector.style.display = 'none';
         }
@@ -464,9 +508,11 @@ function updateLobbyDisplay() {
     
     // Обновляем селектор максимального количества игроков
     const maxPlayersSelect = document.getElementById('maxPlayersSelect');
-    if (maxPlayersSelect) {
+    if (maxPlayersSelect && gameState.isHost) {
         maxPlayersSelect.value = gameState.maxPlayers;
     }
+    
+    console.log('✅ Lobby display updated');
 }
 
 // === ФУНКЦИИ ИГРОВОГО ПРОЦЕССА ===
@@ -864,55 +910,219 @@ function updatePlayersGrid() {
     console.log('🎮 Players grid updated:', gameState.players.length, 'players');
 }
 
-// УБИРАЕМ ДУБЛИРУЮЩУЮСЯ ФУНКЦИЮ createPlayerCard - оставляем только одну
-// (Оставляем ту что с правильной логикой карт действий)
-
-// ДОБАВЛЯЕМ ФУНКЦИЮ joinGame В НАЧАЛО client.js (после объявления gameState)
-
-function joinGame() {
-    console.log('🎯 Attempting to join game...');
+// УБИРАЕМ ДУБЛИРУЮЩИЙСЯ обработчик room-state - оставляем только один
+socket.on('room-state', function(data) {
+    console.log('🏠 Room state received:', data);
+    gameState.players = data.players || [];
+    gameState.serverGameState = data.gameState || 'lobby';
+    gameState.gamePhase = data.gamePhase || 'waiting';
+    gameState.currentRound = data.currentRound || 1;
+    gameState.timeLeft = data.timeLeft || 0;
+    gameState.currentTurnPlayer = data.currentTurnPlayer || null;
+    gameState.maxPlayers = data.maxPlayers || 8;
+    gameState.startRoundVotes = data.startRoundVotes || [];
     
-    const playerNameInput = document.getElementById('playerNameInput');
+    // Обработка истории при переподключении
+    if (data.story) {
+        gameState.currentStory = data.story;
+        updateStoryDisplay(data.story);
+    } else {
+        gameState.currentStory = null;
+        hideStoryPanel();
+    }
+    
+    // ИСПРАВЛЯЕМ: Правильное отображение экранов
+    if (gameState.playerId) {
+        if (gameState.serverGameState === 'lobby') {
+            hideStoryPanel(); // В лобби история не нужна
+            showLobbyScreen();
+        } else if (gameState.serverGameState === 'playing') {
+            showGameScreen();
+        }
+    } else {
+        // Если нет playerId - показываем экран входа
+        showLoginScreen();
+    }
+});
+
+// ИСПРАВЛЯЕМ обработчик join-confirmed
+socket.on('join-confirmed', function(data) {
+    console.log('✅ Join confirmed:', data);
+    
+    // Разблокируем кнопку
     const joinBtn = document.getElementById('joinGameBtn');
-    
-    if (!playerNameInput) {
-        console.error('❌ Player name input not found');
-        return;
-    }
-    
-    const playerName = playerNameInput.value.trim();
-    
-    if (!playerName) {
-        showNotification('Ошибка', 'Введите ваше имя!');
-        playerNameInput.focus();
-        return;
-    }
-    
-    if (playerName.length < 2) {
-        showNotification('Ошибка', 'Имя должно содержать минимум 2 символа!');
-        playerNameInput.focus();
-        return;
-    }
-    
-    if (playerName.length > 20) {
-        showNotification('Ошибка', 'Имя не должно превышать 20 символов!');
-        playerNameInput.focus();
-        return;
-    }
-    
-    // Блокируем кнопку на время подключения
     if (joinBtn) {
-        joinBtn.disabled = true;
-        joinBtn.textContent = 'Подключение...';
+        joinBtn.disabled = false;
+        joinBtn.textContent = 'Присоединиться к игре';
     }
     
-    console.log('🚀 Joining game with name:', playerName);
+    // ИСПРАВЛЯЕМ: Правильно устанавливаем состояние
+    gameState.playerId = data.playerId;
+    gameState.playerName = data.playerName;
+    gameState.isHost = data.isHost;
+    gameState.maxPlayers = data.maxPlayers;
+    gameState.startRoundVotes = data.startRoundVotes || [];
+    gameState.serverGameState = 'lobby'; // ДОБАВЛЯЕМ: устанавливаем состояние лобби
+    gameState.gamePhase = 'waiting';     // ДОБАВЛЯЕМ: устанавливаем фазу ожидания
     
-    // Отправляем запрос на присоединение
-    socket.emit('join-game', { 
-        playerName: playerName 
-    });
+    // Показываем лобби
+    showLobbyScreen();
+});
+
+// ИСПРАВЛЯЕМ обработчик player-joined
+socket.on('player-joined', function(data) {
+    console.log('👋 Player joined:', data);
+    gameState.players = data.players;
+    gameState.maxPlayers = data.maxPlayers;
+    gameState.startRoundVotes = data.startRoundVotes || [];
+    gameState.serverGameState = data.gameState || 'lobby'; // ДОБАВЛЯЕМ
+    
+    // ИСПРАВЛЯЕМ: Обновляем лобби только если мы в лобби
+    if (gameState.serverGameState === 'lobby') {
+        updateLobbyDisplay();
+    }
+});
+
+// ИСПРАВЛЯЕМ обработчик player-left
+socket.on('player-left', function(data) {
+    console.log('👋 Player left:', data);
+    gameState.players = data.players;
+    gameState.serverGameState = data.gameState || 'lobby'; // ДОБАВЛЯЕМ
+    
+    // ИСПРАВЛЯЕМ: Обновляем лобби только если мы в лобби
+    if (gameState.serverGameState === 'lobby') {
+        updateLobbyDisplay();
+    }
+});
+
+// ИСПРАВЛЯЕМ обработчик game-reset
+socket.on('game-reset', function(data) {
+    console.log('🔄 Game reset:', data);
+    gameState.players = data.players;
+    gameState.serverGameState = 'lobby'; // ИСПРАВЛЯЕМ: устанавливаем лобби
+    gameState.gamePhase = 'waiting';     // ИСПРАВЛЯЕМ: устанавливаем ожидание
+    gameState.currentRound = 1;
+    gameState.timeLeft = 0;
+    gameState.currentTurnPlayer = null;
+    gameState.currentStory = null;
+    gameState.startRoundVotes = [];
+    gameState.myStartRoundVote = false;
+    
+    hideStoryPanel(); // Скрываем историю при сбросе
+    showLobbyScreen(); // ИСПРАВЛЯЕМ: показываем лобби
+});
+
+// ИСПРАВЛЯЕМ функцию updateLobbyDisplay
+function updateLobbyDisplay() {
+    console.log('🏠 Updating lobby display. Players:', gameState.players.length, 'Host:', gameState.isHost);
+    
+    // Обновляем счетчик игроков
+    const currentPlayersCount = document.getElementById('currentPlayersCount');
+    const maxPlayersCount = document.getElementById('maxPlayersCount');
+    const playersList = document.getElementById('playersList');
+    const startGameBtn = document.getElementById('startGameBtn');
+    const waitingInfo = document.getElementById('waitingInfo');
+    const maxPlayersSelector = document.getElementById('maxPlayersSelector');
+    
+    if (currentPlayersCount) {
+        currentPlayersCount.textContent = gameState.players.length;
+    }
+    
+    if (maxPlayersCount) {
+        maxPlayersCount.textContent = gameState.maxPlayers;
+    }
+    
+    // Обновляем список игроков
+    if (playersList) {
+        playersList.innerHTML = '';
+        gameState.players.forEach(player => {
+            const li = document.createElement('li');
+            li.className = player.isHost ? 'host' : '';
+            li.innerHTML = `
+                <span class="player-name">${player.name}</span>
+                ${player.isHost ? ' <span class="host-badge">👑 Хост</span>' : ''}
+                ${player.id === gameState.playerId ? ' <span class="you-badge">(Вы)</span>' : ''}
+            `;
+            playersList.appendChild(li);
+        });
+    }
+    
+    // ИСПРАВЛЯЕМ: Показываем/скрываем элементы в зависимости от роли
+    if (gameState.isHost) {
+        console.log('🎯 Player is host - showing host controls');
+        
+        if (startGameBtn) {
+            startGameBtn.style.display = 'block';
+            startGameBtn.disabled = gameState.players.length < 2;
+            
+            // Обновляем текст кнопки
+            if (gameState.players.length < 2) {
+                startGameBtn.textContent = 'Начать игру (минимум 2 игрока)';
+                startGameBtn.className = 'start-game-btn disabled';
+            } else {
+                startGameBtn.textContent = `🚀 Начать игру (${gameState.players.length} игроков)`;
+                startGameBtn.className = 'start-game-btn';
+            }
+        }
+        
+        if (waitingInfo) {
+            waitingInfo.style.display = 'none';
+        }
+        
+        if (maxPlayersSelector) {
+            maxPlayersSelector.style.display = 'block';
+        }
+    } else {
+        console.log('👥 Player is not host - showing waiting state');
+        
+        if (startGameBtn) {
+            startGameBtn.style.display = 'none';
+        }
+        
+        if (waitingInfo) {
+            waitingInfo.style.display = 'block';
+            waitingInfo.innerHTML = `
+                <p>⏳ Ожидание хоста для начала игры...</p>
+                <p>Игроков в лобби: ${gameState.players.length}/${gameState.maxPlayers}</p>
+            `;
+        }
+        
+        if (maxPlayersSelector) {
+            maxPlayersSelector.style.display = 'none';
+        }
+    }
+    
+    // Обновляем селектор максимального количества игроков
+    const maxPlayersSelect = document.getElementById('maxPlayersSelect');
+    if (maxPlayersSelect && gameState.isHost) {
+        maxPlayersSelect.value = gameState.maxPlayers;
+    }
+    
+    console.log('✅ Lobby display updated');
 }
+
+// ДОБАВЛЯЕМ недостающую функцию changeMaxPlayers если её нет
+function changeMaxPlayers() {
+    const select = document.getElementById('maxPlayersSelect');
+    if (!select) return;
+    
+    const newMaxPlayers = parseInt(select.value);
+    console.log('🔧 Changing max players to:', newMaxPlayers);
+    
+    socket.emit('change-max-players', { maxPlayers: newMaxPlayers });
+}
+
+// ДОБАВЛЯЕМ обработчик max-players-changed если его нет
+socket.on('max-players-changed', function(data) {
+    console.log('🔧 Max players changed:', data);
+    gameState.maxPlayers = data.maxPlayers;
+    gameState.players = data.players;
+    
+    // Обновляем лобби если мы в лобби
+    if (gameState.serverGameState === 'lobby') {
+        updateLobbyDisplay();
+    }
+});
 
 // ДОБАВЛЯЕМ ФУНКЦИИ ДЛЯ ЛОББИ И ИГРЫ
 
@@ -1291,7 +1501,7 @@ socket.on('room-state', function(data) {
     gameState.timeLeft = data.timeLeft || 0;
     gameState.currentTurnPlayer = data.currentTurnPlayer || null;
     gameState.maxPlayers = data.maxPlayers || 8;
-    gameState.startRoundVotes = data.startRoundVotes || 0;
+    gameState.startRoundVotes = data.startRoundVotes || [];
     
     // ДОБАВЛЯЕМ: Обработка истории при переподключении
     if (data.story) {

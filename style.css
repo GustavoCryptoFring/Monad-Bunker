@@ -691,3 +691,170 @@ body {
         min-width: 180px;
     }
 }
+
+/* ДОБАВЛЯЕМ СТИЛИ ДЛЯ ЛОББИ */
+
+.room-setup h2 {
+    color: #f39c12;
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 2em;
+}
+
+.room-settings {
+    background: rgba(44, 62, 80, 0.6);
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.room-settings label {
+    font-size: 1.1em;
+    color: #ecf0f1;
+}
+
+.room-settings select {
+    margin-left: 10px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 5px;
+    font-size: 1em;
+    background: white;
+    color: #2c3e50;
+}
+
+.players-waiting {
+    background: rgba(44, 62, 80, 0.6);
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.players-waiting h3 {
+    color: #3498db;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.players-waiting ul {
+    list-style: none;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.players-waiting li {
+    padding: 10px;
+    margin: 5px 0;
+    background: rgba(52, 152, 219, 0.2);
+    border-radius: 8px;
+    border-left: 4px solid #3498db;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.players-waiting li.host {
+    background: rgba(243, 156, 18, 0.2);
+    border-left-color: #f39c12;
+}
+
+.player-name {
+    font-weight: bold;
+    color: #ecf0f1;
+}
+
+.host-badge {
+    color: #f39c12;
+    font-weight: bold;
+}
+
+.you-badge {
+    color: #2ecc71;
+    font-weight: bold;
+}
+
+.lobby-actions {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.start-game-btn {
+    background: linear-gradient(45deg, #2ecc71, #27ae60);
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    border-radius: 25px;
+    font-size: 1.3em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 6px 20px rgba(46, 204, 113, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    min-width: 250px;
+}
+
+.start-game-btn:hover:not(.disabled) {
+    background: linear-gradient(45deg, #27ae60, #229954);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(46, 204, 113, 0.6);
+}
+
+.start-game-btn.disabled {
+    background: linear-gradient(45deg, #7f8c8d, #95a5a6);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: 0 4px 15px rgba(127, 140, 141, 0.4);
+}
+
+.game-info {
+    background: rgba(52, 73, 94, 0.6);
+    padding: 15px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.game-info p {
+    margin: 5px 0;
+    color: #bdc3c7;
+}
+
+/* АНИМАЦИЯ ДЛЯ ПОДКЛЮЧЕНИЯ ИГРОКОВ */
+@keyframes playerJoin {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.players-waiting li {
+    animation: playerJoin 0.3s ease-out;
+}
+
+/* АДАПТИВНОСТЬ ДЛЯ ЛОББИ */
+@media (max-width: 768px) {
+    .room-setup {
+        padding: 20px 15px;
+    }
+    
+    .start-game-btn {
+        padding: 12px 25px;
+        font-size: 1.1em;
+        min-width: 200px;
+    }
+    
+    .players-waiting {
+        padding: 15px;
+    }
+    
+    .players-waiting li {
+        flex-direction: column;
+        text-align: center;
+        gap: 5px;
+    }
+}
