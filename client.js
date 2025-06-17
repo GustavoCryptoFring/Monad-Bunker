@@ -654,7 +654,7 @@ function updateTimerDisplay() {
     }
 }
 
-// ПРОВЕРЯЕМ что функция createPlayerCard существует и работает
+// ИСПРАВЛЯЕМ функцию createPlayerCard - логика цветов карт действий
 function createPlayerCard(player) {
     const card = document.createElement('div');
     const isCurrentPlayer = player.id === gameState.playerId;
@@ -726,14 +726,25 @@ function createPlayerCard(player) {
         }
     }
 
-    // Формируем индикатор карты действия
+    // ИСПРАВЛЯЕМ: Формируем индикатор карты действия с правильными цветами
     let actionCardIndicator = '';
     if (player.actionCards && player.actionCards.length > 0) {
         const actionCard = player.actionCards[0];
         const canUse = actionCard.usesLeft > 0;
         const isOwner = isCurrentPlayer;
         
-        const indicatorClass = `action-card-indicator ${!canUse ? 'used' : ''} ${!isOwner ? 'not-owner' : ''}`;
+        // ИСПРАВЛЕННАЯ ЛОГИКА КЛАССОВ:
+        let indicatorClass = 'action-card-indicator';
+        
+        if (!canUse) {
+            // Карта использована - серая для всех
+            indicatorClass += ' used';
+        } else if (!isOwner) {
+            // Чужая неиспользованная карта - золотая, но не кликабельная
+            indicatorClass += ' not-owner';
+        }
+        // Своя неиспользованная карта - золотая и кликабельная (базовый класс)
+        
         const clickHandler = isOwner && canUse ? `onclick="showActionCard('${actionCard.id}')"` : '';
         
         actionCardIndicator = `
@@ -914,14 +925,25 @@ function createPlayerCard(player) {
         }
     }
 
-    // Формируем индикатор карты действия
+    // ИСПРАВЛЯЕМ: Формируем индикатор карты действия с правильными цветами
     let actionCardIndicator = '';
     if (player.actionCards && player.actionCards.length > 0) {
         const actionCard = player.actionCards[0];
         const canUse = actionCard.usesLeft > 0;
         const isOwner = isCurrentPlayer;
         
-        const indicatorClass = `action-card-indicator ${!canUse ? 'used' : ''} ${!isOwner ? 'not-owner' : ''}`;
+        // ИСПРАВЛЕННАЯ ЛОГИКА КЛАССОВ:
+        let indicatorClass = 'action-card-indicator';
+        
+        if (!canUse) {
+            // Карта использована - серая для всех
+            indicatorClass += ' used';
+        } else if (!isOwner) {
+            // Чужая неиспользованная карта - золотая, но не кликабельная
+            indicatorClass += ' not-owner';
+        }
+        // Своя неиспользованная карта - золотая и кликабельная (базовый класс)
+        
         const clickHandler = isOwner && canUse ? `onclick="showActionCard('${actionCard.id}')"` : '';
         
         actionCardIndicator = `
