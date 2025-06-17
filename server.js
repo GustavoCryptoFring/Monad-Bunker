@@ -835,7 +835,8 @@ io.on('connection', (socket) => {
             timeLeft: gameRoom.timeLeft,
             currentTurnPlayer: gameRoom.currentTurnPlayer,
             maxPlayers: gameRoom.maxPlayers,
-            startRoundVotes: gameRoom.startRoundVotes || []
+            startRoundVotes: gameRoom.startRoundVotes || [],
+            story: gameRoom.currentStory || null // ДОБАВЛЯЕМ историю
         });
     } catch (error) {
         console.error('❌ Error sending room state:', error);
@@ -927,6 +928,13 @@ io.on('connection', (socket) => {
             return;
         }
         
+        // ДОБАВЛЯЕМ: Выбираем случайную историю
+        const randomStoryIndex = Math.floor(Math.random() * gameStories.length);
+        const selectedStory = gameStories[randomStoryIndex];
+        gameRoom.currentStory = selectedStory;
+        
+        console.log('📜 Selected story:', selectedStory.title);
+        
         // Генерируем характеристики для всех игроков
         gameRoom.players.forEach(player => {
             player.characteristics = generateCharacteristics();
@@ -944,7 +952,7 @@ io.on('connection', (socket) => {
         gameRoom.playersWhoRevealed = [];
         gameRoom.currentTurnPlayer = null;
         
-        console.log('🚀 Game started! Players:', gameRoom.players.length);
+        console.log('🚀 Game started! Players:', gameRoom.players.length, 'Story:', selectedStory.title);
         
         // Уведомляем всех игроков о начале игры
         io.to('game-room').emit('game-started', {
@@ -952,7 +960,8 @@ io.on('connection', (socket) => {
             gameState: gameRoom.gameState,
             gamePhase: gameRoom.gamePhase,
             currentRound: gameRoom.currentRound,
-            timeLeft: gameRoom.timeLeft
+            timeLeft: gameRoom.timeLeft,
+            story: selectedStory // ДОБАВЛЯЕМ историю
         });
     });
     
@@ -1446,6 +1455,7 @@ function resetGame() {
         gameRoom.canChangeVote = {};
         gameRoom.startRoundVotes = [];
         gameRoom.activeEffects = {};
+        gameRoom.currentStory = null; // ДОБАВЛЯЕМ: сброс истории
         
         io.to('game-room').emit('game-reset', {
             players: gameRoom.players,
@@ -1576,8 +1586,8 @@ process.on('SIGINT', () => {
         process.exit(0);
     });
 });
-// ДОБАВЛЯЕМ МАССИВ ИСТОРИЙ после других массивов характеристик
 
+// ДОБАВЛЯЕМ МАССИВ ИСТОРИЙ после других массивов (если его нет)
 const gameStories = [
     {
         id: 1,
@@ -1622,7 +1632,8 @@ const gameStories = [
         `
     }
 ];
-// ОБНОВЛЯЕМ обработчик start-game
+
+// НАХОДИМ обработчик start-game и ОБНОВЛЯЕМ его
 socket.on('start-game', () => {
     console.log('🎮 Game start requested by:', socket.id);
     
@@ -1680,76 +1691,20 @@ socket.on('start-game', () => {
     });
 });
 
-// ОБНОВЛЯЕМ функцию resetGame - сбрасываем историю
-function resetGame() {
-    console.log('🔄 Resetting game...');
-    
-    try {
-        if (gameRoom.timer) {
-            clearInterval(gameRoom.timer);
-            gameRoom.timer = null;
-        }
-        
-        // Оставляем игроков, но сбрасываем игровое состояние
-        gameRoom.players.forEach((player) => {
-            player.isAlive = true;
-            player.votes = 0;
-            player.hasRevealed = false;
-            player.hasVoted = false;
-            player.votedFor = null;
-            player.cardsRevealedThisRound = 0;
-            player.revealedCharacteristics = [];
-            player.characteristics = null;
-            player.actionCards = [];
-        });
-        
-        gameRoom.gameState = 'lobby';
-        gameRoom.gamePhase = 'waiting';
-        gameRoom.currentRound = 1;
-        gameRoom.timer = null;
-        gameRoom.timeLeft = 0;
-        gameRoom.votingResults = {};
-        gameRoom.revealedThisRound = 0;
-        gameRoom.currentTurnPlayer = null;
-        gameRoom.playersWhoRevealed = [];
-        gameRoom.totalVotes = 0;
-        gameRoom.skipDiscussionVotes = [];
-        gameRoom.justificationQueue = [];
-        gameRoom.currentJustifyingPlayer = null;
-        gameRoom.canChangeVote = {};
-        gameRoom.startRoundVotes = [];
-        gameRoom.activeEffects = {};
-        gameRoom.currentStory = null; // ДОБАВЛЯЕМ: сброс истории
-        
-        io.to('game-room').emit('game-reset', {
-            players: gameRoom.players,
-            gameState: gameRoom.gameState
-        });
-    } catch (error) {
-        console.error('❌ Error resetting game:', error);
-    }
-}
-
-// ОБНОВЛЯЕМ room-state - включаем историю
-socket.on('connection', (socket) => {
-    // ... существующий код ...
-    
-    // Отправляем текущее состояние комнаты новому подключению
-    try {
-        socket.emit('room-state', {
-            players: gameRoom.players,
-            gameState: gameRoom.gameState,
-            gamePhase: gameRoom.gamePhase,
-            currentRound: gameRoom.currentRound,
-            timeLeft: gameRoom.timeLeft,
-            currentTurnPlayer: gameRoom.currentTurnPlayer,
-            maxPlayers: gameRoom.maxPlayers,
-            startRoundVotes: gameRoom.startRoundVotes || [],
-            story: gameRoom.currentStory || null // ДОБАВЛЯЕМ историю
-        });
-    } catch (error) {
-        console.error('❌ Error sending room state:', error);
-    }
-    
-    // ... остальной код ...
+// ОБНОВЛЯЕМ room-state - добавляем историю в ответ
+// НАХОДИМ место где отправляется room-state и добавляем story
+socket.emit('room-state', {
+    players: gameRoom.players,
+    gameState: gameRoom.gameState,
+    gamePhase: gameRoom.gamePhase,
+    currentRound: gameRoom.currentRound,
+    timeLeft: gameRoom.timeLeft,
+    currentTurnPlayer: gameRoom.currentTurnPlayer,
+    maxPlayers: gameRoom.maxPlayers,
+    startRoundVotes: gameRoom.startRoundVotes || [],
+    story: gameRoom.currentStory || null // ДОБАВЛЯЕМ: отправляем историю
 });
+
+// ОБНОВЛЯЕМ функцию resetGame - добавляем сброс истории
+// НАХОДИМ функцию resetGame и добавляем сброс истории
+gameRoom.currentStory = null; // ДОБАВЛЯЕМ эту строку в resetGame

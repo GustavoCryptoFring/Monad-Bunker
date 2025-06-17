@@ -140,6 +140,14 @@ socket.on('game-started', function(data) {
     gameState.timeLeft = data.timeLeft;
     gameState.startRoundVotes = 0;      // ДОБАВЛЯЕМ: сброс голосов
     gameState.myStartRoundVote = false; // ДОБАВЛЯЕМ: сброс моего голоса
+    
+    // ДОБАВЛЯЕМ: Обработка истории
+    if (data.story) {
+        gameState.currentStory = data.story;
+        updateStoryDisplay(data.story);
+        showStoryPanel();
+    }
+    
     showGameScreen();
 });
 
@@ -151,6 +159,9 @@ socket.on('game-reset', function(data) {
     gameState.currentRound = 1;
     gameState.timeLeft = 0;
     gameState.currentTurnPlayer = null;
+    gameState.currentStory = null; // ДОБАВЛЯЕМ: сброс истории
+    
+    hideStoryPanel(); // ДОБАВЛЯЕМ: скрываем историю при сбросе
     showLobbyScreen();
 });
 
@@ -364,6 +375,14 @@ function showLobbyScreen() {
 function showGameScreen() {
     console.log('📱 Showing game screen');
     showScreen('gameScreen');
+    
+    // Проверяем и показываем историю если она есть
+    if (gameState.currentStory) {
+        updateStoryDisplay(gameState.currentStory);
+    } else {
+        hideStoryPanel();
+    }
+    
     updateGameDisplay();
 }
 
@@ -438,191 +457,6 @@ function updateLobbyDisplay() {
     if (maxPlayersSelect) {
         maxPlayersSelect.value = gameState.maxPlayers;
     }
-}
-
-// === ФУНКЦИИ ОТОБРАЖЕНИЯ ЭКРАНОВ ===
-
-function showScreen(screenId) {
-    // Скрываем все экраны
-    const screens = document.querySelectorAll('.screen');
-    screens.forEach(screen => {
-        screen.style.display = 'none';
-    });
-    
-    // Показываем нужный экран
-    const targetScreen = document.getElementById(screenId);
-    if (targetScreen) {
-        targetScreen.style.display = 'block';
-    }
-}
-
-function showLoginScreen() {
-    console.log('📱 Showing login screen');
-    showScreen('loginScreen');
-    
-    // Устанавливаем фокус на поле ввода имени
-    const nameInput = document.getElementById('playerNameInput');
-    if (nameInput) {
-        nameInput.focus();
-    }
-}
-
-function showLobbyScreen() {
-    console.log('📱 Showing lobby screen');
-    showScreen('lobbyScreen');
-    updateLobbyDisplay();
-}
-
-function showGameScreen() {
-    console.log('📱 Showing game screen');
-    showScreen('gameScreen');
-    updateGameDisplay();
-}
-
-function showResultsScreen() {
-    console.log('📱 Showing results screen');
-    showScreen('resultsScreen');
-}
-
-// === ФУНКЦИИ ОБНОВЛЕНИЯ ЛОББИ ===
-
-function updateLobbyDisplay() {
-    // Обновляем счетчик игроков
-    const currentPlayersCount = document.getElementById('currentPlayersCount');
-    const maxPlayersCount = document.getElementById('maxPlayersCount');
-    const playersList = document.getElementById('playersList');
-    const startGameBtn = document.getElementById('startGameBtn');
-    const waitingInfo = document.getElementById('waitingInfo');
-    const maxPlayersSelector = document.getElementById('maxPlayersSelector');
-    
-    if (currentPlayersCount) {
-        currentPlayersCount.textContent = gameState.players.length;
-    }
-    
-    if (maxPlayersCount) {
-        maxPlayersCount.textContent = gameState.maxPlayers;
-    }
-    
-    // Обновляем список игроков
-    if (playersList) {
-        playersList.innerHTML = '';
-        gameState.players.forEach(player => {
-            const li = document.createElement('li');
-            li.className = player.isHost ? 'host' : '';
-            li.textContent = `${player.name}${player.isHost ? ' (Хост)' : ''}`;
-            playersList.appendChild(li);
-        });
-    }
-    
-    // Показываем/скрываем кнопки и селекторы
-    if (gameState.isHost) {
-        if (startGameBtn) {
-            startGameBtn.style.display = 'block';
-            startGameBtn.disabled = gameState.players.length < 2;
-            
-            // ОБНОВЛЯЕМ текст кнопки
-            if (gameState.players.length < 2) {
-                startGameBtn.textContent = 'Начать игру (минимум 2 игрока)';
-            } else {
-                startGameBtn.textContent = 'Начать игру';
-            }
-        }
-        if (waitingInfo) {
-            waitingInfo.style.display = 'none';
-        }
-        if (maxPlayersSelector) {
-            maxPlayersSelector.style.display = 'block';
-        }
-    } else {
-        if (startGameBtn) {
-            startGameBtn.style.display = 'none';
-        }
-        if (waitingInfo) {
-            waitingInfo.style.display = 'block';
-        }
-        if (maxPlayersSelector) {
-            maxPlayersSelector.style.display = 'none';
-        }
-    }
-    
-    // Обновляем селектор максимального количества игроков
-    const maxPlayersSelect = document.getElementById('maxPlayersSelect');
-    if (maxPlayersSelect) {
-        maxPlayersSelect.value = gameState.maxPlayers;
-    }
-}
-
-// === ОСНОВНЫЕ ФУНКЦИИ ИГРЫ ===
-
-function joinGame() {
-    console.log('🎯 joinGame function called');
-    
-    const nameInput = document.getElementById('playerNameInput');
-    if (!nameInput) {
-        console.error('❌ Name input not found');
-        return;
-    }
-    
-    const playerName = nameInput.value.trim();
-    console.log('🎯 Player name:', playerName);
-    
-    if (!playerName) {
-        showNotification('Ошибка', 'Введите ваше имя!');
-        return;
-    }
-    
-    if (playerName.length < 2 || playerName.length > 20) {
-        showNotification('Ошибка', 'Имя должно быть от 2 до 20 символов!');
-        return;
-    }
-    
-    // ДОБАВЛЕНО: Проверка подключения к сокету
-    if (!socket.connected) {
-        console.error('❌ Socket not connected');
-        showNotification('Ошибка', 'Нет соединения с сервером. Попробуйте перезагрузить страницу.');
-        return;
-    }
-    
-    console.log('🎯 Joining game with name:', playerName);
-    socket.emit('join-game', { playerName: playerName });
-    
-    // ДОБАВЛЕНО: Блокируем кнопку на время запроса
-    const joinBtn = document.getElementById('joinGameBtn');
-    if (joinBtn) {
-        joinBtn.disabled = true;
-        joinBtn.textContent = 'Подключение...';
-        
-        // Разблокируем через 5 секунд если нет ответа
-        setTimeout(() => {
-            if (joinBtn.disabled) {
-                joinBtn.disabled = false;
-                joinBtn.textContent = 'Присоединиться к игре';
-            }
-        }, 5000);
-    }
-}
-
-function startGame() {
-    console.log('🚀 Starting game...');
-    socket.emit('start-game');
-}
-
-function startRound() {
-    if (gameState.myStartRoundVote) {
-        showNotification('Голос уже учтен', 'Вы уже проголосовали за начало раунда');
-        return;
-    }
-    
-    console.log('🎯 Voting to start round');
-    socket.emit('start-round');
-}
-
-function changeMaxPlayers() {
-    const select = document.getElementById('maxPlayersSelect');
-    const newMaxPlayers = parseInt(select.value);
-    
-    console.log('🔧 Changing max players to:', newMaxPlayers);
-    socket.emit('change-max-players', { maxPlayers: newMaxPlayers });
 }
 
 // === ФУНКЦИИ ИГРОВОГО ПРОЦЕССА ===
@@ -1418,6 +1252,7 @@ socket.on('game-started', function(data) {
     if (data.story) {
         gameState.currentStory = data.story;
         updateStoryDisplay(data.story);
+        showStoryPanel();
     }
     
     showGameScreen();
@@ -1434,14 +1269,18 @@ socket.on('room-state', function(data) {
     gameState.maxPlayers = data.maxPlayers || 8;
     gameState.startRoundVotes = data.startRoundVotes || 0;
     
-    // ДОБАВЛЯЕМ: Обработка истории
+    // ДОБАВЛЯЕМ: Обработка истории при переподключении
     if (data.story) {
         gameState.currentStory = data.story;
         updateStoryDisplay(data.story);
+    } else {
+        gameState.currentStory = null;
+        hideStoryPanel();
     }
     
     // Если мы уже в игре, показываем соответствующий экран
     if (gameState.playerId && gameState.serverGameState === 'lobby') {
+        hideStoryPanel(); // В лобби история не нужна
         showLobbyScreen();
     } else if (gameState.playerId && gameState.serverGameState === 'playing') {
         showGameScreen();
@@ -1460,12 +1299,14 @@ function updateStoryDisplay(story) {
     if (story) {
         console.log('📜 Updating story display:', story.title);
         storyContent.innerHTML = story.content;
+        showStoryPanel();
     } else {
         storyContent.innerHTML = `
             <div class="story-loading">
                 Ожидание начала игры...
             </div>
         `;
+        hideStoryPanel();
     }
 }
 
@@ -1474,13 +1315,16 @@ function showGameScreen() {
     console.log('📱 Showing game screen');
     showScreen('gameScreen');
     
-    // Обновляем историю если она есть
+    // Проверяем и показываем историю если она есть
     if (gameState.currentStory) {
         updateStoryDisplay(gameState.currentStory);
+    } else {
+        hideStoryPanel();
     }
     
     updateGameDisplay();
 }
+
 // ОБНОВЛЯЕМ обработчик game-started
 socket.on('game-started', function(data) {
     console.log('🚀 Game started:', data);
@@ -1576,7 +1420,7 @@ socket.on('room-state', function(data) {
         updateStoryDisplay(data.story);
     } else {
         gameState.currentStory = null;
-        hideStoryPanel(); // Скрываем если истории нет
+        hideStoryPanel();
     }
     
     // Если мы уже в игре, показываем соответствующий экран
