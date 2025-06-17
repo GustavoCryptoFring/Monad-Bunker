@@ -10,7 +10,21 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 // === МАССИВЫ КАРТ ДЕЙСТВИЙ И ХАРАКТЕРИСТИКИ ===
-
+const stories = [
+  {
+    title: 'Потерянный радиопередатчик',
+    description: 'Вы находите обломки старого радиопередатчика, по легенде передавшего последний сигнал выживших…'
+  },
+  {
+    title: 'Тайная лаборатория',
+    description: 'Где-то под бункером скрыта заброшенная лаборатория. Говорят, там остались образцы неизвестного вируса…'
+  },
+  {
+    title: 'Привет из прошлого',
+    description: 'В вентиляции вы находите старую кассету с записью. На ней — голоса давно умерших…'
+  }
+  // …другие истории
+];
 const actionCards = [
     { 
         id: 1, 
@@ -911,7 +925,7 @@ io.on('connection', (socket) => {
         console.log('🎮 Game start requested by:', socket.id);
         
         const player = gameRoom.players.find(p => p.id === socket.id);
-        
+        const chosenStory = stories[Math.floor(Math.random() * stories.length)];
         if (!player || !player.isHost) {
             socket.emit('error', 'Только хост может начать игру!');
             return;
@@ -947,13 +961,14 @@ io.on('connection', (socket) => {
         console.log('🚀 Game started! Players:', gameRoom.players.length);
         
         // Уведомляем всех игроков о начале игры
-        io.to('game-room').emit('game-started', {
-            players: gameRoom.players,
-            gameState: gameRoom.gameState,
-            gamePhase: gameRoom.gamePhase,
-            currentRound: gameRoom.currentRound,
-            timeLeft: gameRoom.timeLeft
-        });
+       +    io.to('game-room').emit('game-started', {
+        players:      gameRoom.players,
+        gameState:    gameRoom.gameState,
+        gamePhase:    gameRoom.gamePhase,
+        currentRound: gameRoom.currentRound,
+        timeLeft:     gameRoom.timeLeft,
+        story:        chosenStory
+    });
     });
     
     // ИСПРАВЛЯЕМ обработчик start-round - убираем дублирование

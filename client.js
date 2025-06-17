@@ -25,6 +25,23 @@ let gameState = {
     startRoundVotes: 0,      // ДОБАВЛЯЕМ: количество голосов за начало раунда
     myStartRoundVote: false  // ДОБАВЛЯЕМ: проголосовал ли я за начало раунда
 };
+const bunkerFeatures = [
+  'Запасы чистой воды (100 литров)',
+  'Аптечка первой помощи (20 наборов)',
+  'Электрогенератор (запас топлива на 48 ч)',
+  'Запас консервов (200 банок)',
+  'Укреплённые стены и вентиляция',
+  'Спальный отсек на 10 человек',
+  'Склад инструментов и запчастей',
+  'Радиостанция с дальностью 50 км',
+  'Система очистки воздуха',
+  'Лаборатория для анализа проб',
+  'Тренажёрный зал',
+  'Зарядная станция для техники',
+  'Библиотека (100 книг)',
+  'Огород на гидропонике',
+  'Запас топлива для транспорта'
+];
 const stories = [
   {
     title: 'Потерянный радиопередатчик',
@@ -149,32 +166,29 @@ socket.on('game-started', function(data) {
     console.log('🚀 Game started:', data);
 
     // Обновляем состояние
-    gameState.players = data.players;
+    gameState.players     = data.players;
     gameState.serverGameState = data.gameState;
-    gameState.gamePhase = data.gamePhase;
-    gameState.currentRound = data.currentRound;
-    gameState.timeLeft = data.timeLeft;
-    gameState.startRoundVotes = 0;      
-    gameState.myStartRoundVote = false; 
+    gameState.gamePhase   = data.gamePhase;
+    gameState.currentRound= data.currentRound;
+    gameState.timeLeft    = data.timeLeft;
+    gameState.startRoundVotes = 0;
+    gameState.myStartRoundVote = false;
 
-    // 1) Выбираем случайную историю из массива stories
-    const idx   = Math.floor(Math.random() * stories.length);
-    const story = stories[idx];
-    console.log('📖 Selected story:', idx, story);
+    // ── Получаем единую историю от сервера
+    const story = data.story;
+    document.getElementById('storyTitle').textContent       = story.title;
+    document.getElementById('storyDescription').textContent = story.description;
 
-    // 2) Подставляем её в DOM
-    const titleEl = document.getElementById('storyTitle');
-    const descEl  = document.getElementById('storyDescription');
-    if (titleEl && descEl) {
-      titleEl.textContent       = story.title;
-      descEl.textContent        = story.description;
-    } else {
-      console.warn('Элементы #storyTitle / #storyDescription не найдены в DOM');
-    }
+    // ── Рендерим характеристики бункера (как было)
+    const shuffled = bunkerFeatures.sort(() => 0.5 - Math.random());
+    const selectedFeatures = shuffled.slice(0, 5);
+    document.getElementById('storyScrollText').innerHTML =
+      selectedFeatures.map(f => `<div>• ${f}</div>`).join('');
 
-    // 3) Показываем экран игры
+    // ── Показываем экран
     showGameScreen();
 });
+
 socket.on('game-reset', function(data) {
     console.log('🔄 Game reset:', data);
     gameState.players = data.players;

@@ -2390,3 +2390,18 @@ body {
     font-size: 1.1em;
     margin: 10px 0;
 }
+.story-scroll-container {
+  margin: 1rem 0;
+  max-height: 150px;      /* регулируйте по вкусу */
+  overflow-y: auto;
+  padding: 0.5rem;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 4px;
+}
+.story-scroll-text {
+  white-space: pre-wrap;
+  line-height: 1.4;
+  color: #fff;
+  font-size: 0.9rem;
+}
