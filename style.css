@@ -1367,7 +1367,7 @@ body {
     }
 }
 
-/* НОВЫЕ СТИЛИ ДЛЯ КАРТ ДЕЙСТВИЙ */
+/* ОБНОВЛЯЕМ СТИЛИ ДЛЯ КАРТ ДЕЙСТВИЙ */
 .action-card-indicator {
     position: absolute;
     top: -5px;
@@ -1387,6 +1387,7 @@ body {
     color: #2c3e50;
     box-shadow: 0 2px 8px rgba(243, 156, 18, 0.6);
     animation: pulse-gold 2s infinite;
+    /* УБИРАЕМ содержимое - просто золотой кружок */
 }
 
 .action-card-indicator:hover {
