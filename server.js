@@ -177,27 +177,35 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Обновляем объект gameRoom - убираем notificationSettings
+// Единая игровая комната для всех
 const gameRoom = {
     players: [],
-    gameState: 'lobby',
-    maxPlayers: 8,
-    gamePhase: 'waiting',
+    gameState: 'lobby', // lobby, playing, finished
+    maxPlayers: 8, // ИЗМЕНЕНО: по умолчанию 8 игроков
+    gamePhase: 'waiting', // waiting, preparation, revelation, discussion, voting, results, justification
     currentRound: 1,
     maxRounds: 3,
     timer: null,
     timeLeft: 0,
     votingResults: {},
     revealedThisRound: 0,
-    currentTurnPlayer: null,
-    playersWhoRevealed: [],
-    totalVotes: 0,
-    skipDiscussionVotes: [],
-    justificationQueue: [],
-    currentJustifyingPlayer: null,
-    justificationPhase: 1,
-    canChangeVote: {}
-    // УБИРАЕМ notificationSettings полностью
+    currentTurnPlayer: null, // Для фазы раскрытия
+    playersWhoRevealed: [], // Кто уже раскрыл в этом раунде
+    totalVotes: 0, // Для досрочного завершения голосования
+    skipDiscussionVotes: [], // ДОБАВЛЕНО: голоса за пропуск обсуждения
+    // НОВЫЕ ПОЛЯ ДЛЯ ОПРАВДАНИЙ
+    justificationQueue: [], // Очередь игроков на оправдание
+    currentJustifyingPlayer: null, // Текущий оправдывающийся игрок
+    justificationPhase: 1, // Номер фазы оправдания (может быть несколько раундов)
+    canChangeVote: {}, // Отслеживание возможности смены голоса для каждого игрока
+    // НОВЫЕ НАСТРОЙКИ УВЕДОМЛЕНИЙ
+    notificationSettings: {
+        gameStart: false,
+        discussionSkipped: false,
+        newRound: false,
+        playerJoined: false  // ДОБАВЛЯЕМ НОВУЮ НАСТРОЙКУ
+    },
+    startRoundVotes: []  // ДОБАВЛЯЕМ: голоса за начало раунда
 };
 
 // Socket.IO логика
@@ -212,8 +220,8 @@ io.on('connection', (socket) => {
         currentRound: gameRoom.currentRound,
         timeLeft: gameRoom.timeLeft,
         currentTurnPlayer: gameRoom.currentTurnPlayer,
-        maxPlayers: gameRoom.maxPlayers
-        // УБИРАЕМ notificationSettings
+        maxPlayers: gameRoom.maxPlayers,
+        startRoundVotes: gameRoom.startRoundVotes || [] // ДОБАВЛЯЕМ
     });
     
     socket.on('join-game', (data) => {
@@ -323,12 +331,12 @@ io.on('connection', (socket) => {
     });
     
     socket.on('start-round', () => {
-        console.log('🎯 Round start requested by:', socket.id);
+        console.log('🎯 Round start vote from:', socket.id);
         
         const player = gameRoom.players.find(p => p.id === socket.id);
         
-        if (!player || !player.isHost) {
-            socket.emit('error', 'Только хост может начать раунд!');
+        if (!player || !player.isAlive) {
+            socket.emit('error', 'Вы не можете голосовать!');
             return;
         }
         
@@ -337,7 +345,35 @@ io.on('connection', (socket) => {
             return;
         }
         
-        startRevelationPhase();
+        if (gameRoom.startRoundVotes.includes(socket.id)) {
+            socket.emit('error', 'Вы уже проголосовали за начало раунда!');
+            return;
+        }
+        
+        // Добавляем голос
+        gameRoom.startRoundVotes.push(socket.id);
+        
+        const requiredVotes = 2; // Всегда требуется ровно 2 голоса
+        const currentVotes = gameRoom.startRoundVotes.length;
+        
+        console.log(`🎯 Start round votes: ${currentVotes}/${requiredVotes}`);
+        
+        // Отправляем обновление всем игрокам
+        gameRoom.players.forEach(p => {
+            const hasVoted = gameRoom.startRoundVotes.includes(p.id);
+            io.to(p.id).emit('start-round-vote-update', {
+                votes: currentVotes,
+                required: requiredVotes,
+                hasVoted: hasVoted
+            });
+        });
+        
+        // Если достаточно голосов - начинаем раунд
+        if (currentVotes >= requiredVotes) {
+            console.log('🎯 Starting round - enough votes');
+            gameRoom.startRoundVotes = []; // Сбрасываем голоса
+            startRevelationPhase();
+        }
     });
     
     socket.on('vote-player', (data) => {
@@ -1062,6 +1098,7 @@ function nextRound() {
     gameRoom.gamePhase = 'preparation';
     gameRoom.timeLeft = 0;
     gameRoom.currentTurnPlayer = null;
+    gameRoom.startRoundVotes = []; // ДОБАВЛЯЕМ: сброс голосов за начало раунда
     
     console.log('🔄 Starting round:', gameRoom.currentRound, 'Alive players:', alivePlayers.length);
     
@@ -1070,7 +1107,6 @@ function nextRound() {
         gamePhase: gameRoom.gamePhase,
         timeLeft: gameRoom.timeLeft,
         players: gameRoom.players
-        // УБИРАЕМ notificationSettings
     });
 }
 
@@ -1131,12 +1167,11 @@ function resetGame() {
     gameRoom.justificationQueue = [];
     gameRoom.currentJustifyingPlayer = null;
     gameRoom.canChangeVote = {};
-    // УБИРАЕМ сброс notificationSettings
+    gameRoom.startRoundVotes = []; // ДОБАВЛЯЕМ: сброс голосов за начало раунда
     
     io.to('game-room').emit('game-reset', {
         players: gameRoom.players,
         gameState: gameRoom.gameState
-        // УБИРАЕМ notificationSettings
     });
 }
 

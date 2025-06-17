@@ -1194,3 +1194,49 @@ body {
     background: #ecf0f1;
     color: #c0392b;
 }
+
+/* Добавляем стили для кнопки начала раунда с голосованием */
+.start-round-btn.voted-skip {
+    background: linear-gradient(45deg, #2ecc71, #27ae60) !important;
+    cursor: not-allowed !important;
+    box-shadow: 0 4px 15px rgba(46, 204, 113, 0.4) !important;
+}
+
+.start-round-btn.voted-skip:hover {
+    background: linear-gradient(45deg, #2ecc71, #27ae60) !important;
+    transform: none !important;
+    box-shadow: 0 4px 15px rgba(46, 204, 113, 0.4) !important;
+}
+
+/* Обновляем стили для информации о голосах */
+.votes-info {
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #f39c12;
+    font-weight: bold;
+    text-align: center;
+    padding: 5px 10px;
+    background: rgba(44, 62, 80, 0.6);
+    border-radius: 8px;
+    border: 1px solid rgba(243, 156, 18, 0.3);
+}
+
+/* Стили для анимации кнопки когда нужны голоса */
+@keyframes pulse-vote-needed {
+    0% { 
+        box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4); 
+        transform: scale(1);
+    }
+    50% { 
+        box-shadow: 0 6px 25px rgba(231, 76, 60, 0.6);
+        transform: scale(1.02);
+    }
+    100% { 
+        box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+        transform: scale(1);
+    }
+}
+
+.start-round-btn:not(.voted-skip):not(:disabled) {
+    animation: pulse-vote-needed 2s infinite;
+}
