@@ -73,25 +73,25 @@
                     <h2>РАУНД <span id="currentRound">1</span></h2>
                     <p id="gameStatus">Ожидание начала игры...</p>
                     
-                    <!-- ОБНОВЛЕННЫЕ кнопки действий в верхней части -->
+                    <!-- ПЕРЕМЕЩАЕМ кнопки действий В ЦЕНТР round-info -->
                     <div class="round-actions" id="roundActions" style="display: none;">
-                        <!-- Кнопка начала раунда (для хоста) -->
-                        <button id="startRoundBtn" class="start-round-btn" onclick="startRound()" style="display: none;">
+                        <!-- Кнопка начала раунда (для всех игроков) -->
+                        <button id="startRoundBtn" class="center-action-btn" onclick="startRound()" style="display: none;">
                             🚀 Начать раунд
                         </button>
                         
                         <!-- Кнопка пропуска обсуждения -->
-                        <button id="skipDiscussionBtn" class="start-round-btn" onclick="voteToSkipDiscussion()" style="display: none;">
+                        <button id="skipDiscussionBtn" class="center-action-btn" onclick="voteToSkipDiscussion()" style="display: none;">
                             ⏭️ Пропустить обсуждение (<span id="skipVotesCount">0</span>/2)
                         </button>
                         
                         <!-- Кнопка завершения оправдания -->
-                        <button id="finishJustificationBtn" class="start-round-btn" onclick="finishJustification()" style="display: none;">
+                        <button id="finishJustificationBtn" class="center-action-btn" onclick="finishJustification()" style="display: none;">
                             ✅ Завершить оправдание
                         </button>
                         
                         <!-- Кнопка сдачи -->
-                        <button id="surrenderBtn" class="start-round-btn surrender-btn" onclick="surrender()" style="display: none;">
+                        <button id="surrenderBtn" class="center-action-btn surrender-btn" onclick="surrender()" style="display: none;">
                             🏳️ Сдаться
                         </button>
                     </div>
@@ -107,7 +107,7 @@
             </div>
 
             <div class="game-actions" id="gameActions">
-                <!-- Удаляем отсюда все кнопки - они теперь наверху -->
+                <!-- Убираем отсюда все кнопки - они теперь в центре -->
             </div>
         </div>
 
