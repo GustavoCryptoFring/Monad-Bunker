@@ -1355,3 +1355,10 @@ body {
     border-radius: 10px;
     margin: 12px 0 12px 32px;
 }
+
+.round-info {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start; /* Очень важно! */
+  align-items: flex-start;     /* Можно добавить для выравнивания по верхнему краю */
+}
