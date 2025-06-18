@@ -1078,18 +1078,17 @@ function createPlayerCard(player) {
     }
 
     // ИСПРАВЛЕНО: Формируем индикатор карты действия БЕЗ СОДЕРЖИМОГО
-    let actionCardIndicator = '';
+  let actionCardIndicator = '';
     if (player.actionCards && player.actionCards.length > 0) {
-        const actionCard = player.actionCards[0];
-        const canUse = actionCard.usesLeft > 0;
-        const isOwner = isCurrentPlayer;
-        
-        const indicatorClass = `action-card-indicator ${!canUse ? 'used' : ''} ${!isOwner ? 'not-owner' : ''}`;
-        const clickHandler = isOwner && canUse ? `onclick="showActionCard('${actionCard.id}')"` : '';
-        
-        // УБИРАЕМ ИКОНКУ - просто пустой кружок
+        const card = player.actionCards[0];
+        const canUse = card.usesLeft > 0;
+        const isOwner = player.id === gameState.playerId;
         actionCardIndicator = `
-            <div class="${indicatorClass}" ${clickHandler} title="${actionCard.name}">
+            <div class="action-card${!canUse?' used':''}${!isOwner?' not-owner':''}"
+                 data-id="${card.id}"
+                 data-type="${card.type}"
+                 title="${card.name}">
+                ${card.icon}
             </div>
         `;
     }
@@ -1628,5 +1627,36 @@ function translateCharacteristic(key) {
     };
     return translations[key] || key;
 }
+// ——— Делегируем click по любому .action-card ———
+document.addEventListener('click', e => {
+  const el = e.target.closest('.action-card');
+  if (!el) return;
+
+  const cardId   = el.dataset.id;
+  const cardType = el.dataset.type;
+  let   targetId = null;
+
+  // Для карт, которым нужна цель:
+  if (['voting','revenge','change','investigative','protective','disruptive'].includes(cardType)) {
+    const alive = gameState.players.filter(p => p.isAlive && p.id !== gameState.playerId);
+    const choice = prompt(
+      `Выберите цель для "${el.title}":\n` +
+      alive.map(p => `${p.name} (${p.id})`).join('\n')
+    );
+    if (choice) targetId = choice.trim();
+  }
+
+  socket.emit('use-action-card', { cardId, targetId });
+});
+
+// ——— Обработка ответа от сервера ———
+socket.on('action-card-used', data => {
+  gameState.players = data.players;
+  updatePlayersGrid();
+
+  let msg = `${data.playerName} использовал карту «${data.cardName}»`;
+  if (data.targetName) msg += ` на ${data.targetName}`;
+  showNotification('Карта действия', msg);
+});
 
 console.log('🎮 Bunker Game Client Loaded');
