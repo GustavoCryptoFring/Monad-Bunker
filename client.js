@@ -1350,28 +1350,16 @@ function getVotingButtons(player) {
     let isDisabled = false;
     
     if (hasVoted) {
-        if (votedFor === player.id) {
-            if (canChange) {
-                buttonText = 'Изменить голос';
-                buttonClass = 'vote-player-btn change-vote';
-                isDisabled = false;
-            } else {
-                buttonText = '✅ Проголосовано';
-                buttonClass = 'vote-player-btn voted';
-                isDisabled = true;
-            }
-        } else {
-            if (canChange) {
-                buttonText = 'Изменить на этого';
-                buttonClass = 'vote-player-btn change-vote';
-                isDisabled = false;
-            } else {
-                buttonText = 'Голосовать';
-                buttonClass = 'vote-player-btn';
-                isDisabled = true;
-            }
-        }
+    if (votedFor === player.id) {
+        buttonText = '✅ Проголосовано';
+        buttonClass = 'vote-player-btn voted';
+        isDisabled = true;
+    } else {
+        buttonText = 'Голосовать';
+        buttonClass = 'vote-player-btn';
+        isDisabled = true;
     }
+}
 
     // Добавляем информацию о текущих голосах в кнопку
     const currentVotes = player.votes || 0;
