@@ -425,12 +425,17 @@ io.on('connection', (socket) => {
   }
 
   // шлём всем обновлённый список игроков (чтобы UI обновил карточки и счётчики)
-  io.in('game-room').emit('action-card-used', {
-    players: gameRoom.players,
-    by: me.id,
-    cardType: card.type,
-    target: targetId || null
-  });
+ io.in('game-room').emit('action-card-used', {
+  players: gameRoom.players,
+  byId: me.id,
+  byName: me.name,                   // имя того, кто использовал
+  cardId: card.id,
+  cardName: card.name,               // название карты
+  targetId: targetId || null,
+  targetName: targetId
+    ? gameRoom.players.find(p => p.id === targetId).name
+    : null
+});
 });
     // Отправляем текущее количество игроков
     socket.emit('player-count', { count: gameRoom.players.length });
