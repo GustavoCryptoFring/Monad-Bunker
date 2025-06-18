@@ -68,73 +68,41 @@
 
         <!-- Игровой экран -->
         <div class="screen" id="gameScreen" style="display: none;">
-            <!-- НОВАЯ СТРУКТУРА: основной блок с историей и игрой -->
-            <div class="game-layout">
-                <!-- ДОБАВЛЯЕМ: Блок с историей слева -->
-                <div class="story-panel">
-                    <div class="story-header">
-                        <h3>📖 ИСТОРИЯ</h3>
-                    </div>
-                    <div class="story-content">
-                        <div class="story-scenario" id="storyScenario">
-                            <h4 id="storyTitle">Загрузка...</h4>
-                            <p id="storyDescription">Определяется сценарий...</p>
-                        </div>
-                        <div class="bunker-info" id="bunkerInfo">
-                            <h4>🏠 Ваш бункер:</h4>
-                            <div class="bunker-details">
-                                <div class="bunker-room" id="bunkerRoom1">
-                                    <span class="room-icon">🏠</span>
-                                    <span class="room-name" id="roomName1">Загрузка...</span>
-                                </div>
-                                <div class="bunker-room" id="bunkerRoom2">
-                                    <span class="room-icon">🏠</span>
-                                    <span class="room-name" id="roomName2">Загрузка...</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ОБНОВЛЯЕМ: Основной игровой блок справа -->
-                <div class="game-main">
-                    <div class="game-info">
-                        <div class="round-info">
-                            <h2>РАУНД <span id="currentRound">1</span></h2>
-                            <p id="gameStatus">Ожидание начала игры...</p>
-                            
-                            <div class="round-actions" id="roundActions" style="display: none;">
-                                <button id="startRoundBtn" class="center-action-btn" onclick="startRound()" style="display: none;">
-                                    🚀 Начать раунд
-                                </button>
-                                
-                                <button id="skipDiscussionBtn" class="center-action-btn" onclick="voteToSkipDiscussion()" style="display: none;">
-                                    ⏭️ Пропустить обсуждение (<span id="skipVotesCount">0</span>/2)
-                                </button>
-                                
-                                <button id="finishJustificationBtn" class="center-action-btn" onclick="finishJustification()" style="display: none;">
-                                    ✅ Завершить оправдание
-                                </button>
-                                
-                                <button id="surrenderBtn" class="center-action-btn surrender-btn" onclick="surrender()" style="display: none;">
-                                    🏳️ Сдаться
-                                </button>
-                            </div>
-                        </div>
-                        <div class="timer-info">
-                            <div class="phase-display" id="phaseDisplay">Подготовка</div>
-                            <div class="timer-display" id="timerDisplay">0:00</div>
-                        </div>
-                    </div>
+            <div class="game-info">
+                <div class="round-info">
+                    <h2>РАУНД <span id="currentRound">1</span></h2>
+                    <p id="gameStatus">Ожидание начала игры...</p>
                     
-                    <div class="players-grid" id="playersGrid">
-                        <!-- Карточки игроков -->
-                    </div>
-
-                    <div class="game-actions" id="gameActions">
-                        <!-- Убираем отсюда все кнопки - они теперь в центре -->
+                    <div class="round-actions" id="roundActions" style="display: none;">
+                        <button id="startRoundBtn" class="center-action-btn" onclick="startRound()" style="display: none;">
+                            🚀 Начать раунд
+                        </button>
+                        
+                        <button id="skipDiscussionBtn" class="center-action-btn" onclick="voteToSkipDiscussion()" style="display: none;">
+                            ⏭️ Пропустить обсуждение (<span id="skipVotesCount">0</span>/2)
+                        </button>
+                        
+                        <button id="finishJustificationBtn" class="center-action-btn" onclick="finishJustification()" style="display: none;">
+                            ✅ Завершить оправдание
+                        </button>
+                        
+                        <button id="surrenderBtn" class="center-action-btn surrender-btn" onclick="surrender()" style="display: none;">
+                            🏳️ Сдаться
+                        </button>
                     </div>
                 </div>
+                <div class="timer-info">
+                    <div class="phase-display" id="phaseDisplay">Подготовка</div>
+                    <div class="timer-display" id="timerDisplay">0:00</div>
+                </div>
+            </div>
+            
+            <div class="players-grid" id="playersGrid">
+                <!-- Карточки игроков -->
+            </div>
+
+            <div class="game-actions" id="gameActions">
+                <!-- Убираем отсюда все кнопки - они теперь в центре -->
             </div>
         </div>
 

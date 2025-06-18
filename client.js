@@ -23,8 +23,7 @@ let gameState = {
     skipDiscussionVotes: 0,
     mySkipVote: false,
     startRoundVotes: 0,
-    myStartRoundVote: false,
-    scenario: null // ДОБАВЛЯЕМ сценарий
+    myStartRoundVote: false
 };
 
 // Socket.IO подключение
@@ -374,8 +373,7 @@ function showGameScreen() {
     console.log('🎮 Game state:', {
         phase: gameState.gamePhase,
         players: gameState.players.length,
-        playerId: gameState.playerId,
-        scenario: gameState.scenario ? gameState.scenario.title : 'Not loaded'
+        playerId: gameState.playerId
     });
     
     showScreen('gameScreen');
@@ -493,8 +491,7 @@ function showGameScreen() {
     console.log('🎮 Game state:', {
         phase: gameState.gamePhase,
         players: gameState.players.length,
-        playerId: gameState.playerId,
-        scenario: gameState.scenario ? gameState.scenario.title : 'Not loaded'
+        playerId: gameState.playerId
     });
     
     showScreen('gameScreen');
@@ -712,9 +709,6 @@ function updateGameDisplay() {
     if (phaseDisplayElement) {
         phaseDisplayElement.textContent = getPhaseDisplayText();
     }
-    
-    // ДОБАВЛЯЕМ: Обновляем историю
-    updateStoryDisplay();
     
     // ИСПРАВЛЯЕМ: Убеждаемся что функции вызываются
     updateRoundActions();
@@ -1489,46 +1483,6 @@ function translateCharacteristic(key) {
         'fact2': 'Факт 2'
     };
     return translations[key] || key;
-}
-
-// ДОБАВЛЯЕМ функцию обновления истории
-function updateStoryDisplay() {
-    if (!gameState.scenario) {
-        // Если сценарий еще не выбран, показываем заглушки
-        const storyTitle = document.getElementById('storyTitle');
-        const storyDescription = document.getElementById('storyDescription'); 
-        const bunkerDescription = document.getElementById('bunkerDescription');
-        
-        if (storyTitle) {
-            storyTitle.textContent = 'Загрузка...';
-        }
-        
-        if (storyDescription) {
-            storyDescription.textContent = 'Определяется сценарий...';
-        }
-        
-        if (bunkerDescription) {
-            bunkerDescription.textContent = 'Загрузка информации о бункере...';
-        }
-        
-        return;
-    }
-    
-    const storyTitle = document.getElementById('storyTitle');
-    const storyDescription = document.getElementById('storyDescription'); 
-    const bunkerDescription = document.getElementById('bunkerDescription');
-    
-    if (storyTitle) {
-        storyTitle.textContent = gameState.scenario.title;
-    }
-    
-    if (storyDescription) {
-        storyDescription.textContent = gameState.scenario.description;
-    }
-    
-    if (bunkerDescription && gameState.scenario.bunkerDescription) {
-        bunkerDescription.textContent = gameState.scenario.bunkerDescription;
-    }
 }
 
 console.log('🎮 Bunker Game Client Loaded');
