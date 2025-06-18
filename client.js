@@ -713,6 +713,23 @@ function startRound() {
     socket.emit('start-round');
 }
 
+// ДОБАВЛЯЕМ недостающую функцию startGame
+function startGame() {
+    console.log('🚀 Start game requested');
+    
+    if (!gameState.isHost) {
+        showNotification('Ошибка', 'Только хост может начать игру!');
+        return;
+    }
+    
+    if (gameState.players.length < 2) {
+        showNotification('Ошибка', 'Для начала игры нужно минимум 2 игрока!');
+        return;
+    }
+    
+    socket.emit('start-game');
+}
+
 function changeMaxPlayers() {
     const select = document.getElementById('maxPlayersSelect');
     const newMaxPlayers = parseInt(select.value);
