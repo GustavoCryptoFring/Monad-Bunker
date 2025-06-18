@@ -16,8 +16,6 @@ let gameState = {
     maxPlayers: 8,
     currentTurnPlayer: null,
     currentJustifyingPlayer: null,
-    canChangeVote: {},
-    hasChangedVote: false,
     cardsRevealedThisRound: 0,
     requiredCardsThisRound: 1,
     skipDiscussionVotes: 0,
@@ -267,7 +265,6 @@ socket.on('phase-changed', function(data) {
     
     if (data.gamePhase !== 'voting') {
         gameState.myVote = null;
-        gameState.hasChangedVote = false;
     }
     
     if (data.gamePhase === 'revelation') {
@@ -303,7 +300,6 @@ socket.on('vote-update', function(data) {
     console.log('🗳️ Vote update:', data);
     gameState.players = data.players;
     gameState.votingResults = data.votingResults;
-    gameState.canChangeVote = data.canChangeVote || {};
     updatePlayersGrid();
 });
 
@@ -321,7 +317,6 @@ socket.on('second-voting-started', function(data) {
     gameState.gamePhase = data.gamePhase;
     gameState.timeLeft = data.timeLeft;
     gameState.players = data.players;
-    gameState.canChangeVote = data.canChangeVote || {};
     
     // Показываем уведомление о втором голосовании
     if (data.isSecondVoting) {
@@ -1292,19 +1287,13 @@ function voteForPlayer(playerId) {
         return;
     }
     
-    if (me.hasVoted && !gameState.canChangeVote[gameState.playerId]) {
+    if (me.hasVoted) {
         showNotification('Ошибка', 'Вы уже проголосовали!');
         return;
     }
     
-    if (me.hasVoted && gameState.canChangeVote[gameState.playerId]) {
-        // Смена голоса
-        socket.emit('change-vote', { targetId: playerId });
-        gameState.hasChangedVote = true;
-    } else {
-        // Первичное голосование
-        socket.emit('vote-player', { targetId: playerId });
-    }
+    // Только первичное голосование
+    socket.emit('vote-player', { targetId: playerId });
 }
 
 function voteToSkipDiscussion() {
@@ -1343,23 +1332,22 @@ function getVotingButtons(player) {
     
     const hasVoted = me.hasVoted;
     const votedFor = me.votedFor;
-    const canChange = gameState.canChangeVote[gameState.playerId] && !gameState.hasChangedVote;
     
     let buttonText = 'Голосовать';
     let buttonClass = 'vote-player-btn';
     let isDisabled = false;
     
     if (hasVoted) {
-    if (votedFor === player.id) {
-        buttonText = '✅ Проголосовано';
-        buttonClass = 'vote-player-btn voted';
-        isDisabled = true;
-    } else {
-        buttonText = 'Голосовать';
-        buttonClass = 'vote-player-btn';
-        isDisabled = true;
+        if (votedFor === player.id) {
+            buttonText = '✅ Проголосовано';
+            buttonClass = 'vote-player-btn voted';
+            isDisabled = true;
+        } else {
+            buttonText = 'Голосовать';
+            buttonClass = 'vote-player-btn';
+            isDisabled = true; // Уже проголосовал за другого
+        }
     }
-}
 
     // Добавляем информацию о текущих голосах в кнопку
     const currentVotes = player.votes || 0;
@@ -1378,36 +1366,38 @@ function getVotingButtons(player) {
     `;
 }
 
-function showNotification(title, message) {
-    document.getElementById('notificationTitle').textContent = title;
-    document.getElementById('notificationMessage').textContent = message;
-    document.getElementById('notificationModal').style.display = 'flex';
-}
-
-function closeNotificationModal() {
-    document.getElementById('notificationModal').style.display = 'none';
-}
-
-function showConnectionError(message) {
-    // Создаем элемент ошибки если его нет
-    let errorElement = document.getElementById('connectionError');
-    if (!errorElement) {
-        errorElement = document.createElement('div');
-        errorElement.id = 'connectionError';
-        errorElement.className = 'connection-error';
-        errorElement.innerHTML = `
-            <div class="error-content">
-                <h3>Ошибка подключения</h3>
-                <p id="errorMessage">${message}</p>
-                <button class="room-btn" onclick="location.reload()">Перезагрузить страницу</button>
-            </div>
-        `;
-        document.body.appendChild(errorElement);
-    } else {
-        document.getElementById('errorMessage').textContent = message;
-        errorElement.style.display = 'flex';
+// УПРОЩАЕМ сброс состояния при смене фазы
+socket.on('phase-changed', function(data) {
+    console.log('🔄 Phase changed:', data);
+    gameState.gamePhase = data.gamePhase;
+    gameState.timeLeft = data.timeLeft;
+    gameState.players = data.players;
+    gameState.currentTurnPlayer = data.currentTurnPlayer || null;
+    gameState.currentRound = data.currentRound || gameState.currentRound;
+    
+    // ДОБАВЛЯЕМ: Получаем сценарий при изменении фазы
+    if (data.scenario) {
+        gameState.scenario = data.scenario;
+        console.log('🎲 Scenario received:', data.scenario.title);
     }
-}
+    
+    gameState.requiredCardsThisRound = getRequiredCardsForRound(gameState.currentRound);
+    
+    if (data.gamePhase !== 'discussion') {
+        gameState.skipDiscussionVotes = 0;
+        gameState.mySkipVote = false;
+    }
+    
+    if (data.gamePhase !== 'voting') {
+        gameState.myVote = null;
+    }
+    
+    if (data.gamePhase === 'revelation') {
+        gameState.cardsRevealedThisRound = 0;
+    }
+    
+    updateGameDisplay();
+});
 
 // Обновляем обработчик game-started
 socket.on('game-started', function(data) {
@@ -1590,17 +1580,13 @@ function voteForPlayer(playerId) {
         return;
     }
     
-    if (me.hasVoted && !gameState.canChangeVote[gameState.playerId]) {
+    if (me.hasVoted) {
         showNotification('Ошибка', 'Вы уже проголосовали!');
         return;
     }
     
-    if (me.hasVoted && gameState.canChangeVote[gameState.playerId]) {
-        socket.emit('change-vote', { targetId: playerId });
-        gameState.hasChangedVote = true;
-    } else {
-        socket.emit('vote-player', { targetId: playerId });
-    }
+    // Только первичное голосование
+    socket.emit('vote-player', { targetId: playerId });
 }
 
 // Убеждаемся что все функции переведены

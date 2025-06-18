@@ -992,16 +992,6 @@ body {
     box-shadow: 0 6px 20px rgba(231, 76, 60, 0.5);
 }
 
-.vote-player-btn.change-vote {
-    background: linear-gradient(45deg, #f39c12, #e67e22);
-    box-shadow: 0 4px 15px rgba(243, 156, 18, 0.3);
-}
-
-.vote-player-btn.change-vote:hover {
-    background: linear-gradient(45deg, #e67e22, #d35400);
-    box-shadow: 0 6px 20px rgba(243, 156, 18, 0.5);
-}
-
 .vote-player-btn.voted {
     background: linear-gradient(45deg, #2ecc71, #27ae60);
     cursor: not-allowed;
