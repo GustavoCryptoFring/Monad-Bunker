@@ -1426,6 +1426,14 @@ socket.on('game-reset', function(data) {
     showLobbyScreen();
 });
 
+// Добавьте этот слушатель после инициализации подключения socket
+socket.on('showStory', function(story) {
+    const storyText = document.getElementById('storyText');
+    if (storyText) {
+        storyText.textContent = story;
+    }
+});
+
 // === ИНИЦИАЛИЗАЦИЯ ===
 
 document.addEventListener('DOMContentLoaded', function() {
