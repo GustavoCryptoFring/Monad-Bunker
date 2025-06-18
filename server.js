@@ -20,46 +20,30 @@ const actionCards = [
         usesLeft: 1,
         icon: "🗳️"
     },
-    { 
+  { 
         id: 2, 
-        name: "Детектив", 
-        description: "Узнайте одну скрытую характеристику любого игрока", 
-        type: "investigative", 
+        name: "Месть", 
+        description: "Может состарить любого игрока на 20 лет, если вылетает(при изгнании игрока с этой карточкой ,у него появляется выбор кому из активных игроков добавить возраст(возраст может быть не открыт,в таком случае будет писать +20,а после открытия добавиться)", 
+        type: "revenge", 
         usesLeft: 1,
-        icon: "🔍"
+        icon: "🔪"
     },
     { 
         id: 3, 
-        name: "Защитник", 
-        description: "Спасите одного игрока от исключения (включая себя)", 
-        type: "protective", 
+        name: "Доктор", 
+        description: "Может вылечить себя или ухудшить здоровье другого (либо делает свое здоровье полностью здоров (должно быть открыто) либо меняет здоровье другого игрока(должно быть открыто) на случайную из специального списка списка) (карликовость,дцп,рак,полностью слепой,глухой,инвалид,нет двух рук,нет двух ног)", 
+        type: "healing", 
         usesLeft: 1,
-        icon: "🛡️"
+        icon: "👨‍⚕️"
     },
     { 
         id: 4, 
-        name: "Анонимный голос", 
-        description: "Ваш голос не будет показан другим игрокам", 
-        type: "stealth", 
+        name: "Перемены", 
+        description: "Может заменить один Карточку у другого игрока(Нужно выбрать игрока и карту,которую заменить,новая карточка этой категории берется случайно из общего списка)", 
+        type: "change", 
         usesLeft: 1,
-        icon: "👤"
+        icon: "⬆️"
     },
-    { 
-        id: 5, 
-        name: "Блокировщик", 
-        description: "Заблокируйте использование карты действия другого игрока", 
-        type: "disruptive", 
-        usesLeft: 1,
-        icon: "🚫"
-    },
-    { 
-        id: 6, 
-        name: "Лидер", 
-        description: "Принудительно начните следующую фазу игры", 
-        type: "control", 
-        usesLeft: 1,
-        icon: "👑"
-    }
 ];
 
 const professions = [
@@ -332,6 +316,8 @@ app.get('*', (req, res) => {
 
 const gameRoom = {
     players: [],
+    round: 0,
+  votingResults: {},
     gameState: 'lobby',
     maxPlayers: 8,
     gamePhase: 'waiting',
@@ -400,7 +386,52 @@ function startRevelationPhase() {
 // Функция обработки раскрытия характеристик
 io.on('connection', (socket) => {
     console.log('🔗 New connection:', socket.id);
-    
+    socket.on('use-action-card', ({ cardId, targetId }) => {
+  const me = gameRoom.players.find(p => p.id === socket.id);
+  if (!me) return socket.emit('error', 'Игрок не найден');
+  const card = me.actionCards.find(c => c.id === cardId);
+  if (!card || card.usesLeft <= 0) return socket.emit('error', 'Карта недоступна');
+
+  // уменьшаем usesLeft
+  card.usesLeft--;
+
+  // сбрасываем предыдущие эффекты у меня
+  gameRoom.activeEffects[socket.id] = {};
+
+  switch (card.type) {
+    case 'voting':
+      gameRoom.activeEffects[socket.id].doubleVote = true;
+      break;
+
+    case 'revenge':
+      // запоминаем, на кого отомстить при выбывании
+      gameRoom.activeEffects[socket.id].revengeTarget = targetId;
+      break;
+
+    case 'healing':
+      // лечим цель (или себя, если targetId пустой)
+      const heal = targetId
+        ? gameRoom.players.find(p => p.id === targetId)
+        : me;
+      if (heal) heal.characteristics.health = 'Здоров';
+      break;
+
+    case 'change':
+      const other = gameRoom.players.find(p => p.id === targetId);
+      if (other) {
+        [me.actionCards, other.actionCards] = [other.actionCards, me.actionCards];
+      }
+      break;
+  }
+
+  // шлём всем обновлённый список игроков (чтобы UI обновил карточки и счётчики)
+  io.in('game-room').emit('action-card-used', {
+    players: gameRoom.players,
+    by: me.id,
+    cardType: card.type,
+    target: targetId || null
+  });
+});
     // Отправляем текущее количество игроков
     socket.emit('player-count', { count: gameRoom.players.length });
     
@@ -816,7 +847,12 @@ io.on('connection', (socket) => {
             socket.emit('error', 'Вы уже проголосовали!');
             return;
         }
-        
+         // проверяем двойной голос
+  const eff = gameRoom.activeEffects[socket.id] || {};
+  const votes = eff.doubleVote ? 2 : 1;
+  if (eff.doubleVote) delete eff.doubleVote;
+
+  target.votes = (target.votes || 0) + votes;
         // Записываем голос
         player.hasVoted = true;
         player.votedFor = data.targetId;
@@ -936,6 +972,21 @@ io.on('connection', (socket) => {
         if (playersWithMaxVotes.length === 1) {
             // Только один игрок - исключаем сразу
             playersWithMaxVotes[0].isAlive = false;
+            const eliminated = gameRoom.players.filter(p => !p.isAlive);
+eliminated.forEach(p => {
+  const revengeTarget = gameRoom.activeEffects[p.id]?.revengeTarget;
+  if (revengeTarget) {
+    const victim = gameRoom.players.find(x => x.id === revengeTarget);
+    if (victim) {
+      // прибавляем 20 лет
+      victim.characteristics.age += 20;
+    }
+  }
+  // очищаем эффекты выбывшего
+  delete gameRoom.activeEffects[p.id];
+});
+// и обновляем всех
+io.in('game-room').emit('round-results', { players: gameRoom.players });
             showResults();
         } else if (playersWithMaxVotes.length >= 2 && playersWithMaxVotes.length <= 3) {
             if (isSecondVoting) {
@@ -1507,15 +1558,16 @@ process.on('SIGINT', () => {
 
 // ДОБАВЛЯЕМ функции генерации характеристик
 function generateCharacteristics() {
-    return {
-        profession: getRandomElement(professions),
-        health: getRandomElement(healthConditions),
-        hobby: getRandomElement(hobbies),
-        phobia: getRandomElement(phobias),
-        baggage: getRandomElement(baggage),
-        fact1: getRandomElement(facts),
-        fact2: getRandomElement(facts.filter(f => f !== facts[0])) // Убеждаемся что факты разные
-    };
+  return {
+    profession: getRandomElement(professions),
+    health: getRandomElement(healthConditions),
+    hobby: getRandomElement(hobbies),
+    phobia: getRandomElement(phobias),
+    baggage: getRandomElement(baggage),
+    fact1: getRandomElement(facts),
+    fact2: getRandomElement(facts.filter(f => f !== facts[0])),
+    age: 18 + Math.floor(Math.random() * 63)    // 18–80 лет
+  };
 }
 
 function getRandomElement(array) {
