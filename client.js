@@ -220,7 +220,8 @@ socket.on('game-started', function(data) {
     gameState.timeLeft = data.timeLeft;
     gameState.startRoundVotes = 0;
     gameState.myStartRoundVote = false;
-    // gameState.scenario = data.scenario; // УБИРАЕМ - сценарий придет позже
+    gameState.scenario = data.scenario; // ДОБАВЛЯЕМ: Сохраняем сценарий
+    console.log('🎲 Scenario loaded:', data.scenario?.title);
     showGameScreen();
 });
 
@@ -232,6 +233,7 @@ socket.on('game-reset', function(data) {
     gameState.currentRound = 1;
     gameState.timeLeft = 0;
     gameState.currentTurnPlayer = null;
+    gameState.scenario = null; // ДОБАВЛЯЕМ: Очищаем сценарий
     showLobbyScreen();
 });
 
@@ -772,17 +774,18 @@ function getRequiredCardsForRound(round) {
 // Добавляем функцию обновления истории
 function updateStoryDisplay() {
     const storyText = document.getElementById('storyText');
-    
-    if (!storyText) return;
-    
-    // Пока история не загружена, показываем заглушку
-    if (!gameState.scenario) {
-        storyText.textContent = 'Ожидание начала игры...';
+    if (!storyText) {
+        console.log('⚠️ storyText element not found');
         return;
     }
     
-    // Показываем сценарий
-    storyText.textContent = gameState.scenario.description || 'Описание сценария загружается...';
+    // Always display the story immediately once it is set.
+    if (gameState.scenario && gameState.scenario.description) {
+        storyText.textContent = gameState.scenario.description;
+        console.log('✅ Story updated with scenario');
+    } else {
+        storyText.textContent = ''; // No loading text anymore
+    }
 }
 
 // ОБНОВЛЯЕМ функцию updateGameDisplay
@@ -1452,18 +1455,49 @@ function showConnectionError(message) {
     }
 }
 
-// Обновляем socket.on('error') для обработки ошибок карт действий
-socket.on('error', function(errorMessage) {
-    console.error('❌ Server error:', errorMessage);
-    
-    // Разблокируем кнопку при ошибке
-    const joinBtn = document.getElementById('joinGameBtn');
-    if (joinBtn) {
-        joinBtn.disabled = false;
-        joinBtn.textContent = 'Присоединиться к игре';
+// Обновляем обработчик game-started
+socket.on('game-started', function(data) {
+    console.log('🚀 Game started:', data);
+    gameState.players = data.players;
+    gameState.serverGameState = data.gameState;
+    gameState.gamePhase = data.gamePhase;
+    gameState.currentRound = data.currentRound;
+    gameState.timeLeft = data.timeLeft;
+    gameState.startRoundVotes = 0;
+    gameState.myStartRoundVote = false;
+    gameState.scenario = data.scenario; // ДОБАВЛЯЕМ: Сохраняем сценарий
+    console.log('🎲 Scenario loaded:', data.scenario?.title);
+    showGameScreen();
+});
+
+// Обновляем функцию updateStoryDisplay
+function updateStoryDisplay() {
+    const storyText = document.getElementById('storyText');
+    if (!storyText) {
+        console.log('⚠️ storyText element not found');
+        return;
     }
     
-    showNotification('Ошибка', errorMessage);
+    // Always display the story immediately once it is set.
+    if (gameState.scenario && gameState.scenario.description) {
+        storyText.textContent = gameState.scenario.description;
+        console.log('✅ Story updated with scenario');
+    } else {
+        storyText.textContent = ''; // No loading text anymore
+    }
+}
+
+// Обновляем game-reset обработчик
+socket.on('game-reset', function(data) {
+    console.log('🔄 Game reset:', data);
+    gameState.players = data.players;
+    gameState.serverGameState = data.gameState;
+    gameState.gamePhase = 'lobby';
+    gameState.currentRound = 1;
+    gameState.timeLeft = 0;
+    gameState.currentTurnPlayer = null;
+    gameState.scenario = null; // ДОБАВЛЯЕМ: Очищаем сценарий
+    showLobbyScreen();
 });
 
 // === ИНИЦИАЛИЗАЦИЯ ===
