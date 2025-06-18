@@ -1638,4 +1638,86 @@ function startGameTimer() {
     }, 1000);
 }
 
-// ...остальной код server.js остается без изменений...
+// ДОБАВЛЯЕМ обработчик завершения оправдания после других socket обработчиков
+socket.on('finish-justification', () => {
+    console.log('✅ Finish justification from:', socket.id);
+    
+    const player = gameRoom.players.find(p => p.id === socket.id);
+    
+    if (!player || !player.isAlive) {
+        socket.emit('error', 'Вы не можете завершить оправдание!');
+        return;
+    }
+    
+    if (gameRoom.gamePhase !== 'justification') {
+        socket.emit('error', 'Сейчас не фаза оправдания!');
+        return;
+    }
+    
+    if (gameRoom.currentJustifyingPlayer !== socket.id) {
+        socket.emit('error', 'Сейчас не ваша очередь оправдываться!');
+        return;
+    }
+    
+    console.log(`✅ ${player.name} finished justification`);
+    
+    // Очищаем таймер
+    if (gameRoom.timer) {
+        clearInterval(gameRoom.timer);
+        gameRoom.timer = null;
+    }
+    
+    // Переходим к следующему оправданию
+    nextJustification();
+});
+
+// ДОБАВЛЯЕМ обработчик сдачи
+socket.on('surrender', () => {
+    console.log('🏳️ Surrender from:', socket.id);
+    
+    const player = gameRoom.players.find(p => p.id === socket.id);
+    
+    if (!player || !player.isAlive) {
+        socket.emit('error', 'Вы не можете сдаться!');
+        return;
+    }
+    
+    if (gameRoom.gamePhase !== 'justification') {
+        socket.emit('error', 'Сдаться можно только во время оправдания!');
+        return;
+    }
+    
+    if (gameRoom.currentJustifyingPlayer !== socket.id) {
+        socket.emit('error', 'Сейчас не ваша очередь оправдываться!');
+        return;
+    }
+    
+    console.log(`🏳️ ${player.name} surrendered`);
+    
+    // Исключаем игрока
+    player.isAlive = false;
+    
+    // Убираем его из очереди оправданий
+    gameRoom.justificationQueue = gameRoom.justificationQueue.filter(p => p.id !== socket.id);
+    
+    // Очищаем таймер
+    if (gameRoom.timer) {
+        clearInterval(gameRoom.timer);
+        gameRoom.timer = null;
+    }
+    
+    // Отправляем уведомление
+    io.to('game-room').emit('player-surrendered', {
+        playerName: player.name,
+        players: gameRoom.players
+    });
+    
+    // Если в очереди еще есть игроки - продолжаем оправдания
+    if (gameRoom.justificationQueue.length > 0) {
+        // Переходим к следующему
+        nextJustification();
+    } else {
+        // Очередь пуста - переходим к результатам
+        showResults();
+    }
+});
