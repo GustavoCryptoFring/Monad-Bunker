@@ -1248,27 +1248,36 @@ function startJustificationPhase() {
 
 // Функция перехода к следующему оправданию
 function nextJustification() {
+    console.log('⚖️ Moving to next justification');
+    
+    if (!gameRoom.justificationQueue || gameRoom.justificationQueue.length === 0) {
+        console.log('✅ No more players to justify - starting second voting');
+        startSecondVoting();
+        return;
+    }
+    
+    // Находим текущего игрока в очереди
     const currentIndex = gameRoom.justificationQueue.findIndex(p => p.id === gameRoom.currentJustifyingPlayer);
     
     if (currentIndex < gameRoom.justificationQueue.length - 1) {
         // Переходим к следующему игроку
-        gameRoom.currentJustifyingPlayer = gameRoom.justificationQueue[currentIndex + 1].id;
-        gameRoom.timeLeft = 60;
-        
         const nextPlayer = gameRoom.justificationQueue[currentIndex + 1];
+        gameRoom.currentJustifyingPlayer = nextPlayer.id;
+        gameRoom.timeLeft = 90; // 1.5 минуты на оправдание
+        
+        console.log(`⚖️ Next player justifying: ${nextPlayer.name}`);
         
         io.to('game-room').emit('justification-started', {
-            gamePhase: gameRoom.gamePhase,
+            justifyingPlayer: nextPlayer,
             timeLeft: gameRoom.timeLeft,
             players: gameRoom.players,
-            justifyingPlayer: nextPlayer,
-            justificationQueue: gameRoom.justificationQueue.map(p => p.name),
-            currentRound: gameRoom.currentRound
+            gamePhase: 'justification'
         });
         
         startGameTimer();
     } else {
-        // Все оправдались - начинаем второе голосование
+        // Это был последний игрок - переходим ко второму голосованию
+        console.log('✅ All players justified - starting second voting');
         startSecondVoting();
     }
 }
@@ -1712,9 +1721,8 @@ socket.on('surrender', () => {
         players: gameRoom.players
     });
     
-    // Если в очереди еще есть игроки - продолжаем оправдания
+    // Переходим к следующему оправданию или завершаем фазу
     if (gameRoom.justificationQueue.length > 0) {
-        // Переходим к следующему
         nextJustification();
     } else {
         // Очередь пуста - переходим к результатам
