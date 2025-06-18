@@ -1094,638 +1094,641 @@ io.on('connection', (socket) => {
         
         startGameTimer();
     }
-});
-
-// Функция перехода к следующему игроку
-function nextPlayerTurn() {
-    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
-    const currentPlayerIndex = alivePlayers.findIndex(p => p.id === gameRoom.currentTurnPlayer);
     
-    // Переходим к следующему игроку
-    const nextPlayerIndex = (currentPlayerIndex + 1) % alivePlayers.length;
-    
-    // Если дошли до первого игрока снова и все завершили - переходим к обсуждению
-    if (nextPlayerIndex === 0) {
-        const allRevealed = alivePlayers.every(p => p.hasRevealed);
-        if (allRevealed) {
-            console.log('✅ All players finished revelation phase');
-            startDiscussionPhase();
-            return;
-        }
-    }
-    
-    const nextPlayer = alivePlayers[nextPlayerIndex];
-    gameRoom.currentTurnPlayer = nextPlayer.id;
-    gameRoom.timeLeft = 60;
-    
-    console.log(`👤 Next turn: ${nextPlayer.name}`);
-    
-    // Отправляем обновление
-    io.to('game-room').emit('phase-changed', {
-        gamePhase: gameRoom.gamePhase,
-        timeLeft: gameRoom.timeLeft,
-        players: gameRoom.players,
-        currentTurnPlayer: gameRoom.currentTurnPlayer,
-        currentRound: gameRoom.currentRound
-    });
-    
-    startGameTimer();
-}
-
-// Функция начала фазы обсуждения
-function startDiscussionPhase() {
-    console.log('💬 Starting discussion phase');
-    
-    gameRoom.gamePhase = 'discussion';
-    gameRoom.timeLeft = 180; // 3 минуты на обсуждение
-    gameRoom.currentTurnPlayer = null;
-    gameRoom.skipDiscussionVotes = [];
-    
-    io.to('game-room').emit('phase-changed', {
-        gamePhase: gameRoom.gamePhase,
-        timeLeft: gameRoom.timeLeft,
-        players: gameRoom.players,
-        currentTurnPlayer: null,
-        currentRound: gameRoom.currentRound
-    });
-    
-    startGameTimer();
-}
-
-// Функция начала фазы голосования
-function startVotingPhase() {
-    console.log('🗳️ Starting voting phase');
-    
-    gameRoom.gamePhase = 'voting';
-    gameRoom.timeLeft = 120; // 2 минуты на голосование
-    gameRoom.votingResults = {};
-    gameRoom.totalVotes = 0;
-    
-    // Сбрасываем голоса всех игроков
-    gameRoom.players.forEach(player => {
-        player.hasVoted = false;
-        player.votedFor = null;
-        player.votes = 0;
-    });
-    
-    // Определяем кто может менять голос (каждый игрок может поменять голос один раз)
-    gameRoom.canChangeVote = {};
-    gameRoom.players.filter(p => p.isAlive).forEach(player => {
-        gameRoom.canChangeVote[player.id] = true;
-    });
-    
-    io.to('game-room').emit('phase-changed', {
-        gamePhase: gameRoom.gamePhase,
-        timeLeft: gameRoom.timeLeft,
-        players: gameRoom.players,
-        canChangeVote: gameRoom.canChangeVote,
-        currentRound: gameRoom.currentRound
-    });
-    
-    startGameTimer();
-}
-
-// Функция начала фазы оправдания
-function startJustificationPhase() {
-    console.log('⚖️ Starting justification phase');
-    
-    // Определяем игроков с максимальным количеством голосов
-    let maxVotes = 0;
-    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
-    
-    alivePlayers.forEach(player => {
-        if (player.votes > maxVotes) {
-            maxVotes = player.votes;
-        }
-    });
-    
-    // Получаем игроков с максимальным количеством голосов
-    const playersToJustify = alivePlayers.filter(p => 
-        p.votes === maxVotes && maxVotes > 0
-    );
-    
-    console.log(`⚖️ Max votes: ${maxVotes}, Players with max votes:`, playersToJustify.map(p => `${p.name}(${p.votes})`));
-    
-    if (playersToJustify.length === 0) {
-        // Никто не получил голосов - переходим к следующему раунду
-        console.log('⚖️ No votes - proceeding to next round');
-        nextRound();
-        return;
-    }
-    
-    if (playersToJustify.length === 1) {
-        // ИСПРАВЛЕНО: Только один игрок с максимумом голосов - сразу исключаем
-        const eliminatedPlayer = playersToJustify[0];
-        eliminatedPlayer.isAlive = false;
-        console.log('💀 Single player eliminated:', eliminatedPlayer.name);
-        
-        // Показываем результаты без оправданий
-        showResults();
-        return;
-    }
-    
-    // ИСПРАВЛЕНО: Несколько игроков с одинаковым максимумом голосов - они оправдываются
-    console.log(`⚖️ Multiple players tied with ${maxVotes} votes - starting justifications`);
-    
-    gameRoom.gamePhase = 'justification';
-    gameRoom.justificationQueue = [...playersToJustify];
-    gameRoom.currentJustifyingPlayer = gameRoom.justificationQueue[0].id;
-    gameRoom.timeLeft = 60; // 1 минута на оправдание
-    
-    console.log(`⚖️ Players justifying: ${playersToJustify.map(p => p.name).join(', ')}`);
-    
-    io.to('game-room').emit('justification-started', {
-        gamePhase: gameRoom.gamePhase,
-        timeLeft: gameRoom.timeLeft,
-        players: gameRoom.players,
-        justifyingPlayer: playersToJustify[0],
-        justificationQueue: gameRoom.justificationQueue.map(p => p.name),
-        currentRound: gameRoom.currentRound
-    });
-    
-    startGameTimer();
-}
-
-// Функция перехода к следующему оправданию
-function nextJustification() {
-    console.log('⚖️ Moving to next justification');
-    
-    if (!gameRoom.justificationQueue || gameRoom.justificationQueue.length === 0) {
-        console.log('✅ No more players to justify - starting second voting');
-        startSecondVoting();
-        return;
-    }
-    
-    // Находим текущего игрока в очереди
-    const currentIndex = gameRoom.justificationQueue.findIndex(p => p.id === gameRoom.currentJustifyingPlayer);
-    
-    if (currentIndex < gameRoom.justificationQueue.length - 1) {
-        // Переходим к следующему игроку
-        const nextPlayer = gameRoom.justificationQueue[currentIndex + 1];
-        gameRoom.currentJustifyingPlayer = nextPlayer.id;
-        gameRoom.timeLeft = 90; // 1.5 минуты на оправдание
-        
-        console.log(`⚖️ Next player justifying: ${nextPlayer.name}`);
-        
-        io.to('game-room').emit('justification-started', {
-            justifyingPlayer: nextPlayer,
-            timeLeft: gameRoom.timeLeft,
-            players: gameRoom.players,
-            gamePhase: 'justification'
-        });
-        
-        startGameTimer();
-    } else {
-        // Это был последний игрок - переходим ко второму голосованию
-        console.log('✅ All players justified - starting second voting');
-        startSecondVoting();
-    }
-}
-
-// Функция второго голосования
-function startSecondVoting() {
-    console.log('🗳️ Starting second voting after justifications');
-    
-    gameRoom.gamePhase = 'voting';
-    gameRoom.timeLeft = 90; // 1.5 минуты на второе голосование
-    gameRoom.votingResults = {};
-    
-    // Сбрасываем голоса для всех игроков
-    gameRoom.players.forEach(player => {
-        player.hasVoted = false;
-        player.votedFor = null;
-        player.votes = 0;
-    });
-    
-    // Во втором голосовании нельзя менять голос
-    gameRoom.canChangeVote = {};
-    
-    // ВАЖНО: НЕ очищаем justificationQueue здесь - она нужна для определения второго голосования в processVotingResults
-    
-    io.to('game-room').emit('second-voting-started', {
-        gamePhase: gameRoom.gamePhase,
-        timeLeft: gameRoom.timeLeft,
-        players: gameRoom.players,
-        canChangeVote: gameRoom.canChangeVote,
-        currentRound: gameRoom.currentRound,
-        isSecondVoting: true
-    });
-    
-    startGameTimer();
-}
-
-// Функция показа результатов раунда
-function showResults() {
-    console.log('📊 Showing round results');
-    
-    gameRoom.gamePhase = 'results';
-    
-    // Определяем игроков с максимальным количеством голосов
-    let maxVotes = 0;
-    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
-    
-    alivePlayers.forEach(player => {
-        if (player.votes > maxVotes) {
-            maxVotes = player.votes;
-        }
-    });
-    
-    const playersWithMaxVotes = alivePlayers.filter(p => p.votes === maxVotes && maxVotes > 0);
-    
-    console.log(`📊 Results: Max votes: ${maxVotes}, Players with max votes: ${playersWithMaxVotes.length}`);
-    console.log(`📊 Eliminate top voters next round: ${gameRoom.eliminateTopVotersNextRound}`);
-    
-    let eliminatedPlayers = [];
-    let resultMessage = '';
-    
-    // ИСПРАВЛЕННАЯ ЛОГИКА: Проверяем условия исключения
-    if (gameRoom.eliminateTopVotersNextRound) {
-        // ИСПРАВЛЕНО: Исключаем 2 игроков с наибольшими голосами (независимо от того, сколько голосов у них)
-        console.log('💀 Eliminating top 2 voters due to previous round tie');
-        
-        // Сортируем всех живых игроков по убыванию голосов
-        const sortedByVotes = [...alivePlayers].sort((a, b) => (b.votes || 0) - (a.votes || 0));
-        
-        // ИСПРАВЛЕНО: Берем первых 2 игрока с наибольшими голосами
-        eliminatedPlayers = sortedByVotes.slice(0, Math.min(2, sortedByVotes.length));
-        
-        // Исключаем игроков
-        eliminatedPlayers.forEach(player => {
-            player.isAlive = false;
-        });
-        
-        resultMessage = `Специальное исключение: ${eliminatedPlayers.map(p => p.name).join(', ')} (исключены как топ-2 игрока за ничью в прошлом раунде)`;
-        gameRoom.eliminateTopVotersNextRound = false;
-        
-    } else if (playersWithMaxVotes.length === 1 && maxVotes > 0) {
-        // Стандартное исключение одного игрока
-        eliminatedPlayers = [playersWithMaxVotes[0]];
-        playersWithMaxVotes[0].isAlive = false;
-        resultMessage = `Исключен: ${playersWithMaxVotes[0].name}`;
-        
-    } else if (playersWithMaxVotes.length >= 2 && playersWithMaxVotes.length <= 3 && maxVotes > 0) {
-        // ИСПРАВЛЕНО: Проверяем, было ли это второе голосование
-        const wasSecondVoting = gameRoom.justificationQueue && gameRoom.justificationQueue.length > 0;
-        
-        if (wasSecondVoting) {
-            // ИСПРАВЛЕНО: После второго голосования с ничьей - никого не исключаем, но помечаем для следующего раунда
-            console.log(`🤝 Second voting tie between ${playersWithMaxVotes.length} players - deferring elimination to next round`);
-            eliminatedPlayers = [];
-            resultMessage = `Ничья после оправданий между ${playersWithMaxVotes.map(p => p.name).join(', ')}. В следующем раунде будут исключены 2 игрока с наибольшими голосами!`;
-            gameRoom.eliminateTopVotersNextRound = true;
-        } else {
-            // Это не должно произойти здесь, так как мы уже обработали это в processVotingResults
-            console.log('⚠️ Unexpected: Multiple players with max votes in showResults without justification');
-            eliminatedPlayers = [];
-            resultMessage = `Ничья между ${playersWithMaxVotes.map(p => p.name).join(', ')}. Никто не исключен.`;
-        }
-        
-    } else {
-        // Никого не исключаем (нет голосов или другие случаи)
-        eliminatedPlayers = [];
-        resultMessage = 'Никто не исключен в этом раунде';
-    }
-    
-    // ВАЖНО: Сбрасываем все состояния голосования
-    gameRoom.players.forEach(player => {
-        player.hasVoted = false;
-        player.votedFor = null;
-        player.votes = 0;
-        player.hasRevealed = false;
-        player.cardsRevealedThisRound = 0;
-    });
-    
-    gameRoom.votingResults = {};
-    gameRoom.canChangeVote = {};
-    gameRoom.currentTurnPlayer = null;
-    gameRoom.currentJustifyingPlayer = null;
-    gameRoom.justificationQueue = []; // ВАЖНО: Очищаем очередь оправданий
-    
-    // Очищаем таймер
-    if (gameRoom.timer) {
-        clearInterval(gameRoom.timer);
-        gameRoom.timer = null;
-    }
-    
-    io.to('game-room').emit('round-results', {
-        eliminatedPlayers: eliminatedPlayers.map(p => p.name),
-        players: gameRoom.players,
-        votingResults: gameRoom.votingResults,
-        resultMessage: resultMessage,
-        willEliminateTopVotersNextRound: gameRoom.eliminateTopVotersNextRound
-    });
-    
-    // Через 5 секунд переходим к следующему раунду
-    setTimeout(() => {
-        nextRound();
-    }, 5000);
-}
-
-// ОБНОВЛЯЕМ функцию перехода к следующему раунду
-function nextRound() {
-    try {
-        gameRoom.currentRound++;
-        
-        // Проверяем условия окончания игры
+    // Функция перехода к следующему игроку
+    function nextPlayerTurn() {
         const alivePlayers = gameRoom.players.filter(p => p.isAlive);
+        const currentPlayerIndex = alivePlayers.findIndex(p => p.id === gameRoom.currentTurnPlayer);
         
-        if (alivePlayers.length <= 2 || gameRoom.currentRound > gameRoom.maxRounds) {
-            endGame();
-            return;
+        // Переходим к следующему игроку
+        const nextPlayerIndex = (currentPlayerIndex + 1) % alivePlayers.length;
+        
+        // Если дошли до первого игрока снова и все завершили - переходим к обсуждению
+        if (nextPlayerIndex === 0) {
+            const allRevealed = alivePlayers.every(p => p.hasRevealed);
+            if (allRevealed) {
+                console.log('✅ All players finished revelation phase');
+                startDiscussionPhase();
+                return;
+            }
         }
         
-        gameRoom.gamePhase = 'preparation';
-        gameRoom.timeLeft = 0;
-        gameRoom.currentTurnPlayer = null;
-        gameRoom.startRoundVotes = [];
+        const nextPlayer = alivePlayers[nextPlayerIndex];
+        gameRoom.currentTurnPlayer = nextPlayer.id;
+        gameRoom.timeLeft = 60;
         
-        console.log('🔄 Starting round:', gameRoom.currentRound, 'Alive players:', alivePlayers.length);
+        console.log(`👤 Next turn: ${nextPlayer.name}`);
         
-        // НОВОЕ: Отправляем информацию о специальном режиме исключения
-        io.to('game-room').emit('new-round', {
-            currentRound: gameRoom.currentRound,
+        // Отправляем обновление
+        io.to('game-room').emit('phase-changed', {
             gamePhase: gameRoom.gamePhase,
             timeLeft: gameRoom.timeLeft,
             players: gameRoom.players,
-            willEliminateTopVotersThisRound: gameRoom.eliminateTopVotersNextRound
+            currentTurnPlayer: gameRoom.currentTurnPlayer,
+            currentRound: gameRoom.currentRound
         });
-    } catch (error) {
-        console.error('❌ Error in nextRound:', error);
-    }
-}
-
-// ОБНОВЛЯЕМ функцию сброса игры
-function resetGame() {
-    console.log('🔄 Resetting game...');
-    
-    try {
-        if (gameRoom.timer) {
-            clearInterval(gameRoom.timer);
-            gameRoom.timer = null;
-        }
         
-        // Оставляем игроков, но сбрасываем игровое состояние
-        gameRoom.players.forEach((player) => {
-            player.isAlive = true;
-            player.votes = 0;
-            player.hasRevealed = false;
+        startGameTimer();
+    }
+
+    // Функция начала фазы обсуждения
+    function startDiscussionPhase() {
+        console.log('💬 Starting discussion phase');
+        
+        gameRoom.gamePhase = 'discussion';
+        gameRoom.timeLeft = 180; // 3 минуты на обсуждение
+        gameRoom.currentTurnPlayer = null;
+        gameRoom.skipDiscussionVotes = [];
+        
+        io.to('game-room').emit('phase-changed', {
+            gamePhase: gameRoom.gamePhase,
+            timeLeft: gameRoom.timeLeft,
+            players: gameRoom.players,
+            currentTurnPlayer: null,
+            currentRound: gameRoom.currentRound
+        });
+        
+        startGameTimer();
+    }
+
+    // Функция начала фазы голосования
+    function startVotingPhase() {
+        console.log('🗳️ Starting voting phase');
+        
+        gameRoom.gamePhase = 'voting';
+        gameRoom.timeLeft = 120; // 2 минуты на голосование
+        gameRoom.votingResults = {};
+        gameRoom.totalVotes = 0;
+        
+        // Сбрасываем голоса всех игроков
+        gameRoom.players.forEach(player => {
             player.hasVoted = false;
             player.votedFor = null;
-            player.cardsRevealedThisRound = 0;
-            player.revealedCharacteristics = [];
-            player.characteristics = null;
-            player.actionCards = [];
+            player.votes = 0;
         });
         
-        gameRoom.gameState = 'lobby';
-        gameRoom.gamePhase = 'waiting';
-        gameRoom.currentRound = 1;
-        gameRoom.timer = null;
-        gameRoom.timeLeft = 0;
-        gameRoom.votingResults = {};
-        gameRoom.revealedThisRound = 0;
-        gameRoom.currentTurnPlayer = null;
-        gameRoom.playersWhoRevealed = [];
-        gameRoom.totalVotes = 0;
-        gameRoom.skipDiscussionVotes = [];
-        gameRoom.justificationQueue = [];
-        gameRoom.currentJustifyingPlayer = null;
+        // Определяем кто может менять голос (каждый игрок может поменять голос один раз)
         gameRoom.canChangeVote = {};
-        gameRoom.startRoundVotes = [];
-        gameRoom.activeEffects = {};
-        gameRoom.pendingEliminationNextRound = false; // НОВОЕ: сброс
-        gameRoom.eliminateTopVotersNextRound = false;  // НОВОЕ: сброс
-        
-        io.to('game-room').emit('game-reset', {
-            players: gameRoom.players,
-            gameState: gameRoom.gameState
+        gameRoom.players.filter(p => p.isAlive).forEach(player => {
+            gameRoom.canChangeVote[player.id] = true;
         });
-    } catch (error) {
-        console.error('❌ Error resetting game:', error);
-    }
-}
-
-// Функция завершения игры
-function endGame() {
-    try {
-        console.log('🏁 Game ended');
         
+        io.to('game-room').emit('phase-changed', {
+            gamePhase: gameRoom.gamePhase,
+            timeLeft: gameRoom.timeLeft,
+            players: gameRoom.players,
+            canChangeVote: gameRoom.canChangeVote,
+            currentRound: gameRoom.currentRound
+        });
+        
+        startGameTimer();
+    }
+
+    // Функция начала фазы оправдания
+    function startJustificationPhase() {
+        console.log('⚖️ Starting justification phase');
+        
+        // Определяем игроков с максимальным количеством голосов
+        let maxVotes = 0;
         const alivePlayers = gameRoom.players.filter(p => p.isAlive);
         
-        gameRoom.gamePhase = 'finished';
+        alivePlayers.forEach(player => {
+            if (player.votes > maxVotes) {
+                maxVotes = player.votes;
+            }
+        });
+        
+        // Получаем игроков с максимальным количеством голосов
+        const playersToJustify = alivePlayers.filter(p => 
+            p.votes === maxVotes && maxVotes > 0
+        );
+        
+        console.log(`⚖️ Max votes: ${maxVotes}, Players with max votes:`, playersToJustify.map(p => `${p.name}(${p.votes})`));
+        
+        if (playersToJustify.length === 0) {
+            // Никто не получил голосов - переходим к следующему раунду
+            console.log('⚖️ No votes - proceeding to next round');
+            nextRound();
+            return;
+        }
+        
+        if (playersToJustify.length === 1) {
+            // ИСПРАВЛЕНО: Только один игрок с максимумом голосов - сразу исключаем
+            const eliminatedPlayer = playersToJustify[0];
+            eliminatedPlayer.isAlive = false;
+            console.log('💀 Single player eliminated:', eliminatedPlayer.name);
+            
+            // Показываем результаты без оправданий
+            showResults();
+            return;
+        }
+        
+        // ИСПРАВЛЕНО: Несколько игроков с одинаковым максимумом голосов - они оправдываются
+        console.log(`⚖️ Multiple players tied with ${maxVotes} votes - starting justifications`);
+        
+        gameRoom.gamePhase = 'justification';
+        gameRoom.justificationQueue = [...playersToJustify];
+        gameRoom.currentJustifyingPlayer = gameRoom.justificationQueue[0].id;
+        gameRoom.timeLeft = 60; // 1 минута на оправдание
+        
+        console.log(`⚖️ Players justifying: ${playersToJustify.map(p => p.name).join(', ')}`);
+        
+        io.to('game-room').emit('justification-started', {
+            gamePhase: gameRoom.gamePhase,
+            timeLeft: gameRoom.timeLeft,
+            players: gameRoom.players,
+            justifyingPlayer: playersToJustify[0],
+            justificationQueue: gameRoom.justificationQueue.map(p => p.name),
+            currentRound: gameRoom.currentRound
+        });
+        
+        startGameTimer();
+    }
+
+    // Функция перехода к следующему оправданию
+    function nextJustification() {
+        console.log('⚖️ Moving to next justification');
+        
+        if (!gameRoom.justificationQueue || gameRoom.justificationQueue.length === 0) {
+            console.log('✅ No more players to justify - starting second voting');
+            startSecondVoting();
+            return;
+        }
+        
+        // Находим текущего игрока в очереди
+        const currentIndex = gameRoom.justificationQueue.findIndex(p => p.id === gameRoom.currentJustifyingPlayer);
+        
+        if (currentIndex < gameRoom.justificationQueue.length - 1) {
+            // Переходим к следующему игроку
+            const nextPlayer = gameRoom.justificationQueue[currentIndex + 1];
+            gameRoom.currentJustifyingPlayer = nextPlayer.id;
+            gameRoom.timeLeft = 90; // 1.5 минуты на оправдание
+            
+            console.log(`⚖️ Next player justifying: ${nextPlayer.name}`);
+            
+            io.to('game-room').emit('justification-started', {
+                justifyingPlayer: nextPlayer,
+                timeLeft: gameRoom.timeLeft,
+                players: gameRoom.players,
+                gamePhase: 'justification'
+            });
+            
+            startGameTimer();
+        } else {
+            // Это был последний игрок - переходим ко второму голосованию
+            console.log('✅ All players justified - starting second voting');
+            startSecondVoting();
+        }
+    }
+
+    // Функция второго голосования
+    function startSecondVoting() {
+        console.log('🗳️ Starting second voting after justifications');
+        
+        gameRoom.gamePhase = 'voting';
+        gameRoom.timeLeft = 90; // 1.5 минуты на второе голосование
+        gameRoom.votingResults = {};
+        
+        // Сбрасываем голоса для всех игроков
+        gameRoom.players.forEach(player => {
+            player.hasVoted = false;
+            player.votedFor = null;
+            player.votes = 0;
+        });
+        
+        // Во втором голосовании нельзя менять голос
+        gameRoom.canChangeVote = {};
+        
+        // ВАЖНО: НЕ очищаем justificationQueue здесь - она нужна для определения второго голосования в processVotingResults
+        
+        io.to('game-room').emit('second-voting-started', {
+            gamePhase: gameRoom.gamePhase,
+            timeLeft: gameRoom.timeLeft,
+            players: gameRoom.players,
+            canChangeVote: gameRoom.canChangeVote,
+            currentRound: gameRoom.currentRound,
+            isSecondVoting: true
+        });
+        
+        startGameTimer();
+    }
+    
+    // Функция показа результатов раунда
+    function showResults() {
+        console.log('📊 Showing round results');
+        
+        gameRoom.gamePhase = 'results';
+        
+        // Определяем игроков с максимальным количеством голосов
+        let maxVotes = 0;
+        const alivePlayers = gameRoom.players.filter(p => p.isAlive);
+        
+        alivePlayers.forEach(player => {
+            if (player.votes > maxVotes) {
+                maxVotes = player.votes;
+            }
+        });
+        
+        const playersWithMaxVotes = alivePlayers.filter(p => p.votes === maxVotes && maxVotes > 0);
+        
+        console.log(`📊 Results: Max votes: ${maxVotes}, Players with max votes: ${playersWithMaxVotes.length}`);
+        console.log(`📊 Eliminate top voters next round: ${gameRoom.eliminateTopVotersNextRound}`);
+        
+        let eliminatedPlayers = [];
+        let resultMessage = '';
+        
+        // ИСПРАВЛЕННАЯ ЛОГИКА: Проверяем условия исключения
+        if (gameRoom.eliminateTopVotersNextRound) {
+            // ИСПРАВЛЕНО: Исключаем 2 игроков с наибольшими голосами (независимо от того, сколько голосов у них)
+            console.log('💀 Eliminating top 2 voters due to previous round tie');
+            
+            // Сортируем всех живых игроков по убыванию голосов
+            const sortedByVotes = [...alivePlayers].sort((a, b) => (b.votes || 0) - (a.votes || 0));
+            
+            // ИСПРАВЛЕНО: Берем первых 2 игрока с наибольшими голосами
+            eliminatedPlayers = sortedByVotes.slice(0, Math.min(2, sortedByVotes.length));
+            
+            // Исключаем игроков
+            eliminatedPlayers.forEach(player => {
+                player.isAlive = false;
+            });
+            
+            resultMessage = `Специальное исключение: ${eliminatedPlayers.map(p => p.name).join(', ')} (исключены как топ-2 игрока за ничью в прошлом раунде)`;
+            gameRoom.eliminateTopVotersNextRound = false;
+            
+        } else if (playersWithMaxVotes.length === 1 && maxVotes > 0) {
+            // Стандартное исключение одного игрока
+            eliminatedPlayers = [playersWithMaxVotes[0]];
+            playersWithMaxVotes[0].isAlive = false;
+            resultMessage = `Исключен: ${playersWithMaxVotes[0].name}`;
+            
+        } else if (playersWithMaxVotes.length >= 2 && playersWithMaxVotes.length <= 3 && maxVotes > 0) {
+            // ИСПРАВЛЕНО: Проверяем, было ли это второе голосование
+            const wasSecondVoting = gameRoom.justificationQueue && gameRoom.justificationQueue.length > 0;
+            
+            if (wasSecondVoting) {
+                // ИСПРАВЛЕНО: После второго голосования с ничьей - никого не исключаем, но помечаем для следующего раунда
+                console.log(`🤝 Second voting tie between ${playersWithMaxVotes.length} players - deferring elimination to next round`);
+                eliminatedPlayers = [];
+                resultMessage = `Ничья после оправданий между ${playersWithMaxVotes.map(p => p.name).join(', ')}. В следующем раунде будут исключены 2 игрока с наибольшими голосами!`;
+                gameRoom.eliminateTopVotersNextRound = true;
+            } else {
+                // Это не должно произойти здесь, так как мы уже обработали это в processVotingResults
+                console.log('⚠️ Unexpected: Multiple players with max votes in showResults without justification');
+                eliminatedPlayers = [];
+                resultMessage = `Ничья между ${playersWithMaxVotes.map(p => p.name).join(', ')}. Никто не исключен.`;
+            }
+            
+        } else {
+            // Никого не исключаем (нет голосов или другие случаи)
+            eliminatedPlayers = [];
+            resultMessage = 'Никто не исключен в этом раунде';
+        }
+        
+        // ВАЖНО: Сбрасываем все состояния голосования
+        gameRoom.players.forEach(player => {
+            player.hasVoted = false;
+            player.votedFor = null;
+            player.votes = 0;
+            player.hasRevealed = false;
+            player.cardsRevealedThisRound = 0;
+        });
+        
+        gameRoom.votingResults = {};
+        gameRoom.canChangeVote = {};
+        gameRoom.currentTurnPlayer = null;
+        gameRoom.currentJustifyingPlayer = null;
+        gameRoom.justificationQueue = []; // ВАЖНО: Очищаем очередь оправданий
+        
+        // Очищаем таймер
         if (gameRoom.timer) {
             clearInterval(gameRoom.timer);
             gameRoom.timer = null;
         }
         
-        io.to('game-room').emit('game-ended', {
-            winners: alivePlayers,
+        io.to('game-room').emit('round-results', {
+            eliminatedPlayers: eliminatedPlayers.map(p => p.name),
+            players: gameRoom.players,
+            votingResults: gameRoom.votingResults,
+            resultMessage: resultMessage,
+            willEliminateTopVotersNextRound: gameRoom.eliminateTopVotersNextRound
+        });
+        
+        // Через 5 секунд переходим к следующему раунду
+        setTimeout(() => {
+            nextRound();
+        }, 5000);
+    }
+
+    // ОБНОВЛЯЕМ функцию перехода к следующему раунду
+    function nextRound() {
+        try {
+            gameRoom.currentRound++;
+            
+            // Проверяем условия окончания игры
+            const alivePlayers = gameRoom.players.filter(p => p.isAlive);
+            
+            if (alivePlayers.length <= 2 || gameRoom.currentRound > gameRoom.maxRounds) {
+                endGame();
+                return;
+            }
+            
+            gameRoom.gamePhase = 'preparation';
+            gameRoom.timeLeft = 0;
+            gameRoom.currentTurnPlayer = null;
+            gameRoom.startRoundVotes = [];
+            
+            console.log('🔄 Starting round:', gameRoom.currentRound, 'Alive players:', alivePlayers.length);
+            
+            // НОВОЕ: Отправляем информацию о специальном режиме исключения
+            io.to('game-room').emit('new-round', {
+                currentRound: gameRoom.currentRound,
+                gamePhase: gameRoom.gamePhase,
+                timeLeft: gameRoom.timeLeft,
+                players: gameRoom.players,
+                willEliminateTopVotersThisRound: gameRoom.eliminateTopVotersNextRound
+            });
+        } catch (error) {
+            console.error('❌ Error in nextRound:', error);
+        }
+    }
+
+    // ОБНОВЛЯЕМ функцию сброса игры
+    function resetGame() {
+        console.log('🔄 Resetting game...');
+        
+        try {
+            if (gameRoom.timer) {
+                clearInterval(gameRoom.timer);
+                gameRoom.timer = null;
+            }
+            
+            // Оставляем игроков, но сбрасываем игровое состояние
+            gameRoom.players.forEach((player) => {
+                player.isAlive = true;
+                player.votes = 0;
+                player.hasRevealed = false;
+                player.hasVoted = false;
+                player.votedFor = null;
+                player.cardsRevealedThisRound = 0;
+                player.revealedCharacteristics = [];
+                player.characteristics = null;
+                player.actionCards = [];
+            });
+            
+            gameRoom.gameState = 'lobby';
+            gameRoom.gamePhase = 'waiting';
+            gameRoom.currentRound = 1;
+            gameRoom.timer = null;
+            gameRoom.timeLeft = 0;
+            gameRoom.votingResults = {};
+            gameRoom.revealedThisRound = 0;
+            gameRoom.currentTurnPlayer = null;
+            gameRoom.playersWhoRevealed = [];
+            gameRoom.totalVotes = 0;
+            gameRoom.skipDiscussionVotes = [];
+            gameRoom.justificationQueue = [];
+            gameRoom.currentJustifyingPlayer = null;
+            gameRoom.canChangeVote = {};
+            gameRoom.startRoundVotes = [];
+            gameRoom.activeEffects = {};
+            gameRoom.pendingEliminationNextRound = false; // НОВОЕ: сброс
+            gameRoom.eliminateTopVotersNextRound = false;  // НОВОЕ: сброс
+            
+            io.to('game-room').emit('game-reset', {
+                players: gameRoom.players,
+                gameState: gameRoom.gameState
+            });
+        } catch (error) {
+            console.error('❌ Error resetting game:', error);
+        }
+    }
+
+    // Функция завершения игры
+    function endGame() {
+        try {
+            console.log('🏁 Game ended');
+            
+            const alivePlayers = gameRoom.players.filter(p => p.isAlive);
+            
+            gameRoom.gamePhase = 'finished';
+            if (gameRoom.timer) {
+                clearInterval(gameRoom.timer);
+                gameRoom.timer = null;
+            }
+            
+            io.to('game-room').emit('game-ended', {
+                winners: alivePlayers,
+                players: gameRoom.players
+            });
+            
+            // Автоматический сброс игры через 10 секунд
+            setTimeout(() => {
+                resetGame();
+            }, 10000);
+        } catch (error) {
+            console.error('❌ Error ending game:', error);
+        }
+    }
+
+    // ИСПРАВЛЯЕМ обработку ошибок для всех тайм-аутов
+    process.on('uncaughtException', (error) => {
+        console.error('❌ Uncaught Exception:', error);
+        // Не выходим из процесса, просто логируем
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+        console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+        // Не выходим из процесса, просто логируем
+    });
+
+    // ИСПРАВЛЯЕМ запуск сервера
+    const PORT = process.env.PORT || 3000;
+
+    server.listen(PORT, '0.0.0.0', (error) => {
+        if (error) {
+            console.error('❌ Failed to start server:', error);
+            process.exit(1);
+        }
+        
+        console.log(`🚀 Server running on port ${PORT}`);
+        console.log(`🌐 Access the game at: http://localhost:${PORT}`);
+        console.log('📊 Game room initialized with max', gameRoom.maxPlayers, 'players');
+        console.log('🎯 Ready for players to join!');
+    });
+
+    // ИСПРАВЛЯЕМ graceful shutdown
+    process.on('SIGTERM', () => {
+        console.log('🛑 SIGTERM received, shutting down gracefully');
+        
+        // Очищаем таймер
+        if (gameRoom.timer) {
+            clearInterval(gameRoom.timer);
+            gameRoom.timer = null;
+        }
+        
+        server.close((error) => {
+            if (error) {
+                console.error('❌ Error closing server:', error);
+            }
+            console.log('🔚 Process terminated');
+            process.exit(0);
+        });
+    });
+
+    process.on('SIGINT', () => {
+        console.log('🛑 SIGINT received, shutting down gracefully');
+        
+        // Очищаем таймер
+        if (gameRoom.timer) {
+            clearInterval(gameRoom.timer);
+            gameRoom.timer = null;
+        }
+        
+        server.close((error) => {
+            if (error) {
+                console.error('❌ Error closing server:', error);
+            }
+            console.log('🔚 Process terminated');
+            process.exit(0);
+        });
+    });
+
+    // ДОБАВЛЯЕМ функции генерации характеристик
+    function generateCharacteristics() {
+        return {
+            profession: getRandomElement(professions),
+            health: getRandomElement(healthConditions),
+            hobby: getRandomElement(hobbies),
+            phobia: getRandomElement(phobias),
+            baggage: getRandomElement(baggage),
+            fact1: getRandomElement(facts),
+            fact2: getRandomElement(facts.filter(f => f !== facts[0])) // Убеждаемся что факты разные
+        };
+    }
+
+    function getRandomElement(array) {
+        return array[Math.floor(Math.random() * array.length)];
+    }
+
+    function getRandomActionCard() {
+        const availableCards = actionCards.filter(card => card.usesLeft > 0);
+        const randomCard = getRandomElement(availableCards);
+        return { ...randomCard }; // Возвращаем копию карты
+    }
+
+    // ДОБАВЛЯЕМ функцию startGameTimer
+    function startGameTimer() {
+        // Очищаем предыдущий таймер
+        if (gameRoom.timer) {
+            clearInterval(gameRoom.timer);
+            gameRoom.timer = null;
+        }
+        
+        // Запускаем новый таймер
+        gameRoom.timer = setInterval(() => {
+            gameRoom.timeLeft--;
+            
+            // Отправляем обновление времени каждые 5 секунд или в последние 10 секунд
+            if (gameRoom.timeLeft % 5 === 0 || gameRoom.timeLeft <= 10) {
+                io.to('game-room').emit('timer-update', {
+                    timeLeft: gameRoom.timeLeft,
+                    currentTurnPlayer: gameRoom.currentTurnPlayer
+                });
+            }
+            
+            // Если время закончилось
+            if (gameRoom.timeLeft <= 0) {
+                clearInterval(gameRoom.timer);
+                gameRoom.timer = null;
+                handlePhaseTimeout();
+            }
+        }, 1000);
+    }
+
+    // ДОБАВЛЯЕМ обработчик завершения оправдания после других socket обработчиков
+    socket.on('finish-justification', () => {
+        console.log('✅ Finish justification from:', socket.id);
+        
+        const player = gameRoom.players.find(p => p.id === socket.id);
+        
+        if (!player || !player.isAlive) {
+            socket.emit('error', 'Вы не можете завершить оправдание!');
+            return;
+        }
+        
+        if (gameRoom.gamePhase !== 'justification') {
+            socket.emit('error', 'Сейчас не фаза оправдания!');
+            return;
+        }
+        
+        if (gameRoom.currentJustifyingPlayer !== socket.id) {
+            socket.emit('error', 'Сейчас не ваша очередь оправдываться!');
+            return;
+        }
+        
+        console.log(`✅ ${player.name} finished justification`);
+        
+        // Очищаем таймер
+        if (gameRoom.timer) {
+            clearInterval(gameRoom.timer);
+            gameRoom.timer = null;
+        }
+        
+        // Переходим к следующему оправданию
+        nextJustification();
+    });
+
+    socket.on('surrender', () => {
+        console.log('🏳️ Surrender from:', socket.id);
+        
+        const player = gameRoom.players.find(p => p.id === socket.id);
+        
+        if (!player || !player.isAlive) {
+            socket.emit('error', 'Вы не можете сдаться!');
+            return;
+        }
+        
+        if (gameRoom.gamePhase !== 'justification') {
+            socket.emit('error', 'Сдаться можно только во время оправдания!');
+            return;
+        }
+        
+        if (gameRoom.currentJustifyingPlayer !== socket.id) {
+            socket.emit('error', 'Сейчас не ваша очередь оправдываться!');
+            return;
+        }
+        
+        console.log(`🏳️ ${player.name} surrendered`);
+        
+        // Исключаем игрока
+        player.isAlive = false;
+        
+        // Убираем его из очереди оправданий
+        gameRoom.justificationQueue = gameRoom.justificationQueue.filter(p => p.id !== socket.id);
+        
+        // Очищаем таймер
+        if (gameRoom.timer) {
+            clearInterval(gameRoom.timer);
+            gameRoom.timer = null;
+        }
+        
+        // Отправляем уведомление
+        io.to('game-room').emit('player-surrendered', {
+            playerName: player.name,
             players: gameRoom.players
         });
         
-        // Автоматический сброс игры через 10 секунд
-        setTimeout(() => {
-            resetGame();
-        }, 10000);
-    } catch (error) {
-        console.error('❌ Error ending game:', error);
-    }
-}
-
-// ИСПРАВЛЯЕМ обработку ошибок для всех тайм-аутов
-process.on('uncaughtException', (error) => {
-    console.error('❌ Uncaught Exception:', error);
-    // Не выходим из процесса, просто логируем
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-    // Не выходим из процесса, просто логируем
-});
-
-// ИСПРАВЛЯЕМ запуск сервера
-const PORT = process.env.PORT || 3000;
-
-server.listen(PORT, '0.0.0.0', (error) => {
-    if (error) {
-        console.error('❌ Failed to start server:', error);
-        process.exit(1);
-    }
-    
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`🌐 Access the game at: http://localhost:${PORT}`);
-    console.log('📊 Game room initialized with max', gameRoom.maxPlayers, 'players');
-    console.log('🎯 Ready for players to join!');
-});
-
-// ИСПРАВЛЯЕМ graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('🛑 SIGTERM received, shutting down gracefully');
-    
-    // Очищаем таймер
-    if (gameRoom.timer) {
-        clearInterval(gameRoom.timer);
-        gameRoom.timer = null;
-    }
-    
-    server.close((error) => {
-        if (error) {
-            console.error('❌ Error closing server:', error);
+        // Переходим к следующему оправданию или завершаем фазу
+        if (gameRoom.justificationQueue.length > 0) {
+            nextJustification();
+        } else {
+            // Очередь пуста - переходим к результатам
+            showResults();
         }
-        console.log('🔚 Process terminated');
-        process.exit(0);
     });
-});
+}); // КОНЕЦ io.on('connection')
 
-process.on('SIGINT', () => {
-    console.log('🛑 SIGINT received, shutting down gracefully');
-    
-    // Очищаем таймер
-    if (gameRoom.timer) {
-        clearInterval(gameRoom.timer);
-        gameRoom.timer = null;
-    }
-    
-    server.close((error) => {
-        if (error) {
-            console.error('❌ Error closing server:', error);
-        }
-        console.log('🔚 Process terminated');
-        process.exit(0);
-    });
-});
-
-// ДОБАВЛЯЕМ функции генерации характеристик
-function generateCharacteristics() {
-    return {
-        profession: getRandomElement(professions),
-        health: getRandomElement(healthConditions),
-        hobby: getRandomElement(hobbies),
-        phobia: getRandomElement(phobias),
-        baggage: getRandomElement(baggage),
-        fact1: getRandomElement(facts),
-        fact2: getRandomElement(facts.filter(f => f !== facts[0])) // Убеждаемся что факты разные
-    };
-}
-
-function getRandomElement(array) {
-    return array[Math.floor(Math.random() * array.length)];
-}
-
-function getRandomActionCard() {
-    const availableCards = actionCards.filter(card => card.usesLeft > 0);
-    const randomCard = getRandomElement(availableCards);
-    return { ...randomCard }; // Возвращаем копию карты
-}
-
-// ДОБАВЛЯЕМ функцию startGameTimer
-function startGameTimer() {
-    // Очищаем предыдущий таймер
-    if (gameRoom.timer) {
-        clearInterval(gameRoom.timer);
-        gameRoom.timer = null;
-    }
-    
-    // Запускаем новый таймер
-    gameRoom.timer = setInterval(() => {
-        gameRoom.timeLeft--;
-        
-        // Отправляем обновление времени каждые 5 секунд или в последние 10 секунд
-        if (gameRoom.timeLeft % 5 === 0 || gameRoom.timeLeft <= 10) {
-            io.to('game-room').emit('timer-update', {
-                timeLeft: gameRoom.timeLeft,
-                currentTurnPlayer: gameRoom.currentTurnPlayer
-            });
-        }
-        
-        // Если время закончилось
-        if (gameRoom.timeLeft <= 0) {
-            clearInterval(gameRoom.timer);
-            gameRoom.timer = null;
-            handlePhaseTimeout();
-        }
-    }, 1000);
-}
-
-// ДОБАВЛЯЕМ обработчик завершения оправдания после других socket обработчиков
-socket.on('finish-justification', () => {
-    console.log('✅ Finish justification from:', socket.id);
-    
-    const player = gameRoom.players.find(p => p.id === socket.id);
-    
-    if (!player || !player.isAlive) {
-        socket.emit('error', 'Вы не можете завершить оправдание!');
-        return;
-    }
-    
-    if (gameRoom.gamePhase !== 'justification') {
-        socket.emit('error', 'Сейчас не фаза оправдания!');
-        return;
-    }
-    
-    if (gameRoom.currentJustifyingPlayer !== socket.id) {
-        socket.emit('error', 'Сейчас не ваша очередь оправдываться!');
-        return;
-    }
-    
-    console.log(`✅ ${player.name} finished justification`);
-    
-    // Очищаем таймер
-    if (gameRoom.timer) {
-        clearInterval(gameRoom.timer);
-        gameRoom.timer = null;
-    }
-    
-    // Переходим к следующему оправданию
-    nextJustification();
-});
-
-// ДОБАВЛЯЕМ обработчик сдачи
-socket.on('surrender', () => {
-    console.log('🏳️ Surrender from:', socket.id);
-    
-    const player = gameRoom.players.find(p => p.id === socket.id);
-    
-    if (!player || !player.isAlive) {
-        socket.emit('error', 'Вы не можете сдаться!');
-        return;
-    }
-    
-    if (gameRoom.gamePhase !== 'justification') {
-        socket.emit('error', 'Сдаться можно только во время оправдания!');
-        return;
-    }
-    
-    if (gameRoom.currentJustifyingPlayer !== socket.id) {
-        socket.emit('error', 'Сейчас не ваша очередь оправдываться!');
-        return;
-    }
-    
-    console.log(`🏳️ ${player.name} surrendered`);
-    
-    // Исключаем игрока
-    player.isAlive = false;
-    
-    // Убираем его из очереди оправданий
-    gameRoom.justificationQueue = gameRoom.justificationQueue.filter(p => p.id !== socket.id);
-    
-    // Очищаем таймер
-    if (gameRoom.timer) {
-        clearInterval(gameRoom.timer);
-        gameRoom.timer = null;
-    }
-    
-    // Отправляем уведомление
-    io.to('game-room').emit('player-surrendered', {
-        playerName: player.name,
-        players: gameRoom.players
-    });
-    
-    // Переходим к следующему оправданию или завершаем фазу
-    if (gameRoom.justificationQueue.length > 0) {
-        nextJustification();
-    } else {
-        // Очередь пуста - переходим к результатам
-        showResults();
-    }
-});
+// УДАЛЯЕМ дублированные обработчики в конце файла
+// (найдите и удалите обработчики finish-justification и surrender 
+// которые находятся ПОСЛЕ закрывающей скобки io.on('connection'))
