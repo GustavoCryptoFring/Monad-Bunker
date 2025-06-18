@@ -972,7 +972,11 @@ io.on('connection', (socket) => {
         gameRoom.playersWhoRevealed = [];
         gameRoom.currentTurnPlayer = null;
         
+        // ДОБАВЛЯЕМ: Выбираем случайную историю
+        const randomStory = stories[Math.floor(Math.random() * stories.length)];
+        
         console.log('🚀 Game started! Players:', gameRoom.players.length);
+        console.log('📖 Selected story:', randomStory.substring(0, 50) + '...');
         
         // Уведомляем всех игроков о начале игры
         io.to('game-room').emit('game-started', {
@@ -980,7 +984,8 @@ io.on('connection', (socket) => {
             gameState: gameRoom.gameState,
             gamePhase: gameRoom.gamePhase,
             currentRound: gameRoom.currentRound,
-            timeLeft: gameRoom.timeLeft
+            timeLeft: gameRoom.timeLeft,
+            story: randomStory // ДОБАВЛЯЕМ историю
         });
     });
     

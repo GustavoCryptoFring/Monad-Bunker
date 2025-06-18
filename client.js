@@ -220,8 +220,15 @@ socket.on('game-started', function(data) {
     gameState.timeLeft = data.timeLeft;
     gameState.startRoundVotes = 0;
     gameState.myStartRoundVote = false;
-    gameState.scenario = data.scenario; // ДОБАВЛЯЕМ: Сохраняем сценарий
-    console.log('🎲 Scenario loaded:', data.scenario?.title);
+    
+    // ДОБАВЛЯЕМ: Обновляем историю сразу при старте игры
+    if (data.story) {
+        const storyText = document.getElementById('storyText');
+        if (storyText) {
+            storyText.textContent = data.story;
+        }
+    }
+    
     showGameScreen();
 });
 
@@ -1424,8 +1431,15 @@ socket.on('game-started', function(data) {
     gameState.timeLeft = data.timeLeft;
     gameState.startRoundVotes = 0;
     gameState.myStartRoundVote = false;
-    gameState.scenario = data.scenario; // ДОБАВЛЯЕМ: Сохраняем сценарий
-    console.log('🎲 Scenario loaded:', data.scenario?.title);
+    
+    // ДОБАВЛЯЕМ: Обновляем историю сразу при старте игры
+    if (data.story) {
+        const storyText = document.getElementById('storyText');
+        if (storyText) {
+            storyText.textContent = data.story;
+        }
+    }
+    
     showGameScreen();
 });
 
