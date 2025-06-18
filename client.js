@@ -309,6 +309,15 @@ socket.on('justification-started', function(data) {
     gameState.timeLeft = data.timeLeft;
     gameState.players = data.players;
     gameState.gamePhase = 'justification';
+    
+    // Показываем информацию о прогрессе оправданий
+    if (data.currentJustifyingIndex !== undefined && data.totalJustifying !== undefined) {
+        const progress = `(${data.currentJustifyingIndex + 1}/${data.totalJustifying})`;
+        showNotification('Оправдание', `${data.justifyingPlayer.name} оправдывается ${progress}`);
+    } else {
+        showNotification('Оправдание', `${data.justifyingPlayer.name} начинает оправдание`);
+    }
+    
     updateGameDisplay();
 });
 
@@ -317,103 +326,15 @@ socket.on('second-voting-started', function(data) {
     gameState.gamePhase = data.gamePhase;
     gameState.timeLeft = data.timeLeft;
     gameState.players = data.players;
+    gameState.currentJustifyingPlayer = data.currentJustifyingPlayer; // Обновляем состояние
     
     // Показываем уведомление о втором голосовании
     if (data.isSecondVoting) {
-        showNotification('Второе голосование', 'Игроки оправдались. Голосуйте повторно среди них.');
+        const justifyingPlayersText = data.justifyingPlayers ? data.justifyingPlayers.join(', ') : 'игроки';
+        showNotification('Второе голосование', `После оправданий игроков ${justifyingPlayersText} - голосуйте повторно.`);
     }
     
     updateGameDisplay();
-});
-
-socket.on('skip-discussion-vote-update', function(data) {
-    console.log('⏭️ Skip discussion vote update:', data);
-    gameState.skipDiscussionVotes = data.votes;
-    gameState.mySkipVote = data.hasVoted;
-    
-    // ОБНОВЛЯЕМ кнопку в верхней части
-    updateRoundActions();
-});
-
-socket.on('discussion-skipped', function(data) {
-    console.log('⏭️ Discussion skipped:', data);
-    gameState.gamePhase = data.gamePhase;
-    gameState.timeLeft = data.timeLeft;
-    gameState.players = data.players;
-    gameState.skipDiscussionVotes = 0;
-    gameState.mySkipVote = false;
-    updateGameDisplay();
-});
-
-socket.on('round-results', function(data) {
-    console.log('📊 Round results:', data);
-    gameState.players = data.players;
-    gameState.votingResults = data.votingResults;
-    updateGameDisplay();
-    
-    // ОБНОВЛЯЕМ: Показываем расширенное сообщение о результатах
-    if (data.eliminatedPlayers && data.eliminatedPlayers.length > 0) {
-        if (data.eliminatedPlayers.length === 1) {
-            showNotification('Игрок исключен', `${data.eliminatedPlayers[0]} покидает бункер`);
-        } else {
-            showNotification('Игроки исключены', `${data.eliminatedPlayers.join(', ')} покидают бункер`);
-        }
-    } else if (data.resultMessage) {
-        // НОВОЕ: Показываем специальное сообщение для ничьи
-        if (data.willEliminateTopVotersNextRound) {
-            showNotification('⚠️ Специальный раунд', data.resultMessage);
-        } else {
-            showNotification('Результат раунда', data.resultMessage);
-        }
-    } else {
-        showNotification('Ничья', 'Никто не был исключен в этом раунде');
-    }
-});
-
-socket.on('new-round', function(data) {
-    console.log('🔄 New round:', data);
-    gameState.currentRound = data.currentRound;
-    gameState.gamePhase = data.gamePhase;
-    gameState.timeLeft = data.timeLeft;
-    gameState.players = data.players;
-    gameState.startRoundVotes = 0;
-    gameState.myStartRoundVote = false;
-    
-    // НОВОЕ: Показываем предупреждение о специальном раунде
-    if (data.willEliminateTopVotersThisRound) {
-        showNotification('⚠️ Специальный раунд', 'В этом раунде будут исключены 2 игрока с наибольшими голосами!');
-    }
-    
-    updateGameDisplay();
-});
-
-// Добавляем обработчик голосования за начало раунда
-socket.on('start-round-vote-update', function(data) {
-    console.log('🎯 Start round vote update:', data);
-    gameState.startRoundVotes = data.votes;
-    gameState.myStartRoundVote = data.hasVoted;
-    updateRoundActions();
-});
-
-// Добавляем обработчики событий карт действий
-socket.on('action-card-used', function(data) {
-    console.log('✨ Action card used:', data);
-    gameState.players = data.players;
-    
-    updatePlayersGrid();
-    
-    const message = data.targetId 
-        ? `${data.playerName} использовал карту "${data.cardName}"`
-        : `${data.playerName} использовал карту "${data.cardName}"`;
-    
-    showNotification('Карта действия', message);
-});
-
-socket.on('detective-result', function(data) {
-    console.log('🔍 Detective result:', data);
-    
-    const message = `Характеристика игрока ${data.targetName}:\n${translateCharacteristic(data.characteristic)}: ${data.value}`;
-    showNotification('Результат детектива', message);
 });
 
 // === ФУНКЦИИ ОТОБРАЖЕНИЯ ЭКРАНОВ ===
@@ -880,7 +801,7 @@ function updateRoundActions() {
 
 function getGameStatusText() {
     // ДОБАВЛЯЕМ проверку специального режима
-    const isSpecialRound = gameState.players.some(p => p.willEliminateTopVotersThisRound);
+    const isSpecialRound = gameState.eliminateTopVotersNextRound;
     const specialPrefix = isSpecialRound ? '⚠️ СПЕЦИАЛЬНЫЙ РАУНД: ' : '';
     
     switch (gameState.gamePhase) {
@@ -917,8 +838,9 @@ function getGameStatusText() {
         case 'discussion': 
             return specialPrefix + 'Фаза обсуждения';
         case 'voting': 
-            const justificationQueue = gameState.players.filter(p => p.id === gameState.currentJustifyingPlayer);
-            if (justificationQueue.length > 0) {
+            // ИСПРАВЛЯЕМ: Проверяем правильно второе голосование
+            const isSecondVoting = gameState.justificationQueue && gameState.justificationQueue.length > 0;
+            if (isSecondVoting) {
                 return specialPrefix + 'Повторное голосование';
             }
             return specialPrefix + 'Фаза голосования';
@@ -1420,7 +1342,6 @@ socket.on('game-started', function(data) {
     
     showGameScreen();
 });
-
 
 // Обновляем game-reset обработчик
 socket.on('game-reset', function(data) {

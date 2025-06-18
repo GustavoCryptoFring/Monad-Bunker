@@ -232,7 +232,12 @@ function handlePhaseTimeout() {
             }
             break;
         case 'justification':
-            // Время оправдания истекло - переходим к следующему
+            // ИСПРАВЛЕНО: Время оправдания истекло - переходим к следующему
+            console.log('⏰ Justification timeout - moving to next justification');
+            const justifyingPlayer = gameRoom.players.find(p => p.id === gameRoom.currentJustifyingPlayer);
+            if (justifyingPlayer) {
+                console.log(`⏰ ${justifyingPlayer.name} ran out of time for justification`);
+            }
             nextJustification();
             break;
     }
@@ -925,8 +930,8 @@ io.on('connection', (socket) => {
         
         const player = gameRoom.players.find(p => p.id === socket.id);
         
-        if (!player || gameRoom.currentJustifyingPlayer !== socket.id) {
-            socket.emit('error', 'Сейчас не ваша очередь оправдываться!');
+        if (!player || !player.isAlive) {
+            socket.emit('error', 'Вы не можете завершить оправдание!');
             return;
         }
         
@@ -935,10 +940,24 @@ io.on('connection', (socket) => {
             return;
         }
         
+        if (gameRoom.currentJustifyingPlayer !== socket.id) {
+            socket.emit('error', 'Сейчас не ваша очередь оправдываться!');
+            return;
+        }
+        
+        console.log(`✅ ${player.name} finished justification`);
+        
+        // Очищаем таймер перед переходом
+        if (gameRoom.timer) {
+            clearInterval(gameRoom.timer);
+            gameRoom.timer = null;
+        }
+        
         // Переходим к следующему оправданию
         nextJustification();
     });
 
+    // ДОБАВЛЯЕМ функцию surrender в обработчик
     socket.on('surrender', () => {
         console.log('🏳️ Surrender from:', socket.id);
         
@@ -965,8 +984,12 @@ io.on('connection', (socket) => {
         if (alivePlayers.length <= 2) {
             endGame();
         } else if (gameRoom.gamePhase === 'justification') {
-            // Если сдался во время оправданий - переходим к следующему
-            nextJustification();
+            // ИСПРАВЛЕНО: Если сдался во время оправданий - корректно обрабатываем
+            if (gameRoom.currentJustifyingPlayer === socket.id) {
+                // Если сдался тот кто оправдывается - переходим к следующему
+                console.log(`🏳️ Justifying player surrendered, moving to next`);
+                nextJustification();
+            }
         }
     });
 });
@@ -1091,14 +1114,47 @@ function startJustificationPhase() {
 
 // Функция перехода к следующему оправданию
 function nextJustification() {
+    console.log('⚖️ Processing next justification...');
+    
+    // Очищаем таймер
+    if (gameRoom.timer) {
+        clearInterval(gameRoom.timer);
+        gameRoom.timer = null;
+    }
+    
+    if (!gameRoom.justificationQueue || gameRoom.justificationQueue.length === 0) {
+        console.log('⚖️ No justification queue - starting second voting');
+        startSecondVoting();
+        return;
+    }
+    
     const currentIndex = gameRoom.justificationQueue.findIndex(p => p.id === gameRoom.currentJustifyingPlayer);
+    console.log(`⚖️ Current justification index: ${currentIndex}, Queue length: ${gameRoom.justificationQueue.length}`);
+    
+    if (currentIndex < 0) {
+        console.log('⚖️ Current player not found in queue - starting second voting');
+        startSecondVoting();
+        return;
+    }
     
     if (currentIndex < gameRoom.justificationQueue.length - 1) {
         // Переходим к следующему игроку
-        gameRoom.currentJustifyingPlayer = gameRoom.justificationQueue[currentIndex + 1].id;
+        const nextIndex = currentIndex + 1;
+        const nextPlayer = gameRoom.justificationQueue[nextIndex];
+        
+        // Проверяем что следующий игрок еще жив
+        if (!nextPlayer.isAlive) {
+            console.log(`⚖️ Next player ${nextPlayer.name} is eliminated, skipping...`);
+            // Удаляем из очереди и пробуем следующего
+            gameRoom.justificationQueue.splice(nextIndex, 1);
+            nextJustification();
+            return;
+        }
+        
+        gameRoom.currentJustifyingPlayer = nextPlayer.id;
         gameRoom.timeLeft = 60;
         
-        const nextPlayer = gameRoom.justificationQueue[currentIndex + 1];
+        console.log(`⚖️ Next justifying player: ${nextPlayer.name}`);
         
         io.to('game-room').emit('justification-started', {
             gamePhase: gameRoom.gamePhase,
@@ -1106,12 +1162,15 @@ function nextJustification() {
             players: gameRoom.players,
             justifyingPlayer: nextPlayer,
             justificationQueue: gameRoom.justificationQueue.map(p => p.name),
-            currentRound: gameRoom.currentRound
+            currentRound: gameRoom.currentRound,
+            currentJustifyingIndex: nextIndex,
+            totalJustifying: gameRoom.justificationQueue.length
         });
         
         startGameTimer();
     } else {
         // Все оправдались - начинаем второе голосование
+        console.log('⚖️ All players justified - starting second voting');
         startSecondVoting();
     }
 }
@@ -1120,9 +1179,32 @@ function nextJustification() {
 function startSecondVoting() {
     console.log('🗳️ Starting second voting after justifications');
     
+    // Очищаем таймер
+    if (gameRoom.timer) {
+        clearInterval(gameRoom.timer);
+        gameRoom.timer = null;
+    }
+    
+    // Проверяем что есть игроки для второго голосования
+    if (!gameRoom.justificationQueue || gameRoom.justificationQueue.length === 0) {
+        console.log('⚠️ No players in justification queue - skipping to results');
+        showResults();
+        return;
+    }
+    
+    // Фильтруем только живых игроков из очереди оправданий
+    const aliveJustifyingPlayers = gameRoom.justificationQueue.filter(p => p.isAlive);
+    
+    if (aliveJustifyingPlayers.length === 0) {
+        console.log('⚠️ No alive players to vote for - skipping to results');
+        showResults();
+        return;
+    }
+    
     gameRoom.gamePhase = 'voting';
     gameRoom.timeLeft = 90; // 1.5 минуты на второе голосование
     gameRoom.votingResults = {};
+    gameRoom.currentJustifyingPlayer = null; // ВАЖНО: Очищаем текущего оправдывающегося
     
     // Сбрасываем голоса для всех игроков
     gameRoom.players.forEach(player => {
@@ -1131,20 +1213,16 @@ function startSecondVoting() {
         player.votes = 0;
     });
     
-    // УБИРАЕМ: canChangeVote логику
-    // gameRoom.canChangeVote = {};
-    
-    // ВАЖНО: НЕ очищаем justificationQueue здесь - она нужна для определения второго голосования
-    console.log(`🗳️ Second voting for players: ${gameRoom.justificationQueue.map(p => p.name).join(', ')}`);
+    console.log(`🗳️ Second voting for players: ${aliveJustifyingPlayers.map(p => p.name).join(', ')}`);
     
     io.to('game-room').emit('second-voting-started', {
         gamePhase: gameRoom.gamePhase,
         timeLeft: gameRoom.timeLeft,
         players: gameRoom.players,
-        // УБИРАЕМ: canChangeVote: gameRoom.canChangeVote,
         currentRound: gameRoom.currentRound,
         isSecondVoting: true,
-        justifyingPlayers: gameRoom.justificationQueue.map(p => p.name)
+        justifyingPlayers: aliveJustifyingPlayers.map(p => p.name),
+        currentJustifyingPlayer: null // ВАЖНО: Передаем null чтобы очистить индикатор
     });
     
     startGameTimer();
