@@ -416,7 +416,7 @@ io.on('connection', (socket) => {
     // Отправляем текущее количество игроков
     socket.emit('player-count', { count: gameRoom.players.length });
     
-    // ДОБАВЛЯЕМ обработчик присоединения к игре
+    // ИСПРАВЛЯЕМ обработчик присоединения к игре
     socket.on('join-game', (data) => {
         console.log('👋 Player joining:', data.playerName, 'Socket:', socket.id);
         
@@ -427,9 +427,14 @@ io.on('connection', (socket) => {
             return;
         }
         
-        // Проверяем, не занято ли имя
-        const existingPlayer = gameRoom.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
+        // ИСПРАВЛЯЕМ: Проверяем только ЖИВЫХ игроков и исключаем текущий socket
+        const existingPlayer = gameRoom.players.find(p => 
+            p.name.toLowerCase() === playerName.toLowerCase() && 
+            p.id !== socket.id
+        );
+        
         if (existingPlayer) {
+            console.log('❌ Name already taken:', playerName, 'by player:', existingPlayer.id);
             socket.emit('error', 'Игрок с таким именем уже есть в игре');
             return;
         }
@@ -438,6 +443,13 @@ io.on('connection', (socket) => {
         if (gameRoom.players.length >= gameRoom.maxPlayers) {
             socket.emit('error', 'Игра заполнена');
             return;
+        }
+        
+        // ИСПРАВЛЯЕМ: Удаляем предыдущего игрока с таким же socket.id если он есть
+        const existingPlayerIndex = gameRoom.players.findIndex(p => p.id === socket.id);
+        if (existingPlayerIndex !== -1) {
+            console.log('🔄 Removing previous player with same socket:', socket.id);
+            gameRoom.players.splice(existingPlayerIndex, 1);
         }
         
         // Создаем игрока
@@ -743,7 +755,255 @@ io.on('connection', (socket) => {
         }
     });
     
-    // ... остальные обработчики ...
+    // ДОБАВЛЯЕМ недостающий обработчик голосования за начало раунда
+    socket.on('start-round', () => {
+        console.log('🎯 Start round vote from:', socket.id);
+        
+        const player = gameRoom.players.find(p => p.id === socket.id);
+        
+        if (!player || !player.isAlive) {
+            socket.emit('error', 'Вы не можете голосовать!');
+            return;
+        }
+        
+        if (gameRoom.gamePhase !== 'preparation') {
+            socket.emit('error', 'Сейчас не время для начала раунда!');
+            return;
+        }
+        
+        if (gameRoom.startRoundVotes.includes(socket.id)) {
+            socket.emit('error', 'Вы уже проголосовали за начало раунда!');
+            return;
+        }
+        
+        // Добавляем голос
+        gameRoom.startRoundVotes.push(socket.id);
+        
+        const requiredVotes = 2; // Требуется 2 голоса для начала раунда
+        const currentVotes = gameRoom.startRoundVotes.length;
+        
+        console.log(`🎯 Start round votes: ${currentVotes}/${requiredVotes}`);
+        
+        // Отправляем обновление всем игрокам
+        gameRoom.players.forEach(p => {
+            const hasVoted = gameRoom.startRoundVotes.includes(p.id);
+            io.to(p.id).emit('start-round-vote-update', {
+                votes: currentVotes,
+                required: requiredVotes,
+                hasVoted: hasVoted
+            });
+        });
+        
+        // Если достаточно голосов - начинаем раунд
+        if (currentVotes >= requiredVotes) {
+            console.log('🚀 Starting round - enough votes');
+            gameRoom.startRoundVotes = []; // Сбрасываем голоса
+            startRevelationPhase();
+        }
+    });
+    
+    // ДОБАВЛЯЕМ недостающие обработчики голосования
+    socket.on('vote-player', (data) => {
+        console.log('🗳️ Vote from:', socket.id, 'for:', data.targetId);
+        
+        const player = gameRoom.players.find(p => p.id === socket.id);
+        const targetPlayer = gameRoom.players.find(p => p.id === data.targetId);
+        
+        if (!player || !player.isAlive) {
+            socket.emit('error', 'Вы не можете голосовать!');
+            return;
+        }
+        
+        if (!targetPlayer || !targetPlayer.isAlive) {
+            socket.emit('error', 'Нельзя голосовать за этого игрока!');
+            return;
+        }
+        
+        if (gameRoom.gamePhase !== 'voting') {
+            socket.emit('error', 'Сейчас не время для голосования!');
+            return;
+        }
+        
+        if (player.hasVoted) {
+            socket.emit('error', 'Вы уже проголосовали!');
+            return;
+        }
+        
+        // Записываем голос
+        player.hasVoted = true;
+        player.votedFor = data.targetId;
+        
+        // Увеличиваем счетчик голосов у цели
+        targetPlayer.votes = (targetPlayer.votes || 0) + 1;
+        
+        // Сохраняем в результатах голосования
+        if (!gameRoom.votingResults[data.targetId]) {
+            gameRoom.votingResults[data.targetId] = [];
+        }
+        gameRoom.votingResults[data.targetId].push(socket.id);
+        
+        console.log(`🗳️ ${player.name} voted for ${targetPlayer.name} (${targetPlayer.votes} votes)`);
+        
+        // Отправляем обновление
+        io.to('game-room').emit('vote-update', {
+            players: gameRoom.players,
+            votingResults: gameRoom.votingResults,
+            canChangeVote: gameRoom.canChangeVote
+        });
+        
+        // Проверяем, все ли проголосовали
+        const alivePlayers = gameRoom.players.filter(p => p.isAlive);
+        const votedPlayers = alivePlayers.filter(p => p.hasVoted);
+        
+        if (votedPlayers.length === alivePlayers.length) {
+            console.log('✅ All players voted, processing results');
+            
+            // Небольшая задержка перед обработкой результатов
+            setTimeout(() => {
+                processVotingResults();
+            }, 2000);
+        }
+    });
+
+    socket.on('change-vote', (data) => {
+        console.log('🔄 Change vote from:', socket.id, 'to:', data.targetId);
+        
+        const player = gameRoom.players.find(p => p.id === socket.id);
+        const targetPlayer = gameRoom.players.find(p => p.id === data.targetId);
+        
+        if (!player || !player.isAlive) {
+            socket.emit('error', 'Вы не можете голосовать!');
+            return;
+        }
+        
+        if (!targetPlayer || !targetPlayer.isAlive) {
+            socket.emit('error', 'Нельзя голосовать за этого игрока!');
+            return;
+        }
+        
+        if (gameRoom.gamePhase !== 'voting') {
+            socket.emit('error', 'Сейчас не время для голосования!');
+            return;
+        }
+        
+        if (!gameRoom.canChangeVote[socket.id]) {
+            socket.emit('error', 'Вы не можете изменить голос!');
+            return;
+        }
+        
+        // Убираем предыдущий голос
+        if (player.votedFor) {
+            const previousTarget = gameRoom.players.find(p => p.id === player.votedFor);
+            if (previousTarget) {
+                previousTarget.votes = Math.max(0, (previousTarget.votes || 0) - 1);
+            }
+            
+            // Убираем из результатов голосования
+            if (gameRoom.votingResults[player.votedFor]) {
+                gameRoom.votingResults[player.votedFor] = gameRoom.votingResults[player.votedFor].filter(id => id !== socket.id);
+            }
+        }
+        
+        // Добавляем новый голос
+        player.votedFor = data.targetId;
+        targetPlayer.votes = (targetPlayer.votes || 0) + 1;
+        
+        if (!gameRoom.votingResults[data.targetId]) {
+            gameRoom.votingResults[data.targetId] = [];
+        }
+        gameRoom.votingResults[data.targetId].push(socket.id);
+        
+        // Убираем возможность изменить голос еще раз
+        gameRoom.canChangeVote[socket.id] = false;
+        
+        console.log(`🔄 ${player.name} changed vote to ${targetPlayer.name}`);
+        
+        // Отправляем обновление
+        io.to('game-room').emit('vote-update', {
+            players: gameRoom.players,
+            votingResults: gameRoom.votingResults,
+            canChangeVote: gameRoom.canChangeVote
+        });
+    });
+
+    // ДОБАВЛЯЕМ функцию обработки результатов голосования
+    function processVotingResults() {
+        // Определяем игроков с максимальным количеством голосов
+        let maxVotes = 0;
+        const alivePlayers = gameRoom.players.filter(p => p.isAlive);
+        
+        alivePlayers.forEach(player => {
+            if (player.votes > maxVotes) {
+                maxVotes = player.votes;
+            }
+        });
+        
+        const playersWithMaxVotes = alivePlayers.filter(p => p.votes === maxVotes && maxVotes > 0);
+        
+        console.log(`🗳️ Voting results: Max votes: ${maxVotes}, Players with max votes: ${playersWithMaxVotes.length}`);
+        
+        if (playersWithMaxVotes.length === 1) {
+            // Только один игрок - исключаем сразу
+            playersWithMaxVotes[0].isAlive = false;
+            showResults();
+        } else if (playersWithMaxVotes.length > 1) {
+            // Несколько игроков - идут оправдываться
+            startJustificationPhase();
+        } else {
+            // Никого не исключаем
+            nextRound();
+        }
+    }
+
+    socket.on('finish-justification', () => {
+        console.log('✅ Finish justification from:', socket.id);
+        
+        const player = gameRoom.players.find(p => p.id === socket.id);
+        
+        if (!player || gameRoom.currentJustifyingPlayer !== socket.id) {
+            socket.emit('error', 'Сейчас не ваша очередь оправдываться!');
+            return;
+        }
+        
+        if (gameRoom.gamePhase !== 'justification') {
+            socket.emit('error', 'Сейчас не время для оправданий!');
+            return;
+        }
+        
+        // Переходим к следующему оправданию
+        nextJustification();
+    });
+
+    socket.on('surrender', () => {
+        console.log('🏳️ Surrender from:', socket.id);
+        
+        const player = gameRoom.players.find(p => p.id === socket.id);
+        
+        if (!player || !player.isAlive) {
+            socket.emit('error', 'Вы не можете сдаться!');
+            return;
+        }
+        
+        // Игрок сдается - исключаем его
+        player.isAlive = false;
+        
+        console.log(`🏳️ ${player.name} surrendered`);
+        
+        // Уведомляем всех
+        io.to('game-room').emit('player-surrendered', {
+            playerName: player.name,
+            players: gameRoom.players
+        });
+        
+        // Проверяем условия окончания игры
+        const alivePlayers = gameRoom.players.filter(p => p.isAlive);
+        if (alivePlayers.length <= 2) {
+            endGame();
+        } else if (gameRoom.gamePhase === 'justification') {
+            // Если сдался во время оправданий - переходим к следующему
+            nextJustification();
+        }
+    });
 });
 
 // Функция перехода к следующему игроку
