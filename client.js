@@ -1465,6 +1465,14 @@ socket.on('showStory', function(story) {
     }
 });
 
+// ДОБАВЛЯЕМ после других обработчиков socket
+socket.on('player-surrendered', function(data) {
+    console.log('🏳️ Player surrendered:', data);
+    gameState.players = data.players;
+    updatePlayersGrid();
+    showNotification('Игрок сдался', `${data.playerName} покинул игру`);
+});
+
 // === ИНИЦИАЛИЗАЦИЯ ===
 
 document.addEventListener('DOMContentLoaded', function() {
