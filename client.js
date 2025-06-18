@@ -703,46 +703,6 @@ function joinGame() {
     }, 5000);
 }
 
-function startGame() {
-    console.log('🚀 Starting game...');
-    socket.emit('start-game');
-    // В начале client.js (или вверху файла) добавьте массив историй
-const stories = [
-  {
-    title: 'Потерянный радиопередатчик',
-    description: 'Вы находите обломки старого радиопередатчика, по легенде передавшего последний сигнал выживших перед большим событием…'
-  },
-  {
-    title: 'Тайная лаборатория',
-    description: 'Где-то под бункером скрыта заброшенная лаборатория. Говорят, там остались образцы неизвестного вируса…'
-  },
-  {
-    title: 'Привет из прошлого',
-    description: 'В вентиляции вы находите старую кассету с записью. На ней — голоса давно умерших…'
-  },
-  // …добавьте сколько угодно своих историй
-];
-
-// В функции startGame() (которая вызывается при нажатии “Начать игру”)
-function startGame() {
-  // 1) Выбираем случайную историю
-  const idx = Math.floor(Math.random() * stories.length);
-  const story = stories[idx];
-
-  // 2) Показываем экран игры
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('lobbyScreen').style.display = 'none';
-  document.getElementById('gameScreen').style.display = 'flex';
-
-  // 3) Обновляем DOM-блок с историей
-  document.getElementById('storyTitle').textContent = story.title;
-  document.getElementById('storyDescription').textContent = story.description;
-
-  // 4) Остальной существующий код запуска игры…
-  // initPlayers(), setupTimer(), socket.emit('startGame') и т.д.
-}
-}
-
 function startRound() {
     if (gameState.myStartRoundVote) {
         showNotification('Голос уже учтен', 'Вы уже проголосовали за начало раунда');
@@ -771,23 +731,6 @@ function getRequiredCardsForRound(round) {
     }
 }
 
-// Добавляем функцию обновления истории
-function updateStoryDisplay() {
-    const storyText = document.getElementById('storyText');
-    if (!storyText) {
-        console.log('⚠️ storyText element not found');
-        return;
-    }
-    
-    // Always display the story immediately once it is set.
-    if (gameState.scenario && gameState.scenario.description) {
-        storyText.textContent = gameState.scenario.description;
-        console.log('✅ Story updated with scenario');
-    } else {
-        storyText.textContent = ''; // No loading text anymore
-    }
-}
-
 // ОБНОВЛЯЕМ функцию updateGameDisplay
 function updateGameDisplay() {
     console.log('🎮 Updating game display. Phase:', gameState.gamePhase, 'Players:', gameState.players.length);
@@ -809,8 +752,7 @@ function updateGameDisplay() {
         phaseDisplayElement.textContent = getPhaseDisplayText();
     }
     
-    // Обновляем историю
-    updateStoryDisplay();
+   ;
     
     // Остальные обновления
     updateRoundActions();
@@ -1470,22 +1412,6 @@ socket.on('game-started', function(data) {
     showGameScreen();
 });
 
-// Обновляем функцию updateStoryDisplay
-function updateStoryDisplay() {
-    const storyText = document.getElementById('storyText');
-    if (!storyText) {
-        console.log('⚠️ storyText element not found');
-        return;
-    }
-    
-    // Always display the story immediately once it is set.
-    if (gameState.scenario && gameState.scenario.description) {
-        storyText.textContent = gameState.scenario.description;
-        console.log('✅ Story updated with scenario');
-    } else {
-        storyText.textContent = ''; // No loading text anymore
-    }
-}
 
 // Обновляем game-reset обработчик
 socket.on('game-reset', function(data) {
