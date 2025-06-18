@@ -22,19 +22,43 @@ const actionCards = [
     },
     { 
         id: 2, 
-        name: "Месть", 
-        description: "Может состарить любого игрока на 20 лет, если вылетает", 
-        type: "revenge", 
+        name: "Детектив", 
+        description: "Узнайте одну скрытую характеристику любого игрока", 
+        type: "investigative", 
         usesLeft: 1,
-        icon: "⚡"
+        icon: "🔍"
     },
     { 
         id: 3, 
-        name: "Доктор", 
-        description: "Может вылечить себя или ухудшить здоровье другого", 
-        type: "medical", 
+        name: "Защитник", 
+        description: "Спасите одного игрока от исключения (включая себя)", 
+        type: "protective", 
         usesLeft: 1,
-        icon: "🏥"
+        icon: "🛡️"
+    },
+    { 
+        id: 4, 
+        name: "Анонимный голос", 
+        description: "Ваш голос не будет показан другим игрокам", 
+        type: "stealth", 
+        usesLeft: 1,
+        icon: "👤"
+    },
+    { 
+        id: 5, 
+        name: "Блокировщик", 
+        description: "Заблокируйте использование карты действия другого игрока", 
+        type: "disruptive", 
+        usesLeft: 1,
+        icon: "🚫"
+    },
+    { 
+        id: 6, 
+        name: "Лидер", 
+        description: "Принудительно начните следующую фазу игры", 
+        type: "control", 
+        usesLeft: 1,
+        icon: "👑"
     }
 ];
 
@@ -53,12 +77,6 @@ const healthConditions = [
     'Тревожность', 'Спортивная травма', 'Операция на сердце', 'Протез ноги',
     'Слуховой аппарат', 'Хроническая боль в спине', 'Эпилепсия',
     'Анемия', 'Плохая координация', 'Быстрая утомляемость'
-];
-
-// НОВЫЙ список тяжелых заболеваний для карты "Доктор"
-const severeHealthConditions = [
-    'Карликовость', 'ДЦП', 'Рак', 'Полностью слепой', 
-    'Глухой', 'Инвалид', 'Нет двух рук', 'Нет двух ног'
 ];
 
 const hobbies = [
@@ -803,23 +821,16 @@ io.on('connection', (socket) => {
         player.hasVoted = true;
         player.votedFor = data.targetId;
         
-        // НОВАЯ ЛОГИКА: проверяем эффект двойного голоса
-        const voteWeight = (player.activeEffects && player.activeEffects.doubleVote) ? 2 : 1;
-        
         // Увеличиваем счетчик голосов у цели
-        targetPlayer.votes = (targetPlayer.votes || 0) + voteWeight;
+        targetPlayer.votes = (targetPlayer.votes || 0) + 1;
         
         // Сохраняем в результатах голосования
         if (!gameRoom.votingResults[data.targetId]) {
             gameRoom.votingResults[data.targetId] = [];
         }
+        gameRoom.votingResults[data.targetId].push(socket.id);
         
-        // Добавляем голоса (для двойного голоса добавляем дважды для визуализации)
-        for (let i = 0; i < voteWeight; i++) {
-            gameRoom.votingResults[data.targetId].push(socket.id);
-        }
-        
-        console.log(`🗳️ ${player.name} voted for ${targetPlayer.name} (${voteWeight} vote(s), total: ${targetPlayer.votes})`);
+        console.log(`🗳️ ${player.name} voted for ${targetPlayer.name} (${targetPlayer.votes} votes)`);
         
         // Отправляем обновление
         io.to('game-room').emit('vote-update', {
@@ -1284,33 +1295,6 @@ function showResults() {
         eliminatedPlayers = [];
         resultMessage = 'Никто не исключен в этом раунде';
     }
-
-    // НОВОЕ: Проверяем карты мести у исключенных игроков
-    const playersWithRevenge = eliminatedPlayers.filter(player => {
-        return player.actionCards && player.actionCards.some(card => 
-            card.type === 'revenge' && card.usesLeft > 0
-        );
-    });
-
-    if (playersWithRevenge.length > 0) {
-        // Даем возможность использовать карту мести
-        playersWithRevenge.forEach(player => {
-            const revengeCard = player.actionCards.find(card => 
-                card.type === 'revenge' && card.usesLeft > 0
-            );
-            
-            if (revengeCard) {
-                // Отправляем игроку возможность выбрать цель для мести  
-                io.to(player.id).emit('revenge-card-available', {
-                    cardName: revengeCard.name,
-                    availableTargets: gameRoom.players.filter(p => p.isAlive).map(p => ({
-                        id: p.id,
-                        name: p.name
-                    }))
-                });
-            }
-        });
-    }
     
     // ВАЖНО: Сбрасываем все состояния голосования
     gameRoom.players.forEach(player => {
@@ -1341,7 +1325,7 @@ function showResults() {
         willEliminateTopVotersNextRound: gameRoom.eliminateTopVotersNextRound
     });
     
-    // Через 5 секунд переходим к следующему раунду (если нет активных карт мести)
+    // Через 5 секунд переходим к следующему раунду
     setTimeout(() => {
         nextRound();
     }, 5000);
@@ -1430,93 +1414,6 @@ function resetGame() {
         console.error('❌ Error resetting game:', error);
     }
 }
-
-// ОБНОВЛЯЕМ функцию генерации характеристик для включения возраста
-function generateCharacteristics() {
-    return {
-        profession: getRandomElement(professions),
-        health: getRandomElement(healthConditions),
-        hobby: getRandomElement(hobbies),
-        phobia: getRandomElement(phobias),
-        baggage: getRandomElement(baggage),
-        fact1: getRandomElement(facts),
-        fact2: getRandomElement(facts.filter(f => f !== facts[0])), // Убеждаемся что факты разные
-        age: Math.floor(Math.random() * 50) + 18 // Возраст от 18 до 67 лет
-    };
-}
-
-// ОБНОВЛЯЕМ функцию обработки голосования для двойного голоса
-socket.on('vote-player', (data) => {
-    console.log('🗳️ Vote from:', socket.id, 'for:', data.targetId);
-    
-    const player = gameRoom.players.find(p => p.id === socket.id);
-    const targetPlayer = gameRoom.players.find(p => p.id === data.targetId);
-    
-    if (!player || !player.isAlive) {
-        socket.emit('error', 'Вы не можете голосовать!');
-        return;
-    }
-    
-    if (!targetPlayer || !targetPlayer.isAlive) {
-        socket.emit('error', 'Нельзя голосовать за этого игрока!');
-        return;
-    }
-    
-    if (gameRoom.gamePhase !== 'voting') {
-        socket.emit('error', 'Сейчас не время для голосования!');
-        return;
-    }
-    
-    if (player.hasVoted) {
-        socket.emit('error', 'Вы уже проголосовали!');
-        return;
-    }
-    
-    // Записываем голос
-    player.hasVoted = true;
-    player.votedFor = data.targetId;
-    
-    // НОВАЯ ЛОГИКА: проверяем эффект двойного голоса
-    const voteWeight = (player.activeEffects && player.activeEffects.doubleVote) ? 2 : 1;
-    
-    // Увеличиваем счетчик голосов у цели
-    targetPlayer.votes = (targetPlayer.votes || 0) + voteWeight;
-    
-    // Сохраняем в результатах голосования
-    if (!gameRoom.votingResults[data.targetId]) {
-        gameRoom.votingResults[data.targetId] = [];
-    }
-    
-    // Добавляем голоса (для двойного голоса добавляем дважды для визуализации)
-    for (let i = 0; i < voteWeight; i++) {
-        gameRoom.votingResults[data.targetId].push(socket.id);
-    }
-    
-    console.log(`🗳️ ${player.name} voted for ${targetPlayer.name} (${voteWeight} vote(s), total: ${targetPlayer.votes})`);
-    
-    // Отправляем обновление
-    io.to('game-room').emit('vote-update', {
-        players: gameRoom.players,
-        votingResults: gameRoom.votingResults,
-        canChangeVote: gameRoom.canChangeVote
-    });
-    
-    // Проверяем, все ли проголосовали
-    const alivePlayers = gameRoom.players.filter(p => p.isAlive);
-    const votedPlayers = alivePlayers.filter(p => p.hasVoted);
-    
-    if (votedPlayers.length === alivePlayers.length) {
-        console.log('✅ All players voted, processing results');
-        
-        // Небольшая задержка перед обработкой результатов
-        setTimeout(() => {
-            processVotingResults();
-        }, 2000);
-    }
-});
-
-// ...existing code...
-
 
 // Функция завершения игры
 function endGame() {
