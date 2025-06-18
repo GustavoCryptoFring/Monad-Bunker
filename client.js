@@ -35,6 +35,10 @@ const socket = io({
     reconnectionDelay: 1000 // Задержка между попытками
 });
 
+socket.on('roundMessage', (message) => {
+    document.getElementById('round-message-block').innerText = message;
+});
+
 // === ОБРАБОТЧИКИ СОБЫТИЙ SOCKET.IO ===
 
 socket.on('connect', function() {

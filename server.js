@@ -123,6 +123,20 @@ const facts = [
     'Умеет убеждать людей', 'Хороший лидер'
 ];
 
+const roundMessages = [
+    "Внимание! Сейчас начнется новый раунд.",
+    "Подготовьтесь к следующему этапу!",
+    "Скоро будет важное событие...",
+    "У вас есть время обсудить стратегию.",
+    "Следующий раунд может изменить всё!"
+];
+
+function onStartRound() {
+    const message = roundMessages[Math.floor(Math.random() * roundMessages.length)];
+    // Отправьте сообщение ВСЕМ клиентам
+    io.emit('roundMessage', message);
+}
+
 // Статические файлы
 app.use(express.static(__dirname));
 

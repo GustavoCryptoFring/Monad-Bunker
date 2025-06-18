@@ -1342,3 +1342,15 @@ body {
     font-size: 1.1em;
     margin: 10px 0;
 }
+
+.round-message-block {
+    min-height: 60px;
+    background: #29304d;
+    color: #fff;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    margin: 16px;
+}
