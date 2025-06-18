@@ -930,79 +930,170 @@ io.on('connection', (socket) => {
         
         console.log(`🗳️ Voting results: Max votes: ${maxVotes}, Players with max votes: ${playersWithMaxVotes.length}`);
         
-        // ДОБАВЛЯЕМ: Проверяем, это первое или второе голосование
+        // ИСПРАВЛЯЕМ: Проверяем, это первое или второе голосование
         const isSecondVoting = gameRoom.justificationQueue && gameRoom.justificationQueue.length > 0;
         
         if (playersWithMaxVotes.length === 1) {
             // Только один игрок - исключаем сразу
             playersWithMaxVotes[0].isAlive = false;
+            gameRoom.justificationQueue = []; // Очищаем очередь оправданий
             showResults();
         } else if (playersWithMaxVotes.length >= 2 && playersWithMaxVotes.length <= 3) {
             if (isSecondVoting) {
-                // НОВАЯ ЛОГИКА: Если это второе голосование и снова ничья - никого не исключаем
-                console.log('🤝 Second voting tie - no elimination this round, double elimination next round');
+                // ИСПРАВЛЕНО: Если это второе голосование и снова ничья - никого не исключаем в этом раунде
+                console.log('🤝 Second voting tie - no elimination this round, will eliminate top 2 voters next round');
                 gameRoom.eliminateTopVotersNextRound = true;
-                gameRoom.justificationQueue = []; // ВАЖНО: Очищаем очередь оправданий
+                gameRoom.justificationQueue = []; // Очищаем очередь оправданий
                 showResults(); // Переходим к результатам без исключения
             } else {
                 // Первое голосование - идут оправдываться
                 startJustificationPhase();
             }
         } else {
-            // Никого не исключаем
+            // Никого не исключаем (maxVotes = 0 или слишком много игроков с одинаковыми голосами)
+            gameRoom.justificationQueue = []; // Очищаем очередь оправданий
             showResults();
         }
     }
 
-    socket.on('finish-justification', () => {
-        console.log('✅ Finish justification from:', socket.id);
+    // ИСПРАВЛЯЕМ функцию показа результатов раунда
+    function showResults() {
+        console.log('📊 Showing round results');
         
-        const player = gameRoom.players.find(p => p.id === socket.id);
+        gameRoom.gamePhase = 'results';
         
-        if (!player || gameRoom.currentJustifyingPlayer !== socket.id) {
-            socket.emit('error', 'Сейчас не ваша очередь оправдываться!');
-            return;
-        }
+        // Определяем игроков с максимальным количеством голосов
+        let maxVotes = 0;
+        const alivePlayers = gameRoom.players.filter(p => p.isAlive);
         
-        if (gameRoom.gamePhase !== 'justification') {
-            socket.emit('error', 'Сейчас не время для оправданий!');
-            return;
-        }
-        
-        // Переходим к следующему оправданию
-        nextJustification();
-    });
-
-    socket.on('surrender', () => {
-        console.log('🏳️ Surrender from:', socket.id);
-        
-        const player = gameRoom.players.find(p => p.id === socket.id);
-        
-        if (!player || !player.isAlive) {
-            socket.emit('error', 'Вы не можете сдаться!');
-            return;
-        }
-        
-        // Игрок сдается - исключаем его
-        player.isAlive = false;
-        
-        console.log(`🏳️ ${player.name} surrendered`);
-        
-        // Уведомляем всех
-        io.to('game-room').emit('player-surrendered', {
-            playerName: player.name,
-            players: gameRoom.players
+        alivePlayers.forEach(player => {
+            if (player.votes > maxVotes) {
+                maxVotes = player.votes;
+            }
         });
         
-        // Проверяем условия окончания игры
-        const alivePlayers = gameRoom.players.filter(p => p.isAlive);
-        if (alivePlayers.length <= 2) {
-            endGame();
-        } else if (gameRoom.gamePhase === 'justification') {
-            // Если сдался во время оправданий - переходим к следующему
-            nextJustification();
+        const playersWithMaxVotes = alivePlayers.filter(p => p.votes === maxVotes && maxVotes > 0);
+        
+        console.log(`📊 Results: Max votes: ${maxVotes}, Players with max votes: ${playersWithMaxVotes.length}`);
+        console.log(`📊 Eliminate top voters next round: ${gameRoom.eliminateTopVotersNextRound}`);
+        
+        let eliminatedPlayers = [];
+        let resultMessage = '';
+        
+        // ИСПРАВЛЕННАЯ ЛОГИКА: Проверяем условия исключения
+        if (gameRoom.eliminateTopVotersNextRound) {
+            // ИСПРАВЛЕНО: Исключаем 2 игроков с наибольшими голосами (независимо от того, сколько голосов у них)
+            console.log('💀 Eliminating top 2 voters due to previous round tie');
+            
+            // Сортируем всех живых игроков по убыванию голосов
+            const sortedByVotes = [...alivePlayers].sort((a, b) => (b.votes || 0) - (a.votes || 0));
+            
+            // ИСПРАВЛЕНО: Берем первых 2 игрока с наибольшими голосами
+            eliminatedPlayers = sortedByVotes.slice(0, Math.min(2, sortedByVotes.length));
+            
+            // Исключаем игроков
+            eliminatedPlayers.forEach(player => {
+                player.isAlive = false;
+            });
+            
+            resultMessage = `Специальное исключение: ${eliminatedPlayers.map(p => p.name).join(', ')} (исключены как топ-2 игрока за ничью в прошлом раунде)`;
+            gameRoom.eliminateTopVotersNextRound = false;
+            
+        } else if (playersWithMaxVotes.length === 1 && maxVotes > 0) {
+            // Стандартное исключение одного игрока
+            eliminatedPlayers = [playersWithMaxVotes[0]];
+            playersWithMaxVotes[0].isAlive = false;
+            resultMessage = `Исключен: ${playersWithMaxVotes[0].name}`;
+            
+        } else if (playersWithMaxVotes.length >= 2 && playersWithMaxVotes.length <= 3 && maxVotes > 0) {
+            // ИСПРАВЛЕНО: Проверяем, было ли это второе голосование
+            const wasSecondVoting = gameRoom.justificationQueue && gameRoom.justificationQueue.length > 0;
+            
+            if (wasSecondVoting) {
+                // ИСПРАВЛЕНО: После второго голосования с ничьей - никого не исключаем, но помечаем для следующего раунда
+                console.log(`🤝 Second voting tie between ${playersWithMaxVotes.length} players - deferring elimination to next round`);
+                eliminatedPlayers = [];
+                resultMessage = `Ничья после оправданий между ${playersWithMaxVotes.map(p => p.name).join(', ')}. В следующем раунде будут исключены 2 игрока с наибольшими голосами!`;
+                gameRoom.eliminateTopVotersNextRound = true;
+            } else {
+                // Это не должно произойти здесь, так как мы уже обработали это в processVotingResults
+                console.log('⚠️ Unexpected: Multiple players with max votes in showResults without justification');
+                eliminatedPlayers = [];
+                resultMessage = `Ничья между ${playersWithMaxVotes.map(p => p.name).join(', ')}. Никто не исключен.`;
+            }
+            
+        } else {
+            // Никого не исключаем (нет голосов или другие случаи)
+            eliminatedPlayers = [];
+            resultMessage = 'Никто не исключен в этом раунде';
         }
-    });
+        
+        // ВАЖНО: Сбрасываем все состояния голосования
+        gameRoom.players.forEach(player => {
+            player.hasVoted = false;
+            player.votedFor = null;
+            player.votes = 0;
+            player.hasRevealed = false;
+            player.cardsRevealedThisRound = 0;
+        });
+        
+        gameRoom.votingResults = {};
+        gameRoom.canChangeVote = {};
+        gameRoom.currentTurnPlayer = null;
+        gameRoom.currentJustifyingPlayer = null;
+        gameRoom.justificationQueue = []; // ВАЖНО: Очищаем очередь оправданий
+        
+        // Очищаем таймер
+        if (gameRoom.timer) {
+            clearInterval(gameRoom.timer);
+            gameRoom.timer = null;
+        }
+        
+        io.to('game-room').emit('round-results', {
+            eliminatedPlayers: eliminatedPlayers.map(p => p.name),
+            players: gameRoom.players,
+            votingResults: gameRoom.votingResults,
+            resultMessage: resultMessage,
+            willEliminateTopVotersNextRound: gameRoom.eliminateTopVotersNextRound
+        });
+        
+        // Через 5 секунд переходим к следующему раунду
+        setTimeout(() => {
+            nextRound();
+        }, 5000);
+    }
+
+    // ДОБАВЛЯЕМ функцию второго голосования для ясности
+    function startSecondVoting() {
+        console.log('🗳️ Starting second voting after justifications');
+        
+        gameRoom.gamePhase = 'voting';
+        gameRoom.timeLeft = 90; // 1.5 минуты на второе голосование
+        gameRoom.votingResults = {};
+        
+        // Сбрасываем голоса для всех игроков
+        gameRoom.players.forEach(player => {
+            player.hasVoted = false;
+            player.votedFor = null;
+            player.votes = 0;
+        });
+        
+        // Во втором голосовании нельзя менять голос
+        gameRoom.canChangeVote = {};
+        
+        // ВАЖНО: НЕ очищаем justificationQueue здесь - она нужна для определения второго голосования в processVotingResults
+        
+        io.to('game-room').emit('second-voting-started', {
+            gamePhase: gameRoom.gamePhase,
+            timeLeft: gameRoom.timeLeft,
+            players: gameRoom.players,
+            canChangeVote: gameRoom.canChangeVote,
+            currentRound: gameRoom.currentRound,
+            isSecondVoting: true
+        });
+        
+        startGameTimer();
+    }
 });
 
 // Функция перехода к следующему игроку
@@ -1200,7 +1291,7 @@ function startSecondVoting() {
     // Во втором голосовании нельзя менять голос
     gameRoom.canChangeVote = {};
     
-    // ВАЖНО: НЕ очищаем justificationQueue здесь - она нужна для определения второго голосования
+    // ВАЖНО: НЕ очищаем justificationQueue здесь - она нужна для определения второго голосования в processVotingResults
     
     io.to('game-room').emit('second-voting-started', {
         gamePhase: gameRoom.gamePhase,
@@ -1238,43 +1329,23 @@ function showResults() {
     let eliminatedPlayers = [];
     let resultMessage = '';
     
-    // НОВАЯ ЛОГИКА: Проверяем условия исключения
+    // ИСПРАВЛЕННАЯ ЛОГИКА: Проверяем условия исключения
     if (gameRoom.eliminateTopVotersNextRound) {
-        // Исключаем топ-2 игроков (с наибольшим и вторым по величине количеством голосов)
-        console.log('💀 Eliminating top 2 voters from previous round');
+        // ИСПРАВЛЕНО: Исключаем 2 игроков с наибольшими голосами (независимо от того, сколько голосов у них)
+        console.log('💀 Eliminating top 2 voters due to previous round tie');
         
-        // Сортируем по убыванию голосов
+        // Сортируем всех живых игроков по убыванию голосов
         const sortedByVotes = [...alivePlayers].sort((a, b) => (b.votes || 0) - (a.votes || 0));
         
-        // Получаем уникальные значения голосов
-        const uniqueVotes = [...new Set(sortedByVotes.map(p => p.votes || 0))].filter(v => v > 0);
-        
-        if (uniqueVotes.length >= 2) {
-            // Есть первое и второе место
-            const firstPlaceVotes = uniqueVotes[0];
-            const secondPlaceVotes = uniqueVotes[1];
-            
-            const firstPlacePlayers = sortedByVotes.filter(p => p.votes === firstPlaceVotes);
-            const secondPlacePlayers = sortedByVotes.filter(p => p.votes === secondPlaceVotes);
-            
-            // Добавляем всех с первым местом и столько со вторым, чтобы общее количество было 2
-            eliminatedPlayers = [...firstPlacePlayers];
-            const remainingSlots = 2 - eliminatedPlayers.length;
-            
-            if (remainingSlots > 0) {
-                eliminatedPlayers.push(...secondPlacePlayers.slice(0, remainingSlots));
-            }
-        } else if (uniqueVotes.length === 1) {
-            // Все с одинаковыми голосами - берем первых двух
-            eliminatedPlayers = sortedByVotes.slice(0, 2);
-        }
+        // ИСПРАВЛЕНО: Берем первых 2 игрока с наибольшими голосами
+        eliminatedPlayers = sortedByVotes.slice(0, Math.min(2, sortedByVotes.length));
         
         // Исключаем игроков
         eliminatedPlayers.forEach(player => {
             player.isAlive = false;
         });
         
-        resultMessage = `Специальное исключение: ${eliminatedPlayers.map(p => p.name).join(', ')} (двойное исключение за ничью в прошлом раунде)`;
+        resultMessage = `Специальное исключение: ${eliminatedPlayers.map(p => p.name).join(', ')} (исключены как топ-2 игрока за ничью в прошлом раунде)`;
         gameRoom.eliminateTopVotersNextRound = false;
         
     } else if (playersWithMaxVotes.length === 1 && maxVotes > 0) {
@@ -1284,14 +1355,24 @@ function showResults() {
         resultMessage = `Исключен: ${playersWithMaxVotes[0].name}`;
         
     } else if (playersWithMaxVotes.length >= 2 && playersWithMaxVotes.length <= 3 && maxVotes > 0) {
-        // НОВАЯ ЛОГИКА: Ничья между 2-3 игроками - никого не исключаем, но в следующем раунде исключим топ-2
-        console.log(`🤝 Tie between ${playersWithMaxVotes.length} players - deferring elimination to next round`);
-        eliminatedPlayers = [];
-        resultMessage = `Ничья между ${playersWithMaxVotes.map(p => p.name).join(', ')}. В следующем раунде будут исключены 2 игрока с наибольшими голосами!`;
-        gameRoom.eliminateTopVotersNextRound = true;
+        // ИСПРАВЛЕНО: Проверяем, было ли это второе голосование
+        const wasSecondVoting = gameRoom.justificationQueue && gameRoom.justificationQueue.length > 0;
+        
+        if (wasSecondVoting) {
+            // ИСПРАВЛЕНО: После второго голосования с ничьей - никого не исключаем, но помечаем для следующего раунда
+            console.log(`🤝 Second voting tie between ${playersWithMaxVotes.length} players - deferring elimination to next round`);
+            eliminatedPlayers = [];
+            resultMessage = `Ничья после оправданий между ${playersWithMaxVotes.map(p => p.name).join(', ')}. В следующем раунде будут исключены 2 игрока с наибольшими голосами!`;
+            gameRoom.eliminateTopVotersNextRound = true;
+        } else {
+            // Это не должно произойти здесь, так как мы уже обработали это в processVotingResults
+            console.log('⚠️ Unexpected: Multiple players with max votes in showResults without justification');
+            eliminatedPlayers = [];
+            resultMessage = `Ничья между ${playersWithMaxVotes.map(p => p.name).join(', ')}. Никто не исключен.`;
+        }
         
     } else {
-        // Никого не исключаем
+        // Никого не исключаем (нет голосов или другие случаи)
         eliminatedPlayers = [];
         resultMessage = 'Никто не исключен в этом раунде';
     }
