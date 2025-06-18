@@ -769,6 +769,22 @@ function getRequiredCardsForRound(round) {
     }
 }
 
+// Добавляем функцию обновления истории
+function updateStoryDisplay() {
+    const storyText = document.getElementById('storyText');
+    
+    if (!storyText) return;
+    
+    // Пока история не загружена, показываем заглушку
+    if (!gameState.scenario) {
+        storyText.textContent = 'Ожидание начала игры...';
+        return;
+    }
+    
+    // Показываем сценарий
+    storyText.textContent = gameState.scenario.description || 'Описание сценария загружается...';
+}
+
 // ОБНОВЛЯЕМ функцию updateGameDisplay
 function updateGameDisplay() {
     console.log('🎮 Updating game display. Phase:', gameState.gamePhase, 'Players:', gameState.players.length);
@@ -790,7 +806,10 @@ function updateGameDisplay() {
         phaseDisplayElement.textContent = getPhaseDisplayText();
     }
     
-    // ИСПРАВЛЯЕМ: Убеждаемся что функции вызываются
+    // Обновляем историю
+    updateStoryDisplay();
+    
+    // Остальные обновления
     updateRoundActions();
     updatePlayersGrid();
     updateTimerDisplay();

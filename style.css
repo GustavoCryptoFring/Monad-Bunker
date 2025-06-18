@@ -296,25 +296,67 @@ body {
     transform: translateY(-2px);
 }
 
+/* ОБНОВЛЯЕМ стили для game-info */
 .game-info {
     display: flex;
-    justify-content: center; /* ИЗМЕНЕНО: центрируем содержимое */
+    justify-content: space-between; /* ИЗМЕНЕНО: распределяем по краям */
     align-items: flex-start;
     background: rgba(52, 73, 94, 0.8);
     padding: 20px;
     border-radius: 15px;
     margin-bottom: 20px;
-    position: relative; /* Добавляем для позиционирования таймера */
+    position: relative;
 }
 
+/* НОВЫЙ: Контейнер для истории - левая часть */
+.story-container {
+    flex: 0 0 300px; /* Фиксированная ширина 300px */
+    margin-right: 20px;
+}
+
+/* ОБНОВЛЯЕМ story-block */
+.story-block {
+    width: 100%;
+    min-height: 120px;
+    background: rgba(35, 40, 68, 0.9);
+    color: #fff;
+    font-size: 14px;
+    padding: 16px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    line-height: 1.4;
+    border: 1px solid rgba(52, 152, 219, 0.3);
+}
+
+.story-title {
+    display: block;
+    font-size: 16px;
+    font-weight: bold;
+    color: #f39c12;
+    margin-bottom: 12px;
+    text-align: center;
+    border-bottom: 1px solid rgba(243, 156, 18, 0.3);
+    padding-bottom: 8px;
+}
+
+.story-text {
+    color: #ecf0f1;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* ОБНОВЛЯЕМ round-info */
 .round-info {
+    flex: 1; /* Занимает оставшееся место */
     text-align: center;
     background: none;
     padding: 0;
     border-radius: 0;
     margin-bottom: 0;
-    max-width: 600px; /* ДОБАВЛЯЕМ: ограничиваем ширину */
-    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 .round-info h2 {
@@ -324,12 +366,11 @@ body {
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }
 
+/* ОБНОВЛЯЕМ timer-info - остается справа */
 .timer-info {
-    position: absolute; /* ИЗМЕНЕНО: абсолютное позиционирование */
-    top: 20px;
-    right: 20px;
+    flex: 0 0 auto; /* Не растягивается */
     text-align: right;
-    flex-shrink: 0;
+    margin-left: 20px;
 }
 
 .phase-display {
@@ -346,9 +387,9 @@ body {
     font-family: 'Courier New', monospace;
 }
 
-/* ОБНОВЛЯЕМ round-actions для лучшего центрирования */
+/* ОБНОВЛЯЕМ round-actions */
 .round-actions {
-    margin-top: 25px;
+    margin-top: 20px;
     margin-bottom: 10px;
     text-align: center;
     padding: 20px;
@@ -362,9 +403,9 @@ body {
     align-items: center;
     justify-content: center;
     min-height: 80px;
-    max-width: 400px; /* ДОБАВЛЯЕМ: ограничиваем ширину */
-    margin-left: auto;  /* ДОБАВЛЯЕМ: центрируем */
-    margin-right: auto; /* ДОБАВЛЯЕМ: центрируем */
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 @keyframes highlight-border {
@@ -1355,4 +1396,48 @@ body {
     margin: 24px 36px 0 0;
     box-shadow: 0 4px 20px #0002;
     line-height: 1.4;
+}
+
+/* АДАПТИВНОСТЬ ДЛЯ game-info И story-block */
+@media (max-width: 1200px) {
+    .game-info {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .story-container {
+        flex: none;
+        width: 100%;
+        margin-right: 0;
+        margin-bottom: 20px;
+        order: 1;
+    }
+    
+    .round-info {
+        order: 2;
+        margin-bottom: 20px;
+    }
+    
+    .timer-info {
+        order: 3;
+        margin-left: 0;
+        text-align: center;
+    }
+}
+
+@media (max-width: 768px) {
+    .story-block {
+        min-height: 100px;
+        padding: 12px;
+        font-size: 12px;
+    }
+    
+    .story-title {
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+    
+    .story-text {
+        font-size: 11px;
+    }
 }
