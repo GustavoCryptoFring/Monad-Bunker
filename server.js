@@ -1405,3 +1405,29 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason, promise) => {
     console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
+
+const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
+
+server.listen(PORT, HOST)
+    .on('listening', () => {
+        console.log(`🚀 Bunker Game Server running on ${HOST}:${PORT}`);
+        console.log(`📱 Game ready for players!`);
+        console.log(`🎮 Players: ${gameRoom.players.length}/${gameRoom.maxPlayers}`);
+    })
+    .on('error', (error) => {
+        console.error('❌ Server startup error:', error);
+        if (error.code === 'EADDRINUSE') {
+            console.error(`Port ${PORT} is already in use`);
+        }
+        process.exit(1);
+    });
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('🛑 SIGTERM received, shutting down gracefully');
+    server.close(() => {
+        console.log('✅ Server closed');
+        process.exit(0);
+    });
+});

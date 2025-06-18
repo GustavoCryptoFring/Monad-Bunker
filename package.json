@@ -12,7 +12,8 @@
     "socket.io": "^4.7.2"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
   },
   "keywords": ["game", "multiplayer", "bunker", "survival"],
   "author": "Your Name",
