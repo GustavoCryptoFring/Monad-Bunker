@@ -411,7 +411,194 @@ function startRevelationPhase() {
 
 // Функция обработки раскрытия характеристик
 io.on('connection', (socket) => {
-    // ... существующий код подключения ...
+    console.log('🔗 New connection:', socket.id);
+    
+    // Отправляем текущее количество игроков
+    socket.emit('player-count', { count: gameRoom.players.length });
+    
+    // ДОБАВЛЯЕМ обработчик присоединения к игре
+    socket.on('join-game', (data) => {
+        console.log('👋 Player joining:', data.playerName, 'Socket:', socket.id);
+        
+        const playerName = data.playerName?.trim();
+        
+        if (!playerName || playerName.length < 2 || playerName.length > 20) {
+            socket.emit('error', 'Неверное имя игрока');
+            return;
+        }
+        
+        // Проверяем, не занято ли имя
+        const existingPlayer = gameRoom.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
+        if (existingPlayer) {
+            socket.emit('error', 'Игрок с таким именем уже есть в игре');
+            return;
+        }
+        
+        // Проверяем лимит игроков
+        if (gameRoom.players.length >= gameRoom.maxPlayers) {
+            socket.emit('error', 'Игра заполнена');
+            return;
+        }
+        
+        // Создаем игрока
+        const player = {
+            id: socket.id,
+            name: playerName,
+            isAlive: true,
+            isHost: gameRoom.players.length === 0, // Первый игрок - хост
+            votes: 0,
+            hasVoted: false,
+            votedFor: null,
+            hasRevealed: false,
+            cardsRevealedThisRound: 0,
+            revealedCharacteristics: [],
+            characteristics: null,
+            actionCards: []
+        };
+        
+        gameRoom.players.push(player);
+        socket.join('game-room');
+        
+        console.log('✅ Player joined:', playerName, 'Total players:', gameRoom.players.length);
+        
+        // Подтверждаем подключение
+        socket.emit('join-confirmed', {
+            playerId: socket.id,
+            playerName: playerName,
+            isHost: player.isHost,
+            maxPlayers: gameRoom.maxPlayers,
+            players: gameRoom.players,
+            gameState: gameRoom.gameState
+        });
+        
+        // Уведомляем всех о новом игроке
+        io.to('game-room').emit('player-joined', {
+            players: gameRoom.players,
+            maxPlayers: gameRoom.maxPlayers,
+            gameState: gameRoom.gameState
+        });
+    });
+    
+    // ДОБАВЛЯЕМ обработчик отключения
+    socket.on('disconnect', () => {
+        console.log('❌ Player disconnected:', socket.id);
+        
+        const playerIndex = gameRoom.players.findIndex(p => p.id === socket.id);
+        if (playerIndex !== -1) {
+            const player = gameRoom.players[playerIndex];
+            console.log('👋 Player left:', player.name);
+            
+            // Удаляем игрока
+            gameRoom.players.splice(playerIndex, 1);
+            
+            // Если хост ушел, назначаем нового хоста
+            if (player.isHost && gameRoom.players.length > 0) {
+                gameRoom.players[0].isHost = true;
+                console.log('👑 New host:', gameRoom.players[0].name);
+            }
+            
+            // Если все игроки ушли или игроков стало меньше 2, сбрасываем игру
+            if (gameRoom.players.length === 0 || (gameRoom.gameState === 'playing' && gameRoom.players.length < 2)) {
+                resetGame();
+            } else {
+                // Уведомляем остальных игроков
+                io.to('game-room').emit('player-left', {
+                    players: gameRoom.players,
+                    gameState: gameRoom.gameState
+                });
+            }
+        }
+    });
+    
+    // ДОБАВЛЯЕМ обработчик смены максимального количества игроков
+    socket.on('change-max-players', (data) => {
+        const player = gameRoom.players.find(p => p.id === socket.id);
+        
+        if (!player || !player.isHost) {
+            socket.emit('error', 'Только хост может изменять настройки!');
+            return;
+        }
+        
+        if (gameRoom.gameState !== 'lobby') {
+            socket.emit('error', 'Нельзя изменять настройки во время игры!');
+            return;
+        }
+        
+        const newMaxPlayers = parseInt(data.maxPlayers);
+        if (newMaxPlayers < 2 || newMaxPlayers > 16) {
+            socket.emit('error', 'Неверное количество игроков!');
+            return;
+        }
+        
+        if (newMaxPlayers < gameRoom.players.length) {
+            socket.emit('error', 'Нельзя установить лимит меньше текущего количества игроков!');
+            return;
+        }
+        
+        gameRoom.maxPlayers = newMaxPlayers;
+        
+        console.log('🔧 Max players changed to:', newMaxPlayers);
+        
+        io.to('game-room').emit('max-players-changed', {
+            maxPlayers: gameRoom.maxPlayers,
+            players: gameRoom.players
+        });
+    });
+    
+    // ДОБАВЛЯЕМ обработчик старта игры
+    socket.on('start-game', () => {
+        console.log('🎮 Game start requested by:', socket.id);
+        
+        const player = gameRoom.players.find(p => p.id === socket.id);
+        
+        if (!player || !player.isHost) {
+            socket.emit('error', 'Только хост может начать игру!');
+            return;
+        }
+        
+        if (gameRoom.players.length < 2) {
+            socket.emit('error', 'Для начала игры нужно минимум 2 игрока!');
+            return;
+        }
+        
+        if (gameRoom.gameState !== 'lobby') {
+            socket.emit('error', 'Игра уже идет!');
+            return;
+        }
+        
+        // Генерируем характеристики для всех игроков
+        gameRoom.players.forEach(player => {
+            player.characteristics = generateCharacteristics();
+            player.actionCards = [getRandomActionCard()];
+            player.hasRevealed = false;
+            player.hasVoted = false;
+            player.revealedCharacteristics = [];
+            player.cardsRevealedThisRound = 0;
+        });
+        
+        gameRoom.gameState = 'playing';
+        gameRoom.gamePhase = 'preparation';
+        gameRoom.currentRound = 1;
+        gameRoom.timeLeft = 0;
+        gameRoom.playersWhoRevealed = [];
+        gameRoom.currentTurnPlayer = null;
+        
+        // ДОБАВЛЯЕМ: Выбираем случайную историю
+        const randomStory = stories[Math.floor(Math.random() * stories.length)];
+        
+        console.log('🚀 Game started! Players:', gameRoom.players.length);
+        console.log('📖 Selected story:', randomStory.substring(0, 50) + '...');
+        
+        // Уведомляем всех игроков о начале игры
+        io.to('game-room').emit('game-started', {
+            players: gameRoom.players,
+            gameState: gameRoom.gameState,
+            gamePhase: gameRoom.gamePhase,
+            currentRound: gameRoom.currentRound,
+            timeLeft: gameRoom.timeLeft,
+            story: randomStory // ДОБАВЛЯЕМ историю
+        });
+    });
     
     // ДОБАВЛЯЕМ обработчик раскрытия характеристик
     socket.on('reveal-characteristic', (data) => {
@@ -1072,3 +1259,57 @@ process.on('SIGINT', () => {
         process.exit(0);
     });
 });
+
+// ДОБАВЛЯЕМ функции генерации характеристик
+function generateCharacteristics() {
+    return {
+        profession: getRandomElement(professions),
+        health: getRandomElement(healthConditions),
+        hobby: getRandomElement(hobbies),
+        phobia: getRandomElement(phobias),
+        baggage: getRandomElement(baggage),
+        fact1: getRandomElement(facts),
+        fact2: getRandomElement(facts.filter(f => f !== facts[0])) // Убеждаемся что факты разные
+    };
+}
+
+function getRandomElement(array) {
+    return array[Math.floor(Math.random() * array.length)];
+}
+
+function getRandomActionCard() {
+    const availableCards = actionCards.filter(card => card.usesLeft > 0);
+    const randomCard = getRandomElement(availableCards);
+    return { ...randomCard }; // Возвращаем копию карты
+}
+
+// ДОБАВЛЯЕМ функцию startGameTimer
+function startGameTimer() {
+    // Очищаем предыдущий таймер
+    if (gameRoom.timer) {
+        clearInterval(gameRoom.timer);
+        gameRoom.timer = null;
+    }
+    
+    // Запускаем новый таймер
+    gameRoom.timer = setInterval(() => {
+        gameRoom.timeLeft--;
+        
+        // Отправляем обновление времени каждые 5 секунд или в последние 10 секунд
+        if (gameRoom.timeLeft % 5 === 0 || gameRoom.timeLeft <= 10) {
+            io.to('game-room').emit('timer-update', {
+                timeLeft: gameRoom.timeLeft,
+                currentTurnPlayer: gameRoom.currentTurnPlayer
+            });
+        }
+        
+        // Если время закончилось
+        if (gameRoom.timeLeft <= 0) {
+            clearInterval(gameRoom.timer);
+            gameRoom.timer = null;
+            handlePhaseTimeout();
+        }
+    }, 1000);
+}
+
+// ...остальной код server.js остается без изменений...
