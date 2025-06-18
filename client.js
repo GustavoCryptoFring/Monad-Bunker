@@ -26,6 +26,13 @@ let gameState = {
     myStartRoundVote: false
 };
 
+socket.on('showStory', (story) => {
+    const storyBlock = document.querySelector('.story-block');
+    if (storyBlock) {
+        storyBlock.textContent = story;
+    }
+});
+
 // Socket.IO подключение
 const socket = io({
     transports: ['websocket', 'polling'], // Добавляем fallback транспорты
