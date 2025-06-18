@@ -356,8 +356,20 @@ socket.on('round-results', function(data) {
     gameState.votingResults = data.votingResults;
     updateGameDisplay();
     
-    if (data.eliminatedPlayer) {
-        showNotification('Игрок исключен', `${data.eliminatedPlayer} покидает бункер`);
+    // ОБНОВЛЯЕМ: Показываем расширенное сообщение о результатах
+    if (data.eliminatedPlayers && data.eliminatedPlayers.length > 0) {
+        if (data.eliminatedPlayers.length === 1) {
+            showNotification('Игрок исключен', `${data.eliminatedPlayers[0]} покидает бункер`);
+        } else {
+            showNotification('Игроки исключены', `${data.eliminatedPlayers.join(', ')} покидают бункер`);
+        }
+    } else if (data.resultMessage) {
+        // НОВОЕ: Показываем специальное сообщение для ничьи
+        if (data.willEliminateTopVotersNextRound) {
+            showNotification('⚠️ Специальный раунд', data.resultMessage);
+        } else {
+            showNotification('Результат раунда', data.resultMessage);
+        }
     } else {
         showNotification('Ничья', 'Никто не был исключен в этом раунде');
     }
@@ -369,30 +381,15 @@ socket.on('new-round', function(data) {
     gameState.gamePhase = data.gamePhase;
     gameState.timeLeft = data.timeLeft;
     gameState.players = data.players;
-    gameState.startRoundVotes = 0;      // ДОБАВЛЯЕМ: сброс голосов
-    gameState.myStartRoundVote = false; // ДОБАВЛЯЕМ: сброс моего голоса
+    gameState.startRoundVotes = 0;
+    gameState.myStartRoundVote = false;
+    
+    // НОВОЕ: Показываем предупреждение о специальном раунде
+    if (data.willEliminateTopVotersThisRound) {
+        showNotification('⚠️ Специальный раунд', 'В этом раунде будут исключены 2 игрока с наибольшими голосами!');
+    }
+    
     updateGameDisplay();
-});
-
-socket.on('game-ended', function(data) {
-    console.log('🏁 Game ended:', data);
-    gameState.players = data.players;
-    gameState.gamePhase = 'finished';
-    updateGameDisplay();
-    
-    const winners = data.winners.map(p => p.name).join(', ');
-    showNotification('Игра завершена', `Победители: ${winners}`);
-});
-
-socket.on('player-surrendered', function(data) {
-    console.log('🏳️ Player surrendered:', data);
-    gameState.players = data.players;
-    updatePlayersGrid();
-    
-    const isMe = data.surrenderedPlayer === gameState.playerName;
-    const message = isMe ? 'Вы сдались и покинули игру.' : `${data.surrenderedPlayer} сдался и покинул игру.`;
-    
-    showNotification('Игрок сдался', message);
 });
 
 // Добавляем обработчик голосования за начало раунда
@@ -887,9 +884,13 @@ function updateRoundActions() {
 }
 
 function getGameStatusText() {
+    // ДОБАВЛЯЕМ проверку специального режима
+    const isSpecialRound = gameState.players.some(p => p.willEliminateTopVotersThisRound);
+    const specialPrefix = isSpecialRound ? '⚠️ СПЕЦИАЛЬНЫЙ РАУНД: ' : '';
+    
     switch (gameState.gamePhase) {
         case 'preparation': 
-            return 'Подготовка к раунду';
+            return specialPrefix + 'Подготовка к раунду';
         case 'revelation': 
             const currentPlayer = gameState.players.find(p => p.id === gameState.currentTurnPlayer);
             if (currentPlayer) {
@@ -900,42 +901,41 @@ function getGameStatusText() {
                 if (isMyTurn) {
                     if (gameState.currentRound === 1) {
                         if (revealedCards === 0) {
-                            return 'Ваш ход: Раскройте профессию';
+                            return specialPrefix + 'Ваш ход: Раскройте профессию';
                         } else if (revealedCards === 1) {
-                            return 'Ваш ход: Выберите любую характеристику';
+                            return specialPrefix + 'Ваш ход: Выберите любую характеристику';
                         } else {
-                            return 'Ваш ход завершен';
+                            return specialPrefix + 'Ваш ход завершен';
                         }
                     } else {
                         if (revealedCards === 0) {
-                            return 'Ваш ход: Выберите любую характеристику';
+                            return specialPrefix + 'Ваш ход: Выберите любую характеристику';
                         } else {
-                            return 'Ваш ход завершен';
+                            return specialPrefix + 'Ваш ход завершен';
                         }
                     }
                 } else {
-                    return `Ход игрока: ${currentPlayer.name}`;
+                    return specialPrefix + `Ход игрока: ${currentPlayer.name}`;
                 }
             }
-            return 'Раскрытие характеристик';
+            return specialPrefix + 'Раскрытие характеристик';
         case 'discussion': 
-            return 'Фаза обсуждения';
+            return specialPrefix + 'Фаза обсуждения';
         case 'voting': 
-            // ДОБАВЛЯЕМ проверку на повторное голосование
             const justificationQueue = gameState.players.filter(p => p.id === gameState.currentJustifyingPlayer);
             if (justificationQueue.length > 0) {
-                return 'Повторное голосование';
+                return specialPrefix + 'Повторное голосование';
             }
-            return 'Фаза голосования';
+            return specialPrefix + 'Фаза голосования';
         case 'justification':
             const justifyingPlayer = gameState.players.find(p => p.id === gameState.currentJustifyingPlayer);
             if (justifyingPlayer) {
                 const isMyJustification = justifyingPlayer.id === gameState.playerId;
-                return `Оправдание: ${isMyJustification ? 'Ваш черед' : justifyingPlayer.name}`;
+                return specialPrefix + `Оправдание: ${isMyJustification ? 'Ваш черед' : justifyingPlayer.name}`;
             }
-            return 'Фаза оправдания';
+            return specialPrefix + 'Фаза оправдания';
         case 'results': 
-            return 'Подведение итогов раунда';
+            return specialPrefix + 'Подведение итогов раунда';
         case 'finished': 
             return 'Игра завершена';
         default: 

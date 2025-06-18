@@ -1441,3 +1441,53 @@ body {
         font-size: 11px;
     }
 }
+
+/* НОВОЕ: Стили для специального раунда */
+.special-round-warning {
+    background: linear-gradient(45deg, #e74c3c, #c0392b);
+    color: white;
+    padding: 15px;
+    border-radius: 10px;
+    margin: 10px 0;
+    text-align: center;
+    font-weight: bold;
+    animation: warningPulse 2s infinite;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+@keyframes warningPulse {
+    0% { 
+        background: linear-gradient(45deg, #e74c3c, #c0392b);
+        box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+    }
+    50% { 
+        background: linear-gradient(45deg, #c0392b, #a93226);
+        box-shadow: 0 6px 25px rgba(231, 76, 60, 0.7);
+    }
+    100% { 
+        background: linear-gradient(45deg, #e74c3c, #c0392b);
+        box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+    }
+}
+
+/* ОБНОВЛЕНИЕ: Подсветка для специального раунда */
+.round-info.special-round {
+    border: 3px solid #e74c3c;
+    background: rgba(231, 76, 60, 0.1);
+    animation: specialRoundGlow 3s infinite;
+}
+
+@keyframes specialRoundGlow {
+    0% { 
+        border-color: #e74c3c;
+        background: rgba(231, 76, 60, 0.1);
+    }
+    50% { 
+        border-color: #c0392b;
+        background: rgba(231, 76, 60, 0.2);
+    }
+    100% { 
+        border-color: #e74c3c;
+        background: rgba(231, 76, 60, 0.1);
+    }
+}
