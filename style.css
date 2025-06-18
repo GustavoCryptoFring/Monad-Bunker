@@ -1343,9 +1343,16 @@ body {
     margin: 10px 0;
 }
 
+.round-info {
+    position: relative;
+}
+
 .round-message-block {
-    width: 240px;
-    height: 240px;
+    position: absolute;
+    top: 40px;      /* Подберите, чтобы блок был чуть ниже верха */
+    left: 32px;     /* Подберите по макету */
+    width: 200px;
+    height: 200px;
     background: #29304d;
     color: #fff;
     font-size: 20px;
@@ -1353,12 +1360,5 @@ body {
     align-items: center;
     justify-content: center;
     border-radius: 10px;
-    margin: 12px 0 12px 32px;
-}
-
-.round-info {
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-start; /* Очень важно! */
-  align-items: flex-start;     /* Можно добавить для выравнивания по верхнему краю */
+    z-index: 2;
 }
