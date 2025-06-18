@@ -1344,7 +1344,8 @@ body {
 }
 
 .round-message-block {
-    min-height: 60px;
+    width: 240px;
+    height: 240px;
     background: #29304d;
     color: #fff;
     font-size: 20px;
@@ -1352,5 +1353,5 @@ body {
     align-items: center;
     justify-content: center;
     border-radius: 10px;
-    margin: 16px;
+    margin: 12px 0 12px 32px;
 }
