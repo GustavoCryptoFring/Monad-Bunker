@@ -12,54 +12,6 @@ const io = socketIo(server);
 // === МАССИВЫ КАРТ ДЕЙСТВИЙ И ХАРАКТЕРИСТИКИ ===
 
 const actionCards = [
-    { 
-        id: 1, 
-        name: "Двойной голос", 
-        description: "Ваш голос считается за два во время голосования. Нужно активировать ДО голосования.", 
-        type: "voting", 
-        usesLeft: 1,
-        icon: "🗳️"
-    },
-    { 
-        id: 2, 
-        name: "Детектив", 
-        description: "Узнайте одну скрытую характеристику любого игрока", 
-        type: "investigative", 
-        usesLeft: 1,
-        icon: "🔍"
-    },
-    { 
-        id: 3, 
-        name: "Защитник", 
-        description: "Спасите одного игрока от исключения (включая себя)", 
-        type: "protective", 
-        usesLeft: 1,
-        icon: "🛡️"
-    },
-    { 
-        id: 4, 
-        name: "Анонимный голос", 
-        description: "Ваш голос не будет показан другим игрокам", 
-        type: "stealth", 
-        usesLeft: 1,
-        icon: "👤"
-    },
-    { 
-        id: 5, 
-        name: "Блокировщик", 
-        description: "Заблокируйте использование карты действия другого игрока", 
-        type: "disruptive", 
-        usesLeft: 1,
-        icon: "🚫"
-    },
-    { 
-        id: 6, 
-        name: "Лидер", 
-        description: "Принудительно начните следующую фазу игры", 
-        type: "control", 
-        usesLeft: 1,
-        icon: "👑"
-    }
 ];
 
 const professions = [
@@ -453,7 +405,6 @@ io.on('connection', (socket) => {
             cardsRevealedThisRound: 0,
             revealedCharacteristics: [],
             characteristics: null,
-            actionCards: []
         };
         
         gameRoom.players.push(player);
@@ -569,7 +520,6 @@ io.on('connection', (socket) => {
         // Генерируем характеристики для всех игроков
         gameRoom.players.forEach(player => {
             player.characteristics = generateCharacteristics();
-            player.actionCards = [getRandomActionCard()];
             player.hasRevealed = false;
             player.hasVoted = false;
             player.revealedCharacteristics = [];
@@ -1384,7 +1334,6 @@ function resetGame() {
             player.cardsRevealedThisRound = 0;
             player.revealedCharacteristics = [];
             player.characteristics = null;
-            player.actionCards = [];
         });
         
         gameRoom.gameState = 'lobby';
@@ -1522,11 +1471,6 @@ function getRandomElement(array) {
     return array[Math.floor(Math.random() * array.length)];
 }
 
-function getRandomActionCard() {
-    const availableCards = actionCards.filter(card => card.usesLeft > 0);
-    const randomCard = getRandomElement(availableCards);
-    return { ...randomCard }; // Возвращаем копию карты
-}
 
 // ДОБАВЛЯЕМ функцию startGameTimer
 function startGameTimer() {
