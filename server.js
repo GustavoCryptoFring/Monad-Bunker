@@ -404,7 +404,7 @@ io.on('connection', (socket) => {
             hasRevealed: false,
             cardsRevealedThisRound: 0,
             revealedCharacteristics: [],
-            characteristics: null,
+            characteristics: null
         };
         
         gameRoom.players.push(player);
@@ -1334,6 +1334,7 @@ function resetGame() {
             player.cardsRevealedThisRound = 0;
             player.revealedCharacteristics = [];
             player.characteristics = null;
+        
         });
         
         gameRoom.gameState = 'lobby';
@@ -1470,7 +1471,6 @@ function generateCharacteristics() {
 function getRandomElement(array) {
     return array[Math.floor(Math.random() * array.length)];
 }
-
 
 // ДОБАВЛЯЕМ функцию startGameTimer
 function startGameTimer() {

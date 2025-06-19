@@ -400,6 +400,20 @@ socket.on('start-round-vote-update', function(data) {
     updateRoundActions();
 });
 
+// Добавляем обработчики событий карт действий
+socket.on('action-card-used', function(data) {
+    console.log('✨ Action card used:', data);
+    gameState.players = data.players;
+    
+    updatePlayersGrid();
+    
+    const message = data.targetId 
+        ? `${data.playerName} использовал карту "${data.cardName}"`
+        : `${data.playerName} использовал карту "${data.cardName}"`;
+    
+    showNotification('Карта действия', message);
+});
+
 socket.on('detective-result', function(data) {
     console.log('🔍 Detective result:', data);
     
@@ -1062,6 +1076,7 @@ function createPlayerCard(player) {
             `;
         }
     }
+
     
     card.innerHTML = `
         <div class="player-header">
@@ -1131,43 +1146,6 @@ function createPlayerCard(player) {
     return card;
 }
 
-
-function closeActionCardModal() {
-    document.getElementById('actionCardModal').style.display = 'none';
-    window.currentActionCard = null;
-}
-
-function useActionCard() {
-    if (!window.currentActionCard) return;
-    
-    const card = window.currentActionCard;
-    let targetId = null;
-    
-    // Для некоторых карт нужно выбрать цель
-    if (['investigative', 'protective', 'disruptive'].includes(card.type)) {
-        const alivePlayers = gameState.players.filter(p => p.isAlive);
-        const targetName = prompt(`Выберите цель для карты "${card.name}":\n` + 
-            alivePlayers.map((p, i) => `${i + 1}. ${p.name}`).join('\n'));
-        
-        if (!targetName) return;
-        
-        const targetIndex = parseInt(targetName) - 1;
-        if (targetIndex >= 0 && targetIndex < alivePlayers.length) {
-            targetId = alivePlayers[targetIndex].id;
-        } else {
-            showNotification('Ошибка', 'Неверно выбрана цель');
-            return;
-        }
-    }
-    
-    console.log('✨ Using action card:', card.name, 'Target:', targetId);
-    socket.emit('use-action-card', { 
-        cardId: card.id, 
-        targetId: targetId 
-    });
-    
-    closeActionCardModal();
-}
 
 // НОВАЯ ФУНКЦИЯ: Получаем список игроков, проголосовавших за конкретного игрока
 function getVotersForPlayer(playerId) {
