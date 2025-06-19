@@ -9,10 +9,48 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-// === МАССИВЫ КАРТ ДЕЙСТВИЙ И ХАРАКТЕРИСТИКИ ===
+// === ОБНОВЛЕННЫЕ КАРТЫ ДЕЙСТВИЙ ===
 
 const actionCards = [
+    { 
+        id: 1, 
+        name: "Двойной голос", 
+        description: "Ваш голос считается за два во время голосования. Нужно активировать ДО голосования.", 
+        type: "voting", 
+        usesLeft: 1,
+        icon: "🗳️"
+    },
+    { 
+        id: 2, 
+        name: "Месть", 
+        description: "Может состарить любого игрока на 20 лет, если вылетает (активируется автоматически при изгнании)", 
+        type: "revenge", 
+        usesLeft: 1,
+        icon: "⚰️"
+    },
+    { 
+        id: 3, 
+        name: "Доктор", 
+        description: "Может вылечить себя или ухудшить здоровье другого игрока", 
+        type: "medical", 
+        usesLeft: 1,
+        icon: "🏥"
+    }
 ];
+
+// === СПЕЦИАЛЬНЫЙ СПИСОК БОЛЕЗНЕЙ ДЛЯ ДОКТОРА ===
+const severeDiseases = [
+    'Карликовость',
+    'ДЦП', 
+    'Рак',
+    'Полностью слепой',
+    'Глухой',
+    'Инвалид',
+    'Нет двух рук',
+    'Нет двух ног'
+];
+
+// === МАССИВЫ ХАРАКТЕРИСТИК И СООБЩЕНИЙ ===
 
 const professions = [
     'Врач', 'Учитель', 'Инженер', 'Повар', 'Полицейский', 'Пожарный',
@@ -404,7 +442,8 @@ io.on('connection', (socket) => {
             hasRevealed: false,
             cardsRevealedThisRound: 0,
             revealedCharacteristics: [],
-            characteristics: null
+            characteristics: null,
+            actionCards: []
         };
         
         gameRoom.players.push(player);
@@ -520,6 +559,7 @@ io.on('connection', (socket) => {
         // Генерируем характеристики для всех игроков
         gameRoom.players.forEach(player => {
             player.characteristics = generateCharacteristics();
+            player.actionCards = [getRandomActionCard()];
             player.hasRevealed = false;
             player.hasVoted = false;
             player.revealedCharacteristics = [];
@@ -613,14 +653,28 @@ io.on('connection', (socket) => {
         player.revealedCharacteristics.push(characteristic);
         player.cardsRevealedThisRound = (player.cardsRevealedThisRound || 0) + 1;
         
-        console.log(`🔍 ${player.name} revealed ${characteristic}: ${player.characteristics[characteristic]}`);
+        // НОВОЕ: Если раскрывается возраст и есть модификатор - применяем его
+        let displayValue = player.characteristics[characteristic];
+        if (characteristic === 'age' && player.ageModifier) {
+            player.characteristics[characteristic] += player.ageModifier;
+            displayValue = player.characteristics[characteristic];
+            player.ageModifier = 0; // Сбрасываем модификатор
+            
+            io.to('game-room').emit('age-modifier-applied', {
+                playerName: player.name,
+                newAge: displayValue,
+                modifier: player.ageModifier
+            });
+        }
+        
+        console.log(`🔍 ${player.name} revealed ${characteristic}: ${displayValue}`);
         
         // Отправляем обновление всем игрокам
         io.to('game-room').emit('characteristic-revealed', {
             playerId: player.id,
             playerName: player.name,
             characteristic: characteristic,
-            value: player.characteristics[characteristic],
+            value: displayValue,
             players: gameRoom.players,
             cardsRevealedThisRound: player.cardsRevealedThisRound,
             requiredCards: requiredCards
@@ -771,8 +825,11 @@ io.on('connection', (socket) => {
         player.hasVoted = true;
         player.votedFor = data.targetId;
         
+        // НОВОЕ: Проверяем двойной голос
+        const voteWeight = (player.activeEffects && player.activeEffects.doubleVote) ? 2 : 1;
+        
         // Увеличиваем счетчик голосов у цели
-        targetPlayer.votes = (targetPlayer.votes || 0) + 1;
+        targetPlayer.votes = (targetPlayer.votes || 0) + voteWeight;
         
         // Сохраняем в результатах голосования
         if (!gameRoom.votingResults[data.targetId]) {
@@ -780,7 +837,7 @@ io.on('connection', (socket) => {
         }
         gameRoom.votingResults[data.targetId].push(socket.id);
         
-        console.log(`🗳️ ${player.name} voted for ${targetPlayer.name} (${targetPlayer.votes} votes)`);
+        console.log(`🗳️ ${player.name} voted for ${targetPlayer.name} (${voteWeight} vote${voteWeight > 1 ? 's' : ''}, total: ${targetPlayer.votes})`);
         
         // Отправляем обновление
         io.to('game-room').emit('vote-update', {
@@ -1190,24 +1247,17 @@ function showResults() {
     
     // НОВАЯ ЛОГИКА: Проверяем условия исключения
     if (gameRoom.eliminateTopVotersNextRound) {
-        // Исключаем топ-2 игроков (с наибольшим и вторым по величине количеством голосов)
-        console.log('💀 Eliminating top 2 voters from previous round');
-        
-        // Сортируем по убыванию голосов
+        // Исключаем топ-2 игроков
         const sortedByVotes = [...alivePlayers].sort((a, b) => (b.votes || 0) - (a.votes || 0));
-        
-        // Получаем уникальные значения голосов
         const uniqueVotes = [...new Set(sortedByVotes.map(p => p.votes || 0))].filter(v => v > 0);
         
         if (uniqueVotes.length >= 2) {
-            // Есть первое и второе место
             const firstPlaceVotes = uniqueVotes[0];
             const secondPlaceVotes = uniqueVotes[1];
             
             const firstPlacePlayers = sortedByVotes.filter(p => p.votes === firstPlaceVotes);
             const secondPlacePlayers = sortedByVotes.filter(p => p.votes === secondPlaceVotes);
             
-            // Добавляем всех с первым местом и столько со вторым, чтобы общее количество было 2
             eliminatedPlayers = [...firstPlacePlayers];
             const remainingSlots = 2 - eliminatedPlayers.length;
             
@@ -1215,13 +1265,14 @@ function showResults() {
                 eliminatedPlayers.push(...secondPlacePlayers.slice(0, remainingSlots));
             }
         } else if (uniqueVotes.length === 1) {
-            // Все с одинаковыми голосами - берем первых двух
             eliminatedPlayers = sortedByVotes.slice(0, 2);
         }
         
-        // Исключаем игроков
+        // Исключаем игроков и ТРИГГЕРИМ МЕСТЬ
         eliminatedPlayers.forEach(player => {
             player.isAlive = false;
+            // НОВОЕ: Проверяем карту мести
+            triggerRevengeCard(player);
         });
         
         resultMessage = `Специальное исключение: ${eliminatedPlayers.map(p => p.name).join(', ')} (двойное исключение за ничью в прошлом раунде)`;
@@ -1231,11 +1282,14 @@ function showResults() {
         // Стандартное исключение одного игрока
         eliminatedPlayers = [playersWithMaxVotes[0]];
         playersWithMaxVotes[0].isAlive = false;
+        
+        // НОВОЕ: Проверяем карту мести
+        triggerRevengeCard(playersWithMaxVotes[0]);
+        
         resultMessage = `Исключен: ${playersWithMaxVotes[0].name}`;
         
     } else if (playersWithMaxVotes.length >= 2 && playersWithMaxVotes.length <= 3 && maxVotes > 0) {
-        // НОВАЯ ЛОГИКА: Ничья между 2-3 игроками - никого не исключаем, но в следующем раунде исключим топ-2
-        console.log(`🤝 Tie between ${playersWithMaxVotes.length} players - deferring elimination to next round`);
+        // Ничья - никого не исключаем
         eliminatedPlayers = [];
         resultMessage = `Ничья между ${playersWithMaxVotes.map(p => p.name).join(', ')}. В следующем раунде будут исключены 2 игрока с наибольшими голосами!`;
         gameRoom.eliminateTopVotersNextRound = true;
@@ -1246,7 +1300,14 @@ function showResults() {
         resultMessage = 'Никто не исключен в этом раунде';
     }
     
-    // ВАЖНО: Сбрасываем все состояния голосования
+    // Сбрасываем эффекты двойного голоса после голосования
+    gameRoom.players.forEach(player => {
+        if (player.activeEffects && player.activeEffects.doubleVote) {
+            player.activeEffects.doubleVote = false;
+        }
+    });
+    
+    // Остальная логика сброса состояний
     gameRoom.players.forEach(player => {
         player.hasVoted = false;
         player.votedFor = null;
@@ -1259,9 +1320,8 @@ function showResults() {
     gameRoom.canChangeVote = {};
     gameRoom.currentTurnPlayer = null;
     gameRoom.currentJustifyingPlayer = null;
-    gameRoom.justificationQueue = []; // ВАЖНО: Очищаем очередь оправданий
+    gameRoom.justificationQueue = [];
     
-    // Очищаем таймер
     if (gameRoom.timer) {
         clearInterval(gameRoom.timer);
         gameRoom.timer = null;
@@ -1275,7 +1335,6 @@ function showResults() {
         willEliminateTopVotersNextRound: gameRoom.eliminateTopVotersNextRound
     });
     
-    // Через 5 секунд переходим к следующему раунду
     setTimeout(() => {
         nextRound();
     }, 5000);
@@ -1334,7 +1393,7 @@ function resetGame() {
             player.cardsRevealedThisRound = 0;
             player.revealedCharacteristics = [];
             player.characteristics = null;
-        
+            player.actionCards = [];
         });
         
         gameRoom.gameState = 'lobby';
@@ -1470,6 +1529,12 @@ function generateCharacteristics() {
 
 function getRandomElement(array) {
     return array[Math.floor(Math.random() * array.length)];
+}
+
+function getRandomActionCard() {
+    const availableCards = actionCards.filter(card => card.usesLeft > 0);
+    const randomCard = getRandomElement(availableCards);
+    return { ...randomCard }; // Возвращаем копию карты
 }
 
 // ДОБАВЛЯЕМ функцию startGameTimer

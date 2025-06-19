@@ -1005,6 +1005,7 @@ function updatePlayersGrid() {
     console.log('✅ Players grid updated:', gameState.players.length, 'players');
 }
 
+// ОБНОВЛЯЕМ функцию создания карточки игрока - добавляем возраст
 function createPlayerCard(player) {
     const card = document.createElement('div');
     const isCurrentPlayer = player.id === gameState.playerId;
@@ -1016,7 +1017,8 @@ function createPlayerCard(player) {
     
     card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''} ${isJustifying ? 'justifying' : ''} ${hasDoubleVote ? 'double-vote' : ''}`;
     
-    const characteristicOrder = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
+    // ОБНОВЛЯЕМ порядок характеристик - добавляем возраст
+    const characteristicOrder = ['profession', 'age', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
     
     // Показываем подсказки только для текущего игрока
     let turnInfo = '';
@@ -1077,6 +1079,22 @@ function createPlayerCard(player) {
         }
     }
 
+    // ИСПРАВЛЕНО: Формируем индикатор карты действия БЕЗ СОДЕРЖИМОГО
+    let actionCardIndicator = '';
+    if (player.actionCards && player.actionCards.length > 0) {
+        const actionCard = player.actionCards[0];
+        const canUse = actionCard.usesLeft > 0;
+        const isOwner = isCurrentPlayer;
+        
+        const indicatorClass = `action-card-indicator ${!canUse ? 'used' : ''} ${!isOwner ? 'not-owner' : ''}`;
+        const clickHandler = isOwner && canUse ? `onclick="showActionCard('${actionCard.id}')"` : '';
+        
+        // УБИРАЕМ ИКОНКУ - просто пустой кружок
+        actionCardIndicator = `
+            <div class="${indicatorClass}" ${clickHandler} title="${actionCard.name}">
+            </div>
+        `;
+    }
     
     card.innerHTML = `
         <div class="player-header">
@@ -1126,11 +1144,19 @@ function createPlayerCard(player) {
                     }
                 }
                 
+                // НОВОЕ: Отображаем модификатор возраста
+                let displayValue = player.characteristics[key];
+                if (key === 'age' && !isRevealed && player.ageModifier && isOwnCard) {
+                    displayValue = `${player.characteristics[key]} (+${player.ageModifier})`;
+                } else if (key === 'age' && !isRevealed && player.ageModifier && !isOwnCard) {
+                    displayValue = `??? (+${player.ageModifier})`;
+                }
+                
                 return `<div class="characteristic ${isRevealed ? 'revealed' : (isOwnCard ? 'own-hidden' : 'hidden')} ${canReveal ? 'clickable' : ''}" 
                     ${canReveal ? `onclick="confirmRevealCharacteristic('${key}')"` : ''}>
                     <span class="characteristic-name">${translateCharacteristic(key)}:</span>
                     <span class="characteristic-value ${isOwnCard && !isRevealed ? 'own-characteristic' : ''}">
-                        ${isRevealed ? player.characteristics[key] : (isOwnCard ? player.characteristics[key] : '???')}
+                        ${isRevealed ? player.characteristics[key] : (isOwnCard ? displayValue : '???')}
                     </span>
                 </div>`;}
             ).join('')}
@@ -1146,18 +1172,146 @@ function createPlayerCard(player) {
     return card;
 }
 
+// ОБНОВЛЯЕМ функцию перевода характеристик
+function translateCharacteristic(key) {
+    const translations = {
+        'profession': 'Профессия',
+        'age': 'Возраст',
+        'health': 'Здоровье', 
+        'hobby': 'Хобби',
+        'phobia': 'Фобия',
+        'baggage': 'Багаж',
+        'fact1': 'Факт 1',
+        'fact2': 'Факт 2'
+    };
+    return translations[key] || key;
+}
 
-// НОВАЯ ФУНКЦИЯ: Получаем список игроков, проголосовавших за конкретного игрока
-function getVotersForPlayer(playerId) {
-    if (!gameState.votingResults || !gameState.votingResults[playerId]) {
-        return [];
+// НОВАЯ ФУНКЦИЯ: Обработка карты доктора
+function useDoctorCard() {
+    const me = gameState.players.find(p => p.id === gameState.playerId);
+    if (!me) return;
+    
+    const alivePlayers = gameState.players.filter(p => p.isAlive);
+    
+    // Создаем выбор действия
+    const action = prompt(
+        "Выберите действие:\n" +
+        "1 - Вылечить себя (ваше здоровье должно быть открыто)\n" +
+        "2 - Ухудшить здоровье другого игрока\n" +
+        "Введите номер:"
+    );
+    
+    if (action === '1') {
+        // Лечение себя
+        socket.emit('use-action-card', {
+            cardId: 3,
+            actionType: 'heal_self',
+            targetId: me.id
+        });
+    } else if (action === '2') {
+        // Ухудшение здоровья другого
+        const otherPlayers = alivePlayers.filter(p => p.id !== me.id);
+        const targetName = prompt(
+            "Выберите цель (здоровье должно быть открыто):\n" +
+            otherPlayers.map((p, i) => `${i + 1}. ${p.name}`).join('\n') +
+            "\nВведите номер:"
+        );
+        
+        const targetIndex = parseInt(targetName) - 1;
+        if (targetIndex >= 0 && targetIndex < otherPlayers.length) {
+            socket.emit('use-action-card', {
+                cardId: 3,
+                actionType: 'harm_other',
+                targetId: otherPlayers[targetIndex].id
+            });
+        } else {
+            showNotification('Ошибка', 'Неверно выбрана цель');
+        }
+    } else {
+        showNotification('Ошибка', 'Действие отменено');
+    }
+}
+
+// ОБНОВЛЯЕМ функцию использования карт действий
+function useActionCard() {
+    if (!window.currentActionCard) return;
+    
+    const card = window.currentActionCard;
+    
+    if (card.id === 3) {
+        // Особая обработка для карты доктора
+        closeActionCardModal();
+        useDoctorCard();
+        return;
     }
     
-    return gameState.votingResults[playerId].map(voterId => {
-        const voter = gameState.players.find(p => p.id === voterId);
-        return voter ? voter.name : 'Неизвестный';
-    });
+    let targetId = null;
+    
+    // Для карты двойного голоса цель не нужна
+    if (card.id === 1) {
+        console.log('✨ Using double vote card');
+        socket.emit('use-action-card', { 
+            cardId: card.id
+        });
+        closeActionCardModal();
+        return;
+    }
+    
+    // Для мести (не должна быть доступна для ручного использования)
+    if (card.id === 2) {
+        showNotification('Ошибка', 'Эта карта активируется автоматически');
+        return;
+    }
+    
+    closeActionCardModal();
 }
+
+// ДОБАВЛЯЕМ новые обработчики событий
+socket.on('revenge-card-triggered', function(data) {
+    console.log('⚰️ Revenge card triggered:', data);
+    
+    const targetName = prompt(
+        `Ваша карта "${data.cardName}" активирована!\n` +
+        "Выберите цель для мести (добавить 20 лет):\n" +
+        data.targets.map((t, i) => `${i + 1}. ${t.name}`).join('\n') +
+        "\nВведите номер:"
+    );
+    
+    const targetIndex = parseInt(targetName) - 1;
+    if (targetIndex >= 0 && targetIndex < data.targets.length) {
+        socket.emit('revenge-target-selected', {
+            targetId: data.targets[targetIndex].id
+        });
+    } else {
+        showNotification('Ошибка', 'Цель не выбрана - месть не сработала');
+    }
+});
+
+socket.on('revenge-applied', function(data) {
+    console.log('⚰️ Revenge applied:', data);
+    gameState.players = data.players;
+    updatePlayersGrid();
+    showNotification('Месть!', `${data.targetName}: ${data.effect}`);
+});
+
+socket.on('doctor-applied', function(data) {
+    console.log('🏥 Doctor applied:', data);
+    gameState.players = data.players;
+    updatePlayersGrid();
+    showNotification('Доктор', `${data.playerName} → ${data.targetName}: ${data.effect}`);
+});
+
+socket.on('age-modifier-applied', function(data) {
+    console.log('🎂 Age modifier applied:', data);
+    showNotification('Возраст изменен', `${data.playerName}: возраст стал ${data.newAge} лет`);
+});
+
+socket.on('players-updated', function(data) {
+    console.log('👥 Players updated:', data);
+    gameState.players = data.players;
+    updatePlayersGrid();
+});
 
 // Добавляем функции для модальных окон (если их нет)
 function confirmRevealCharacteristic(characteristic) {
@@ -1244,6 +1398,7 @@ function surrender() {
 function translateCharacteristic(key) {
     const translations = {
         'profession': 'Профессия',
+        'age': 'Возраст',
         'health': 'Здоровье', 
         'hobby': 'Хобби',
         'phobia': 'Фобия',
@@ -1536,6 +1691,7 @@ function voteForPlayer(playerId) {
 function translateCharacteristic(key) {
     const translations = {
         'profession': 'Профессия',
+        'age': 'Возраст',
         'health': 'Здоровье', 
         'hobby': 'Хобби',
         'phobia': 'Фобия',

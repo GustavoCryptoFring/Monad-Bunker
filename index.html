@@ -170,6 +170,26 @@
             </div>
         </div>
 
+        <!-- Добавляем модальное окно для карт действий после существующих модальных окон -->
+        <div id="actionCardModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3>🎯 Карта действия</h3>
+                <div class="action-card-display">
+                    <div class="action-card-name" id="actionCardName"></div>
+                    <div class="action-card-description" id="actionCardDescription"></div>
+                    <div class="action-card-uses" id="actionCardUses"></div>
+                </div>
+                <div class="modal-actions">
+                    <button onclick="useActionCard()" class="room-btn confirm-btn" id="useActionCardBtn">
+                        ✨ Использовать
+                    </button>
+                    <button onclick="closeActionCardModal()" class="room-btn secondary">
+                        ❌ Закрыть
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="client.js"></script>
