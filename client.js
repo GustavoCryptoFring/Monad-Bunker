@@ -400,26 +400,6 @@ socket.on('start-round-vote-update', function(data) {
     updateRoundActions();
 });
 
-// Добавляем обработчики событий карт действий
-socket.on('action-card-used', function(data) {
-    console.log('✨ Action card used:', data);
-    gameState.players = data.players;
-    
-    updatePlayersGrid();
-    
-    const message = data.targetId 
-        ? `${data.playerName} использовал карту "${data.cardName}"`
-        : `${data.playerName} использовал карту "${data.cardName}"`;
-    
-    showNotification('Карта действия', message);
-});
-
-socket.on('detective-result', function(data) {
-    console.log('🔍 Detective result:', data);
-    
-    const message = `Характеристика игрока ${data.targetName}:\n${translateCharacteristic(data.characteristic)}: ${data.value}`;
-    showNotification('Результат детектива', message);
-});
 
 // === ФУНКЦИИ ОТОБРАЖЕНИЯ ЭКРАНОВ ===
 
@@ -1011,8 +991,6 @@ function createPlayerCard(player) {
     const isCurrentTurn = player.id === gameState.currentTurnPlayer;
     const isJustifying = player.id === gameState.currentJustifyingPlayer;
     
-    // Проверяем активные эффекты
-    const hasDoubleVote = player.activeEffects && player.activeEffects.doubleVote;
     
     card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''} ${isJustifying ? 'justifying' : ''} ${hasDoubleVote ? 'double-vote' : ''}`;
     
@@ -1075,23 +1053,6 @@ function createPlayerCard(player) {
                 </div>
             `;
         }
-    }
-
-    // ИСПРАВЛЕНО: Формируем индикатор карты действия БЕЗ СОДЕРЖИМОГО
-    let actionCardIndicator = '';
-    if (player.actionCards && player.actionCards.length > 0) {
-        const actionCard = player.actionCards[0];
-        const canUse = actionCard.usesLeft > 0;
-        const isOwner = isCurrentPlayer;
-        
-        const indicatorClass = `action-card-indicator ${!canUse ? 'used' : ''} ${!isOwner ? 'not-owner' : ''}`;
-        const clickHandler = isOwner && canUse ? `onclick="showActionCard('${actionCard.id}')"` : '';
-        
-        // УБИРАЕМ ИКОНКУ - просто пустой кружок
-        actionCardIndicator = `
-            <div class="${indicatorClass}" ${clickHandler} title="${actionCard.name}">
-            </div>
-        `;
     }
     
     card.innerHTML = `
@@ -1160,37 +1121,6 @@ function createPlayerCard(player) {
     `;
     
     return card;
-}
-
-// НОВЫЕ ФУНКЦИИ ДЛЯ КАРТ ДЕЙСТВИЙ
-function showActionCard(cardId) {
-    const me = gameState.players.find(p => p.id === gameState.playerId);
-    if (!me || !me.actionCards) return;
-    
-    const actionCard = me.actionCards.find(card => card.id === parseInt(cardId));
-    if (!actionCard) return;
-    
-    // В МОДАЛЬНОМ ОКНЕ ПОКАЗЫВАЕМ ИКОНКУ
-    document.getElementById('actionCardName').textContent = `${actionCard.icon || '✨'} ${actionCard.name}`;
-    document.getElementById('actionCardDescription').textContent = actionCard.description;
-    
-    const usesElement = document.getElementById('actionCardUses');
-    const useButton = document.getElementById('useActionCardBtn');
-    
-    if (actionCard.usesLeft > 0) {
-        usesElement.textContent = `Использований осталось: ${actionCard.usesLeft}`;
-        usesElement.className = 'action-card-uses';
-        useButton.disabled = false;
-        useButton.style.display = 'inline-block';
-    } else {
-        usesElement.textContent = 'Карта уже использована';
-        usesElement.className = 'action-card-uses no-uses';
-        useButton.disabled = true;
-        useButton.style.display = 'none';
-    }
-    
-    window.currentActionCard = actionCard;
-    document.getElementById('actionCardModal').style.display = 'flex';
 }
 
 function closeActionCardModal() {
