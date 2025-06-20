@@ -9,7 +9,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-// === МАССИВЫ КАРТ ДЕЙСТВИЙ И ХАРАКТЕРИСТИКИ ==
+// === ХАРАКТЕРИСТИКИ === (УБИРАЕМ комментарий про карты действий)
 
 const professions = [
     'Врач', 'Учитель', 'Инженер', 'Повар', 'Полицейский', 'Пожарный',
@@ -299,9 +299,8 @@ const gameRoom = {
     justificationPhase: 1,
     canChangeVote: {},
     startRoundVotes: [],
-    activeEffects: {},
-    pendingEliminationNextRound: false, // НОВОЕ: флаг отложенного исключения
-    eliminateTopVotersNextRound: false   // НОВОЕ: флаг исключения топ игроков
+    pendingEliminationNextRound: false,
+    eliminateTopVotersNextRound: false
 };
 
 // Функция получения необходимого количества карт для раунда
@@ -394,7 +393,7 @@ io.on('connection', (socket) => {
             id: socket.id,
             name: playerName,
             isAlive: true,
-            isHost: gameRoom.players.length === 0, // Первый игрок - хост
+            isHost: gameRoom.players.length === 0,
             votes: 0,
             hasVoted: false,
             votedFor: null,
@@ -1330,7 +1329,7 @@ function resetGame() {
             player.votedFor = null;
             player.cardsRevealedThisRound = 0;
             player.revealedCharacteristics = [];
-            player.characteristics = null
+            player.characteristics = null;
         });
         
         gameRoom.gameState = 'lobby';
@@ -1348,9 +1347,8 @@ function resetGame() {
         gameRoom.currentJustifyingPlayer = null;
         gameRoom.canChangeVote = {};
         gameRoom.startRoundVotes = [];
-        gameRoom.activeEffects = {};
-        gameRoom.pendingEliminationNextRound = false; // НОВОЕ: сброс
-        gameRoom.eliminateTopVotersNextRound = false;  // НОВОЕ: сброс
+        gameRoom.pendingEliminationNextRound = false;
+        gameRoom.eliminateTopVotersNextRound = false;
         
         io.to('game-room').emit('game-reset', {
             players: gameRoom.players,

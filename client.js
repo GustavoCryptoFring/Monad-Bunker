@@ -991,8 +991,11 @@ function createPlayerCard(player) {
     const isCurrentTurn = player.id === gameState.currentTurnPlayer;
     const isJustifying = player.id === gameState.currentJustifyingPlayer;
     
+    // ИСПРАВЛЯЕМ: Удаляем неопределенные переменные
+    // const hasDoubleVote = player.activeEffects && player.activeEffects.doubleVote; // УДАЛЯЕМ
+    // let actionCardIndicator = ''; // УДАЛЯЕМ
     
-    card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''} ${isJustifying ? 'justifying' : ''} ${hasDoubleVote ? 'double-vote' : ''}`;
+    card.className = `player-card ${player.isAlive ? '' : 'eliminated'} ${isCurrentPlayer ? 'current-player' : ''} ${isCurrentTurn ? 'current-turn' : ''} ${isJustifying ? 'justifying' : ''}`;
     
     const characteristicOrder = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
     
@@ -1025,7 +1028,6 @@ function createPlayerCard(player) {
                 <div class="voting-info">
                     <div class="votes-count">Голосов: ${votesForPlayer}</div>
                     ${votersForThisPlayer.length > 0 ? `
-
                         <div class="voters-list">
                             Проголосовали: ${votersForThisPlayer.join(', ')}
                         </div>
@@ -1062,8 +1064,6 @@ function createPlayerCard(player) {
                     <div class="player-avatar ${player.isAlive ? '' : 'eliminated-avatar'}">
                         ${player.name.charAt(0).toUpperCase()}
                     </div>
-                    ${actionCardIndicator}
-                    ${hasDoubleVote ? '<div class="double-vote-indicator">🗳️×2</div>' : ''}
                 </div>
                 <div>
                     <div class="player-name ${player.isAlive ? '' : 'eliminated-name'}">
@@ -1109,8 +1109,8 @@ function createPlayerCard(player) {
                     <span class="characteristic-value ${isOwnCard && !isRevealed ? 'own-characteristic' : ''}">
                         ${isRevealed ? player.characteristics[key] : (isOwnCard ? player.characteristics[key] : '???')}
                     </span>
-                </div>`;}
-            ).join('')}
+                </div>`;
+            }).join('')}
         </div>
         
         <div class="player-actions">
