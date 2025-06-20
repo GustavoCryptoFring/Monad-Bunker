@@ -10,21 +10,34 @@
     <div class="game-container">
         <header class="game-header">
             <h1>🎭 БУНКЕР</h1>
-            <p>Общая игра для всех участников</p>
+            <p>Многопользовательская игра на выживание</p>
             <div class="server-info">
                 <span id="playerCount">0</span> игроков онлайн
             </div>
         </header>
 
-        <!-- Экран входа -->
-        <div class="screen" id="loginScreen">
+        <!-- Главный экран выбора -->
+        <div class="screen" id="mainScreen">
             <div class="login-form">
                 <h2>Добро пожаловать в Бункер!</h2>
-                <p>Введите ваше имя для присоединения к общей игре:</p>
+                <p>Введите ваше имя:</p>
                 <input type="text" id="playerNameInput" placeholder="Ваше имя" maxlength="20" autofocus>
-                <button type="button" id="joinGameBtn" class="room-btn">
-                    Присоединиться к игре
-                </button>
+                
+                <div class="game-actions">
+                    <button type="button" id="createGameBtn" class="room-btn primary">
+                        🆕 Создать новую игру
+                    </button>
+                    
+                    <div class="join-game-section">
+                        <p>Или присоединитесь к существующей игре:</p>
+                        <div class="join-room">
+                            <input type="text" id="roomCodeInput" placeholder="Код комнаты (6 символов)" maxlength="6" style="text-transform: uppercase;">
+                            <button type="button" id="joinGameBtn" class="room-btn">
+                                🚪 Присоединиться
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -33,7 +46,20 @@
             <div class="room-setup">
                 <h2>Лобби игры</h2>
                 
-                <!-- ДОБАВИЛИ селектор количества игроков -->
+                <div class="room-info">
+                    <div class="room-code-display">
+                        <span>Код комнаты: </span>
+                        <span class="room-code" id="roomCodeDisplay">------</span>
+                        <button class="copy-btn" id="copyRoomCodeBtn" onclick="copyRoomCode()">📋 Копировать</button>
+                    </div>
+                    <div class="room-link">
+                        <span>Ссылка: </span>
+                        <span id="roomLinkDisplay">--</span>
+                        <button class="copy-btn" id="copyRoomLinkBtn" onclick="copyRoomLink()">📋 Копировать</button>
+                    </div>
+                </div>
+                
+                <!-- Селектор количества игроков -->
                 <div class="room-settings" id="maxPlayersSelector" style="display: none;">
                     <label>Максимум игроков: 
                         <select id="maxPlayersSelect" onchange="changeMaxPlayers()">
@@ -45,20 +71,19 @@
                 </div>
                 
                 <div class="players-waiting">
-                    <h3>Игроки в лобби (<span id="currentPlayersCount">0</span>/<span id="maxPlayersCount">12</span>):</h3>
+                    <h3>Игроки в лобби (<span id="currentPlayersCount">0</span>/<span id="maxPlayersCount">8</span>):</h3>
                     <ul id="playersList"></ul>
                 </div>
 
-                <!-- НОВАЯ СТРУКТУРА: кнопка старта и настройки в одной строке -->
                 <div class="lobby-actions">
                     <button id="startGameBtn" class="start-game-btn" onclick="startGame()" style="display: none;" disabled>
                         Начать игру (минимум 2 игрока)
                     </button>
                     
-                    <!-- УБИРАЕМ кнопку настроек уведомлений -->
+                    <button id="leaveRoomBtn" class="room-btn secondary" onclick="leaveRoom()">
+                        🚪 Покинуть комнату
+                    </button>
                 </div>
-                
-                <!-- УБИРАЕМ всю панель настроек уведомлений -->
                 
                 <div class="game-info" id="waitingInfo">
                     <p>⏳ Ожидание хоста для начала игры...</p>
@@ -66,19 +91,16 @@
             </div>
         </div>
 
-        <!-- Игровой экран -->
+        <!-- Игровой экран (остается без изменений) -->
         <div class="screen" id="gameScreen" style="display: none;">
             <div class="game-info">
-                <!-- НОВАЯ СТРУКТУРА: История слева -->
                 <div class="story-container">
                     <div class="story-block">
                         <span class="story-title">📖 История</span>
-                        <div class="story-text" id="storyText">
-                        </div>
+                        <div class="story-text" id="storyText"></div>
                     </div>
                 </div>
                 
-                <!-- Информация о раунде в центре -->
                 <div class="round-info">
                     <h2>РАУНД <span id="currentRound">1</span></h2>
                     <div id="round-message-block" class="round-message-block"></div>
@@ -103,7 +125,6 @@
                     </div>
                 </div>
                 
-                <!-- Таймер справа -->
                 <div class="timer-info">
                     <div class="phase-display" id="phaseDisplay">Подготовка</div>
                     <div class="timer-display" id="timerDisplay">0:00</div>
@@ -113,13 +134,9 @@
             <div class="players-grid" id="playersGrid">
                 <!-- Карточки игроков -->
             </div>
-
-            <div class="game-actions" id="gameActions">
-                <!-- Убираем отсюда все кнопки - они теперь в центре -->
-            </div>
         </div>
 
-        <!-- Экран результатов -->
+        <!-- Экран результатов (остается без изменений) -->
         <div class="screen" id="resultsScreen" style="display: none;">
             <div class="room-setup">
                 <h2>🏆 Игра завершена!</h2>
@@ -133,7 +150,7 @@
             </div>
         </div>
 
-        <!-- Модальные окна -->
+        <!-- Модальные окна (остаются без изменений) -->
         <div id="characteristicModal" class="modal" style="display: none;">
             <div class="modal-content">
                 <h3>Выберите характеристику для раскрытия</h3>
@@ -144,7 +161,6 @@
             </div>
         </div>
 
-        <!-- ОБНОВЛЕННОЕ модальное окно подтверждения раскрытия -->
         <div id="confirmRevealModal" class="modal" style="display: none;">
             <div class="modal-content">
                 <h3>Раскрытие характеристики</h3>
@@ -152,9 +168,7 @@
                 <div class="reveal-confirmation">
                     <strong id="confirmCharacteristicName"></strong>: <span id="confirmCharacteristicValue"></span>
                 </div>
-                <div class="reveal-progress" id="revealProgress">
-                    <!-- Информация о прогрессе раскрытия -->
-                </div>
+                <div class="reveal-progress" id="revealProgress"></div>
                 <div class="modal-actions">
                     <button onclick="confirmReveal()" class="room-btn confirm-btn">✅ Раскрыть</button>
                     <button onclick="cancelReveal()" class="room-btn secondary">❌ Отмена</button>
@@ -170,7 +184,6 @@
             </div>
         </div>
 
-        <!-- Добавляем модальное окно для карт действий после существующих модальных окон -->
         <div id="actionCardModal" class="modal" style="display: none;">
             <div class="modal-content">
                 <h3>🎯 Карта действия</h3>

@@ -3,13 +3,553 @@ const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
 
-console.log('🚀 Starting Single Room Bunker Game Server...');
+console.log('🚀 Starting Multi-Room Bunker Game Server...');
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-// === МАССИВЫ КАРТ ДЕЙСТВИЙ И ХАРАКТЕРИСТИКИ ===
+// === СИСТЕМА КОМНАТ ===
+
+const gameRooms = new Map(); // Хранилище комнат
+
+class GameRoom {
+    constructor(roomCode, hostId, hostName, maxPlayers = 8) {
+        this.roomCode = roomCode;
+        this.players = [];
+        this.gameState = 'lobby';
+        this.maxPlayers = maxPlayers;
+        this.gamePhase = 'waiting';
+        this.currentRound = 1;
+        this.maxRounds = 3;
+        this.timer = null;
+        this.timeLeft = 0;
+        this.votingResults = {};
+        this.revealedThisRound = 0;
+        this.currentTurnPlayer = null;
+        this.playersWhoRevealed = [];
+        this.totalVotes = 0;
+        this.skipDiscussionVotes = [];
+        this.justificationQueue = [];
+        this.currentJustifyingPlayer = null;
+        this.justificationPhase = 1;
+        this.canChangeVote = {};
+        this.startRoundVotes = [];
+        this.activeEffects = {};
+        this.pendingEliminationNextRound = false;
+        this.eliminateTopVotersNextRound = false;
+        this.createdAt = new Date();
+        
+        // Добавляем хоста как первого игрока
+        this.addPlayer(hostId, hostName, true);
+    }
+    
+    addPlayer(socketId, playerName, isHost = false) {
+        const player = {
+            id: socketId,
+            name: playerName,
+            isAlive: true,
+            isHost: isHost,
+            votes: 0,
+            hasVoted: false,
+            votedFor: null,
+            hasRevealed: false,
+            cardsRevealedThisRound: 0,
+            revealedCharacteristics: [],
+            characteristics: null,
+            actionCards: []
+        };
+        
+        this.players.push(player);
+        return player;
+    }
+    
+    removePlayer(socketId) {
+        const playerIndex = this.players.findIndex(p => p.id === socketId);
+        if (playerIndex !== -1) {
+            const removedPlayer = this.players.splice(playerIndex, 1)[0];
+            
+            // Если хост ушел, назначаем нового хоста
+            if (removedPlayer.isHost && this.players.length > 0) {
+                this.players[0].isHost = true;
+            }
+            
+            return removedPlayer;
+        }
+        return null;
+    }
+    
+    getPlayer(socketId) {
+        return this.players.find(p => p.id === socketId);
+    }
+    
+    isEmpty() {
+        return this.players.length === 0;
+    }
+    
+    isFull() {
+        return this.players.length >= this.maxPlayers;
+    }
+    
+    // Очистка ресурсов комнаты
+    cleanup() {
+        if (this.timer) {
+            clearInterval(this.timer);
+            this.timer = null;
+        }
+    }
+}
+
+// Функция генерации уникального кода комнаты
+function generateRoomCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    // Проверяем уникальность
+    if (gameRooms.has(result)) {
+        return generateRoomCode(); // Рекурсивно генерируем новый код
+    }
+    
+    return result;
+}
+
+// Функция получения URL для комнаты
+function getRoomLink(roomCode) {
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+    return `${baseUrl}/${roomCode}`;
+}
+
+// Статические файлы
+app.use(express.static(__dirname));
+
+// Главная страница и страницы комнат
+app.get('/', (req, res) => {
+    console.log('📄 Serving main page');
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/:roomCode', (req, res) => {
+    const roomCode = req.params.roomCode.toUpperCase();
+    console.log('📄 Serving room page for:', roomCode);
+    
+    // Проверяем, существует ли комната
+    if (roomCode.length === 6 && gameRooms.has(roomCode)) {
+        res.sendFile(path.join(__dirname, 'index.html'));
+    } else {
+        // Если комната не существует, перенаправляем на главную
+        res.redirect('/');
+    }
+});
+
+// API для здоровья сервера
+app.get('/api/health', (req, res) => {
+    try {
+        const totalPlayers = Array.from(gameRooms.values()).reduce((sum, room) => sum + room.players.length, 0);
+        
+        res.json({ 
+            status: 'OK', 
+            timestamp: new Date().toISOString(),
+            rooms: gameRooms.size,
+            totalPlayers: totalPlayers,
+            connections: io.engine ? io.engine.clientsCount : 0,
+            uptime: process.uptime(),
+            memory: process.memoryUsage()
+        });
+    } catch (error) {
+        console.error('Health check error:', error);
+        res.status(500).json({ 
+            status: 'ERROR', 
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// === ОБРАБОТЧИКИ ПОДКЛЮЧЕНИЙ ===
+
+io.on('connection', (socket) => {
+    console.log('🔗 New connection:', socket.id);
+    
+    let currentRoom = null;
+    
+    // Создание новой комнаты
+    socket.on('create-room', (data) => {
+        console.log('🆕 Creating room for:', data.playerName, 'Socket:', socket.id);
+        
+        const playerName = data.playerName?.trim();
+        
+        if (!playerName || playerName.length < 2 || playerName.length > 20) {
+            socket.emit('error', 'Неверное имя игрока');
+            return;
+        }
+        
+        try {
+            const roomCode = generateRoomCode();
+            const room = new GameRoom(roomCode, socket.id, playerName);
+            
+            gameRooms.set(roomCode, room);
+            currentRoom = room;
+            
+            socket.join(roomCode);
+            
+            console.log('✅ Room created:', roomCode, 'Host:', playerName);
+            
+            socket.emit('room-created', {
+                roomCode: roomCode,
+                roomLink: getRoomLink(roomCode),
+                playerId: socket.id,
+                playerName: playerName,
+                isHost: true,
+                maxPlayers: room.maxPlayers,
+                players: room.players
+            });
+            
+        } catch (error) {
+            console.error('❌ Error creating room:', error);
+            socket.emit('error', 'Ошибка создания комнаты');
+        }
+    });
+    
+    // Присоединение к существующей комнате
+    socket.on('join-room', (data) => {
+        console.log('🚪 Joining room:', data.roomCode, 'Player:', data.playerName, 'Socket:', socket.id);
+        
+        const playerName = data.playerName?.trim();
+        const roomCode = data.roomCode?.trim().toUpperCase();
+        
+        if (!playerName || playerName.length < 2 || playerName.length > 20) {
+            socket.emit('error', 'Неверное имя игрока');
+            return;
+        }
+        
+        if (!roomCode || roomCode.length !== 6) {
+            socket.emit('error', 'Неверный код комнаты');
+            return;
+        }
+        
+        const room = gameRooms.get(roomCode);
+        if (!room) {
+            socket.emit('error', 'Комната не найдена');
+            return;
+        }
+        
+        if (room.isFull()) {
+            socket.emit('error', 'Комната заполнена');
+            return;
+        }
+        
+        // Проверяем, нет ли игрока с таким именем
+        const existingPlayer = room.players.find(p => 
+            p.name.toLowerCase() === playerName.toLowerCase() && 
+            p.id !== socket.id
+        );
+        
+        if (existingPlayer) {
+            socket.emit('error', 'Игрок с таким именем уже есть в комнате');
+            return;
+        }
+        
+        try {
+            // Удаляем игрока из предыдущей комнаты если он там был
+            if (currentRoom && currentRoom !== room) {
+                currentRoom.removePlayer(socket.id);
+                socket.leave(currentRoom.roomCode);
+            }
+            
+            room.addPlayer(socket.id, playerName);
+            currentRoom = room;
+            
+            socket.join(roomCode);
+            
+            console.log('✅ Player joined room:', roomCode, 'Player:', playerName);
+            
+            socket.emit('room-joined', {
+                roomCode: roomCode,
+                roomLink: getRoomLink(roomCode),
+                playerId: socket.id,
+                playerName: playerName,
+                isHost: false,
+                maxPlayers: room.maxPlayers,
+                players: room.players
+            });
+            
+            // Уведомляем всех в комнате о новом игроке
+            socket.to(roomCode).emit('player-joined', {
+                players: room.players,
+                maxPlayers: room.maxPlayers,
+                gameState: room.gameState
+            });
+            
+        } catch (error) {
+            console.error('❌ Error joining room:', error);
+            socket.emit('error', 'Ошибка присоединения к комнате');
+        }
+    });
+    
+    // Покидание комнаты
+    socket.on('leave-room', () => {
+        console.log('🚪 Player leaving room:', socket.id);
+        
+        if (currentRoom) {
+            const removedPlayer = currentRoom.removePlayer(socket.id);
+            if (removedPlayer) {
+                console.log('👋 Player left room:', currentRoom.roomCode, 'Player:', removedPlayer.name);
+                
+                socket.leave(currentRoom.roomCode);
+                
+                // Уведомляем остальных игроков
+                const newHost = currentRoom.players.find(p => p.isHost);
+                socket.to(currentRoom.roomCode).emit('player-left', {
+                    players: currentRoom.players,
+                    gameState: currentRoom.gameState,
+                    newHost: newHost ? newHost.id : null
+                });
+                
+                // Если комната пуста, удаляем её
+                if (currentRoom.isEmpty()) {
+                    console.log('🗑️ Removing empty room:', currentRoom.roomCode);
+                    currentRoom.cleanup();
+                    gameRooms.delete(currentRoom.roomCode);
+                } else if (currentRoom.gameState === 'playing' && currentRoom.players.length < 2) {
+                    // Если игра идет и игроков меньше 2, сбрасываем игру
+                    resetGameInRoom(currentRoom);
+                }
+                
+                currentRoom = null;
+            }
+        }
+    });
+    
+    // Отключение игрока
+    socket.on('disconnect', () => {
+        console.log('❌ Player disconnected:', socket.id);
+        
+        if (currentRoom) {
+            const removedPlayer = currentRoom.removePlayer(socket.id);
+            if (removedPlayer) {
+                console.log('👋 Player disconnected from room:', currentRoom.roomCode, 'Player:', removedPlayer.name);
+                
+                // Уведомляем остальных игроков
+                const newHost = currentRoom.players.find(p => p.isHost);
+                socket.to(currentRoom.roomCode).emit('player-left', {
+                    players: currentRoom.players,
+                    gameState: currentRoom.gameState,
+                    newHost: newHost ? newHost.id : null
+                });
+                
+                // Если комната пуста, удаляем её
+                if (currentRoom.isEmpty()) {
+                    console.log('🗑️ Removing empty room:', currentRoom.roomCode);
+                    currentRoom.cleanup();
+                    gameRooms.delete(currentRoom.roomCode);
+                } else if (currentRoom.gameState === 'playing' && currentRoom.players.length < 2) {
+                    // Если игра идет и игроков меньше 2, сбрасываем игру
+                    resetGameInRoom(currentRoom);
+                }
+            }
+        }
+    });
+    
+    // === ИГРОВЫЕ ОБРАБОТЧИКИ ===
+    
+    // Изменение максимального количества игроков
+    socket.on('change-max-players', (data) => {
+        if (!currentRoom) {
+            socket.emit('error', 'Вы не в комнате!');
+            return;
+        }
+        
+        const player = currentRoom.getPlayer(socket.id);
+        if (!player || !player.isHost) {
+            socket.emit('error', 'Только хост может изменять настройки!');
+            return;
+        }
+        
+        if (currentRoom.gameState !== 'lobby') {
+            socket.emit('error', 'Нельзя изменять настройки во время игры!');
+            return;
+        }
+        
+        const newMaxPlayers = parseInt(data.maxPlayers);
+        if (newMaxPlayers < 2 || newMaxPlayers > 16) {
+            socket.emit('error', 'Неверное количество игроков!');
+            return;
+        }
+        
+        if (newMaxPlayers < currentRoom.players.length) {
+            socket.emit('error', 'Нельзя установить лимит меньше текущего количества игроков!');
+            return;
+        }
+        
+        currentRoom.maxPlayers = newMaxPlayers;
+        
+        console.log('🔧 Max players changed in room:', currentRoom.roomCode, 'to:', newMaxPlayers);
+        
+        io.to(currentRoom.roomCode).emit('max-players-changed', {
+            maxPlayers: currentRoom.maxPlayers,
+            players: currentRoom.players
+        });
+    });
+    
+    // Начало игры
+    socket.on('start-game', () => {
+        console.log('🎮 Game start requested in room:', currentRoom?.roomCode, 'by:', socket.id);
+        
+        if (!currentRoom) {
+            socket.emit('error', 'Вы не в комнате!');
+            return;
+        }
+        
+        const player = currentRoom.getPlayer(socket.id);
+        if (!player || !player.isHost) {
+            socket.emit('error', 'Только хост может начать игру!');
+            return;
+        }
+        
+        if (currentRoom.players.length < 2) {
+            socket.emit('error', 'Для начала игры нужно минимум 2 игрока!');
+            return;
+        }
+        
+        if (currentRoom.gameState !== 'lobby') {
+            socket.emit('error', 'Игра уже идет!');
+            return;
+        }
+        
+        startGameInRoom(currentRoom);
+    });
+    
+    // Остальные игровые обработчики (копируем из оригинального server.js)
+    // reveal-characteristic, vote-player, start-round, и т.д.
+    
+});
+
+// === ФУНКЦИИ УПРАВЛЕНИЯ ИГРОЙ ===
+
+function startGameInRoom(room) {
+    try {
+        console.log('🚀 Starting game in room:', room.roomCode);
+        
+        // Генерируем характеристики для всех игроков
+        room.players.forEach(player => {
+            player.characteristics = generateCharacteristics();
+            player.actionCards = [getRandomActionCard()];
+            player.hasRevealed = false;
+            player.hasVoted = false;
+            player.revealedCharacteristics = [];
+            player.cardsRevealedThisRound = 0;
+        });
+        
+        room.gameState = 'playing';
+        room.gamePhase = 'preparation';
+        room.currentRound = 1;
+        room.timeLeft = 0;
+        room.playersWhoRevealed = [];
+        room.currentTurnPlayer = null;
+        
+        const randomStory = stories[Math.floor(Math.random() * stories.length)];
+        
+        console.log('🚀 Game started in room:', room.roomCode, 'Players:', room.players.length);
+        
+        io.to(room.roomCode).emit('game-started', {
+            players: room.players,
+            gameState: room.gameState,
+            gamePhase: room.gamePhase,
+            currentRound: room.currentRound,
+            timeLeft: room.timeLeft,
+            story: randomStory
+        });
+        
+    } catch (error) {
+        console.error('❌ Error starting game in room:', room.roomCode, error);
+    }
+}
+
+function resetGameInRoom(room) {
+    try {
+        console.log('🔄 Resetting game in room:', room.roomCode);
+        
+        if (room.timer) {
+            clearInterval(room.timer);
+            room.timer = null;
+        }
+        
+        // Сбрасываем состояние игроков
+        room.players.forEach((player) => {
+            player.isAlive = true;
+            player.votes = 0;
+            player.hasRevealed = false;
+            player.hasVoted = false;
+            player.votedFor = null;
+            player.cardsRevealedThisRound = 0;
+            player.revealedCharacteristics = [];
+            player.characteristics = null;
+            player.actionCards = [];
+        });
+        
+        // Сбрасываем состояние комнаты
+        room.gameState = 'lobby';
+        room.gamePhase = 'waiting';
+        room.currentRound = 1;
+        room.timer = null;
+        room.timeLeft = 0;
+        room.votingResults = {};
+        room.revealedThisRound = 0;
+        room.currentTurnPlayer = null;
+        room.playersWhoRevealed = [];
+        room.totalVotes = 0;
+        room.skipDiscussionVotes = [];
+        room.justificationQueue = [];
+        room.currentJustifyingPlayer = null;
+        room.canChangeVote = {};
+        room.startRoundVotes = [];
+        room.activeEffects = {};
+        room.pendingEliminationNextRound = false;
+        room.eliminateTopVotersNextRound = false;
+        
+        io.to(room.roomCode).emit('game-reset', {
+            players: room.players,
+            gameState: room.gameState
+        });
+        
+    } catch (error) {
+        console.error('❌ Error resetting game in room:', room.roomCode, error);
+    }
+}
+
+// Периодическая очистка пустых комнат
+setInterval(() => {
+    const emptyRooms = [];
+    for (const [roomCode, room] of gameRooms) {
+        if (room.isEmpty()) {
+            emptyRooms.push(roomCode);
+        }
+    }
+    
+    emptyRooms.forEach(roomCode => {
+        const room = gameRooms.get(roomCode);
+        if (room) {
+            room.cleanup();
+            gameRooms.delete(roomCode);
+            console.log('🗑️ Cleaned up empty room:', roomCode);
+        }
+    });
+    
+    if (emptyRooms.length > 0) {
+        console.log('🧹 Cleaned up', emptyRooms.length, 'empty rooms');
+    }
+}, 60000); // Каждую минуту
+
+// Логирование статистики каждые 5 минут
+setInterval(() => {
+    const totalPlayers = Array.from(gameRooms.values()).reduce((sum, room) => sum + room.players.length, 0);
+    console.log('📊 Server stats: Rooms:', gameRooms.size, 'Total players:', totalPlayers);
+}, 300000);
+
+// === ИГРОВЫЕ КОНСТАНТЫ И ФУНКЦИИ (копируем из оригинального server.js) ===
 
 const actionCards = [
     { 
@@ -163,11 +703,13 @@ app.get('/', (req, res) => {
 // API для здоровья сервера
 app.get('/api/health', (req, res) => {
     try {
+        const totalPlayers = Array.from(gameRooms.values()).reduce((sum, room) => sum + room.players.length, 0);
+        
         res.json({ 
             status: 'OK', 
             timestamp: new Date().toISOString(),
-            players: gameRoom ? gameRoom.players.length : 0,
-            gameState: gameRoom ? gameRoom.gameState : 'unknown',
+            rooms: gameRooms.size,
+            totalPlayers: totalPlayers,
             connections: io.engine ? io.engine.clientsCount : 0,
             uptime: process.uptime(),
             memory: process.memoryUsage()
@@ -180,152 +722,6 @@ app.get('/api/health', (req, res) => {
             timestamp: new Date().toISOString()
         });
     }
-});
-
-// ИСПРАВЛЕНО: Обработчик timeout с автоматическим раскрытием карт
-function handlePhaseTimeout() {
-    console.log('⏰ Phase timeout:', gameRoom.gamePhase);
-    
-    switch (gameRoom.gamePhase) {
-        case 'revelation':
-            // ИСПРАВЛЕНО: Автоматически раскрываем карты если игрок не успел
-            const currentPlayer = gameRoom.players.find(p => p.id === gameRoom.currentTurnPlayer);
-            if (currentPlayer && currentPlayer.isAlive) {
-                const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
-                const currentlyRevealed = currentPlayer.cardsRevealedThisRound || 0;
-                
-                if (currentlyRevealed < requiredCards) {
-                    console.log(`⏰ Time's up for ${currentPlayer.name}, auto-revealing remaining cards`);
-                    autoRevealRemainingCards(currentPlayer);
-                }
-            }
-            
-            // Переходим к следующему игроку
-            nextPlayerTurn();
-            break;
-        case 'discussion':
-            startVotingPhase();
-            break;
-        case 'voting':
-            // УЛУЧШЕННАЯ ЛОГИКА: Проверяем результаты голосования при таймауте
-            console.log('⏰ Voting timeout - processing current results');
-            
-            // Подсчитываем текущие голоса
-            let maxVotes = 0;
-            const alivePlayers = gameRoom.players.filter(p => p.isAlive);
-            
-            alivePlayers.forEach(player => {
-                if ((player.votes || 0) > maxVotes) {
-                    maxVotes = player.votes || 0;
-                }
-            });
-            
-            const playersWithMaxVotes = alivePlayers.filter(p => (p.votes || 0) === maxVotes && maxVotes > 0);
-            
-            if (maxVotes === 0) {
-                // Никто не голосовал - переходим к следующему раунду
-                console.log('⏰ No votes cast during timeout - proceeding to next round');
-                nextRound();
-            } else {
-                // Обрабатываем результаты как обычно
-                processVotingResults();
-            }
-            break;
-        case 'justification':
-            // Время оправдания истекло - переходим к следующему
-            nextJustification();
-            break;
-    }
-}
-
-// НОВАЯ ФУНКЦИЯ: Автоматическое раскрытие оставшихся карт
-function autoRevealRemainingCards(player) {
-    const requiredCards = getRequiredCardsForRound(gameRoom.currentRound);
-    const currentlyRevealed = player.cardsRevealedThisRound || 0;
-    const cardsToReveal = requiredCards - currentlyRevealed;
-    
-    if (cardsToReveal <= 0) return;
-    
-    // Получаем доступные для раскрытия характеристики
-    const allCharacteristics = ['profession', 'health', 'hobby', 'phobia', 'baggage', 'fact1', 'fact2'];
-    const alreadyRevealed = player.revealedCharacteristics || [];
-    const availableCharacteristics = allCharacteristics.filter(char => 
-        !alreadyRevealed.includes(char) && player.characteristics[char]
-    );
-    
-    // В первом раунде, если профессия не раскрыта, раскрываем её первой
-    if (gameRoom.currentRound === 1 && !alreadyRevealed.includes('profession')) {
-        if (!player.revealedCharacteristics) {
-            player.revealedCharacteristics = [];
-        }
-        
-        player.revealedCharacteristics.push('profession');
-        player.cardsRevealedThisRound = (player.cardsRevealedThisRound || 0) + 1;
-        
-        console.log(`🎲 Auto-revealed profession for ${player.name}: ${player.characteristics.profession}`);
-        
-        // Отправляем уведомление о раскрытии
-        io.to('game-room').emit('characteristic-revealed', {
-            playerId: player.id,
-            playerName: player.name,
-            characteristic: 'profession',
-            value: player.characteristics.profession,
-            players: gameRoom.players,
-            cardsRevealedThisRound: player.cardsRevealedThisRound,
-            requiredCards: requiredCards,
-            autoRevealed: true
-        });
-        
-        // Обновляем доступные характеристики
-        const professionIndex = availableCharacteristics.indexOf('profession');
-        if (professionIndex !== -1) {
-            availableCharacteristics.splice(professionIndex, 1);
-        }
-    }
-    
-    // Раскрываем оставшиеся карты случайно - БЕЗ ASYNC/AWAIT
-    const remainingToReveal = requiredCards - (player.cardsRevealedThisRound || 0);
-    
-    for (let i = 0; i < remainingToReveal && availableCharacteristics.length > 0; i++) {
-        const randomIndex = Math.floor(Math.random() * availableCharacteristics.length);
-        const characteristic = availableCharacteristics.splice(randomIndex, 1)[0];
-        
-        if (!player.revealedCharacteristics) {
-            player.revealedCharacteristics = [];
-        }
-        
-        player.revealedCharacteristics.push(characteristic);
-        player.cardsRevealedThisRound = (player.cardsRevealedThisRound || 0) + 1;
-        
-        console.log(`🎲 Auto-revealed ${characteristic} for ${player.name}: ${player.characteristics[characteristic]}`);
-        
-        // Отправляем уведомление о раскрытии
-        io.to('game-room').emit('characteristic-revealed', {
-            playerId: player.id,
-            playerName: player.name,
-            characteristic: characteristic,
-            value: player.characteristics[characteristic],
-            players: gameRoom.players,
-            cardsRevealedThisRound: player.cardsRevealedThisRound,
-            requiredCards: requiredCards,
-            autoRevealed: true
-        });
-    }
-    
-    // Отмечаем что игрок завершил раскрытие
-    player.hasRevealed = true;
-    
-    // Уведомляем о завершении автоматического раскрытия
-    io.to('game-room').emit('auto-reveal-completed', {
-        playerName: player.name,
-        cardsRevealed: player.cardsRevealedThisRound,
-        players: gameRoom.players
-    });
-}
-
-// Catch-all для неопределенных роутов
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // === ИГРОВОЕ СОСТОЯНИЕ ===
@@ -1462,21 +1858,20 @@ server.listen(PORT, '0.0.0.0', (error) => {
         process.exit(1);
     }
     
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🚀 Multi-Room Bunker Server running on port ${PORT}`);
     console.log(`🌐 Access the game at: http://localhost:${PORT}`);
-    console.log('📊 Game room initialized with max', gameRoom.maxPlayers, 'players');
-    console.log('🎯 Ready for players to join!');
+    console.log('🎯 Ready for players to create and join rooms!');
 });
 
-// ИСПРАВЛЯЕМ graceful shutdown
+// Graceful shutdown
 process.on('SIGTERM', () => {
     console.log('🛑 SIGTERM received, shutting down gracefully');
     
-    // Очищаем таймер
-    if (gameRoom.timer) {
-        clearInterval(gameRoom.timer);
-        gameRoom.timer = null;
+    // Очищаем все комнаты
+    for (const room of gameRooms.values()) {
+        room.cleanup();
     }
+    gameRooms.clear();
     
     server.close((error) => {
         if (error) {
@@ -1487,74 +1882,4 @@ process.on('SIGTERM', () => {
     });
 });
 
-process.on('SIGINT', () => {
-    console.log('🛑 SIGINT received, shutting down gracefully');
-    
-    // Очищаем таймер
-    if (gameRoom.timer) {
-        clearInterval(gameRoom.timer);
-        gameRoom.timer = null;
-    }
-    
-    server.close((error) => {
-        if (error) {
-            console.error('❌ Error closing server:', error);
-        }
-        console.log('🔚 Process terminated');
-        process.exit(0);
-    });
-});
-
-// ДОБАВЛЯЕМ функции генерации характеристик
-function generateCharacteristics() {
-    return {
-        profession: getRandomElement(professions),
-        health: getRandomElement(healthConditions),
-        hobby: getRandomElement(hobbies),
-        phobia: getRandomElement(phobias),
-        baggage: getRandomElement(baggage),
-        fact1: getRandomElement(facts),
-        fact2: getRandomElement(facts.filter(f => f !== facts[0])) // Убеждаемся что факты разные
-    };
-}
-
-function getRandomElement(array) {
-    return array[Math.floor(Math.random() * array.length)];
-}
-
-function getRandomActionCard() {
-    const availableCards = actionCards.filter(card => card.usesLeft > 0);
-    const randomCard = getRandomElement(availableCards);
-    return { ...randomCard }; // Возвращаем копию карты
-}
-
-// ДОБАВЛЯЕМ функцию startGameTimer
-function startGameTimer() {
-    // Очищаем предыдущий таймер
-    if (gameRoom.timer) {
-        clearInterval(gameRoom.timer);
-        gameRoom.timer = null;
-    }
-    
-    // Запускаем новый таймер
-    gameRoom.timer = setInterval(() => {
-        gameRoom.timeLeft--;
-        
-        // Отправляем обновление времени каждые 5 секунд или в последние 10 секунд
-        if (gameRoom.timeLeft % 5 === 0 || gameRoom.timeLeft <= 10) {
-            io.to('game-room').emit('timer-update', {
-                timeLeft: gameRoom.timeLeft,
-                currentTurnPlayer: gameRoom.currentTurnPlayer
-            });
-        }
-        
-        // Если время закончилось
-        if (gameRoom.timeLeft <= 0) {
-            clearInterval(gameRoom.timer);
-            gameRoom.timer = null;
-            handlePhaseTimeout();
-        }
-    }, 1000);
-}
-
-// ...остальной код server.js остается без изменений...
+console.log('🎮 Multi-Room Bunker Game Server Loaded');
