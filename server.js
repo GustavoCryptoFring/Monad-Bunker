@@ -1364,3 +1364,86 @@ function startSecondVotingInRoom(room) {
     
     startGameTimerInRoom(room);
 }
+
+// Периодическая очистка пустых комнат
+setInterval(() => {
+    const emptyRooms = [];
+    for (const [roomCode, room] of gameRooms) {
+        if (room.isEmpty()) {
+            emptyRooms.push(roomCode);
+        }
+    }
+    
+    emptyRooms.forEach(roomCode => {
+        const room = gameRooms.get(roomCode);
+        if (room) {
+            room.cleanup();
+            gameRooms.delete(roomCode);
+            console.log('🗑️ Cleaned up empty room:', roomCode);
+        }
+    });
+    
+    if (emptyRooms.length > 0) {
+        console.log('🧹 Cleaned up', emptyRooms.length, 'empty rooms');
+    }
+}, 60000); // Каждую минуту
+
+// Логирование статистики каждые 5 минут
+setInterval(() => {
+    const totalPlayers = Array.from(gameRooms.values()).reduce((sum, room) => sum + room.players.length, 0);
+    console.log('📊 Server stats: Rooms:', gameRooms.size, 'Total players:', totalPlayers);
+}, 300000);
+
+// === ЗАПУСК СЕРВЕРА ===
+
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, '0.0.0.0', (error) => {
+    if (error) {
+        console.error('❌ Failed to start server:', error);
+        process.exit(1);
+    }
+    
+    console.log(`🚀 Multi-Room Bunker Server running on port ${PORT}`);
+    console.log(`🌐 Access the game at: http://localhost:${PORT}`);
+    console.log('🎯 Ready for players to create and join rooms!');
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('🛑 SIGTERM received, shutting down gracefully');
+    
+    // Очищаем все комнаты
+    for (const room of gameRooms.values()) {
+        room.cleanup();
+    }
+    gameRooms.clear();
+    
+    server.close((error) => {
+        if (error) {
+            console.error('❌ Error closing server:', error);
+        }
+        console.log('🔚 Process terminated');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('🛑 SIGINT received, shutting down gracefully');
+    
+    // Очищаем все комнаты
+    for (const room of gameRooms.values()) {
+        room.cleanup();
+    }
+    gameRooms.clear();
+    
+    server.close((error) => {
+        if (error) {
+            console.error('❌ Error closing server:', error);
+        }
+        console.log('🔚 Process terminated');
+        process.exit(0);
+    });
+});
+
+console.log('🎮 Multi-Room Bunker Game Server Loaded');
