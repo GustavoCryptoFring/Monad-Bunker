@@ -1,4 +1,7 @@
 console.log('🎮 Bunker Game Client Loading...');
+console.log('🌐 Current URL:', window.location.href);
+console.log('🌐 Protocol:', window.location.protocol);
+console.log('🌐 Host:', window.location.host);
 
 // Состояние игры
 let gameState = {
@@ -26,14 +29,30 @@ let gameState = {
     myStartRoundVote: false
 };
 
-// Socket.IO подключение
-const socket = io({
-    transports: ['websocket', 'polling'],
-    timeout: 10000,
-    reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 1000
-});
+// Socket.IO подключение для Vercel
+let socket;
+
+function initializeSocket() {
+    console.log('🔌 Initializing socket connection...');
+    
+    // Первая попытка с polling приоритетом для Vercel
+    socket = io({
+        transports: ['polling', 'websocket'], // Polling первым для Vercel
+        timeout: 15000,
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 2000,
+        forceNew: true,
+        autoConnect: true,
+        upgrade: true,
+        rememberUpgrade: false
+    });
+    
+    return socket;
+}
+
+// Инициализируем подключение
+socket = initializeSocket();
 
 // ЕДИНАЯ функция joinGame
 function joinGame() {
@@ -60,13 +79,34 @@ function joinGame() {
         return;
     }
     
-    if (!socket.connected) {
-        console.error('❌ Socket not connected');
-        alert('Нет соединения с сервером. Попробуйте перезагрузить страницу.');
+    // Улучшенная проверка подключения
+    if (!socket || !socket.connected) {
+        console.error('❌ Socket not connected. State:', socket ? socket.connected : 'socket is null');
+        console.log('🔄 Attempting to reconnect...');
+        
+        showConnectionError('Нет соединения с сервером. Переподключение...');
+        
+        // Попытка переподключения
+        if (socket) {
+            socket.connect();
+        }
+        
+        // Повторная попытка через 2 секунды
+        setTimeout(() => {
+            if (socket && socket.connected) {
+                console.log('✅ Reconnected, trying to join again');
+                joinGame();
+            } else {
+                alert('Не удалось подключиться к серверу. Попробуйте обновить страницу.');
+            }
+        }, 2000);
+        
         return;
     }
     
     console.log('🎯 Joining game with name:', playerName);
+    console.log('🔗 Socket connected:', socket.connected);
+    console.log('🔗 Socket ID:', socket.id);
     
     // Блокируем кнопку
     if (joinBtn) {
@@ -74,15 +114,29 @@ function joinGame() {
         joinBtn.textContent = 'Подключение...';
     }
     
-    socket.emit('join-game', { playerName: playerName });
-    
-    // Разблокируем через 5 секунд если нет ответа
-    setTimeout(() => {
-        if (joinBtn && joinBtn.disabled) {
+    try {
+        socket.emit('join-game', { playerName: playerName });
+        console.log('📤 join-game event sent');
+    } catch (error) {
+        console.error('❌ Error sending join-game event:', error);
+        alert('Ошибка отправки данных на сервер');
+        
+        if (joinBtn) {
             joinBtn.disabled = false;
             joinBtn.textContent = 'Присоединиться к игре';
         }
-    }, 5000);
+        return;
+    }
+    
+    // Разблокируем через 10 секунд если нет ответа
+    setTimeout(() => {
+        if (joinBtn && joinBtn.disabled && joinBtn.textContent === 'Подключение...') {
+            console.log('⏰ Join timeout, re-enabling button');
+            joinBtn.disabled = false;
+            joinBtn.textContent = 'Присоединиться к игре';
+            showConnectionError('Тайм-аут подключения. Попробуйте снова.');
+        }
+    }, 10000);
 }
 
 // ЕДИНАЯ инициализация DOM
@@ -136,6 +190,7 @@ document.addEventListener('DOMContentLoaded', function() {
 socket.on('connect', function() {
     console.log('🌐 Connected to server');
     console.log('🔗 Socket ID:', socket.id);
+    console.log('🔗 Transport:', socket.io.engine.transport.name);
     
     showLoginScreen();
     
@@ -145,16 +200,70 @@ socket.on('connect', function() {
         joinBtn.disabled = false;
         joinBtn.textContent = 'Присоединиться к игре';
     }
+    
+    // Скрываем сообщение об ошибке подключения если оно есть
+    const errorElement = document.getElementById('connectionError');
+    if (errorElement) {
+        errorElement.remove();
+    }
 });
 
 socket.on('connect_error', function(error) {
     console.error('❌ Connection error:', error);
-    alert('Ошибка подключения к серверу. Проверьте интернет-соединение.');
+    console.error('❌ Error details:', error.description, error.context, error.message);
+    
+    showConnectionError('Ошибка подключения к серверу. Попробуйте обновить страницу.');
+    
+    // Разблокируем кнопку при ошибке
+    const joinBtn = document.getElementById('joinGameBtn');
+    if (joinBtn) {
+        joinBtn.disabled = false;
+        joinBtn.textContent = 'Присоединиться к игре';
+    }
 });
 
 socket.on('disconnect', function(reason) {
     console.log('❌ Disconnected from server:', reason);
-    alert('Соединение потеряно. Попытка переподключения...');
+    
+    showConnectionError('Соединение потеряно. Попытка переподключения...');
+    
+    // Блокируем кнопку при отключении
+    const joinBtn = document.getElementById('joinGameBtn');
+    if (joinBtn) {
+        joinBtn.disabled = true;
+        joinBtn.textContent = 'Переподключение...';
+    }
+});
+
+socket.on('reconnect', function(attemptNumber) {
+    console.log('🔄 Reconnected after', attemptNumber, 'attempts');
+    
+    // Скрываем сообщение об ошибке
+    const errorElement = document.getElementById('connectionError');
+    if (errorElement) {
+        errorElement.remove();
+    }
+    
+    // Разблокируем кнопку
+    const joinBtn = document.getElementById('joinGameBtn');
+    if (joinBtn) {
+        joinBtn.disabled = false;
+        joinBtn.textContent = 'Присоединиться к игре';
+    }
+});
+
+socket.on('reconnect_error', function(error) {
+    console.error('❌ Reconnection error:', error);
+    showConnectionError('Не удалось переподключиться к серверу. Обновите страницу.');
+});
+
+socket.on('reconnect_failed', function() {
+    console.error('❌ Reconnection failed');
+    showConnectionError('Не удалось подключиться к серверу. Обновите страницу.');
+});
+
+socket.on('connected', function(data) {
+    console.log('✅ Server confirmed connection:', data);
 });
 
 socket.on('error', function(errorMessage) {

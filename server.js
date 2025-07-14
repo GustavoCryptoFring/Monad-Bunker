@@ -7,7 +7,19 @@ console.log('🚀 Starting Single Room Bunker Game Server...');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+
+// Socket.IO конфигурация для Vercel
+const io = socketIo(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    transports: ['polling', 'websocket'],
+    allowEIO3: true,
+    pingTimeout: 30000,
+    pingInterval: 25000
+});
 
 // === МАССИВЫ КАРТ ДЕЙСТВИЙ И ХАРАКТЕРИСТИКИ ===
 
@@ -400,9 +412,18 @@ function startRevelationPhase() {
 // Функция обработки раскрытия характеристик
 io.on('connection', (socket) => {
     console.log('🔗 New connection:', socket.id);
+    console.log('🔗 Transport:', socket.conn.transport.name);
+    console.log('🔗 Remote address:', socket.conn.remoteAddress);
     
     // Отправляем текущее количество игроков
     socket.emit('player-count', { count: gameRoom.players.length });
+    
+    // Подтверждаем подключение
+    socket.emit('connected', { 
+        socketId: socket.id, 
+        timestamp: new Date().toISOString(),
+        gameState: gameRoom.gameState 
+    });
     
     // ИСПРАВЛЯЕМ обработчик присоединения к игре
     socket.on('join-game', (data) => {
